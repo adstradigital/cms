@@ -1,0 +1,71 @@
+.cardsContainer {
+  display: flex;
+  gap: 16px;
+}
+
+.actionCard {
+  flex: 1;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid #333;
+  background-color: #222;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.actionCard:hover {
+  background-color: #2a2a2a;
+  border-color: #64748b; /* slate-500 */
+}
+
+.actionCardActive {
+  background-color: #1c1c1c;
+  border-color: #475569; /* slate-600 */
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* Base dot */
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(59, 130, 246, 0.5); /* blue-500/50 */
+  transition: background-color 0.2s ease;
+}
+
+.actionCard:hover .statusDot {
+  background-color: #3b82f6; /* blue-500 */
+}
+
+/* Active dot */
+.statusDotActive {
+  background-color: #3b82f6;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+}
+
+.title {
+  font-weight: 600;
+  font-size: 0.875rem; /* text-sm */
+  color: #e2e8f0; /* slate-200 */
+}
+
+.titleActive {
+  color: #ffffff;
+}
+
+.subtitle {
+  font-size: 0.75rem; /* text-xs */
+  margin-left: 16px;
+  color: #94a3b8; /* slate-400 */
+}
+
+.subtitleActive {
+  color: #cbd5e1; /* slate-300 */
+}

@@ -1,0 +1,25 @@
+.dashboardContainer {
+  display: flex;
+  height: 100vh;
+  background-color: var(--theme-bg);
+  font-family: var(--font-sans);
+  padding: var(--space-4); /* p-4 */
+  overflow: hidden;
+  color: var(--theme-text); /* text-slate-800 */
+  font-size: var(--text-sm); /* text-sm */
+}
+
+.mainContentWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  margin-left: 1.5rem; /* ml-6 */
+}
+
+.workspaceBody {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--theme-bg);
+}

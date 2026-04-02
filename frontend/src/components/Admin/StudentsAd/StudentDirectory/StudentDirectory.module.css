@@ -1,0 +1,25 @@
+.directoryWrapper {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+.centerColumn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+/* Hide scrollbar */
+.centerColumn::-webkit-scrollbar {
+  display: none;
+}
+.centerColumn {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

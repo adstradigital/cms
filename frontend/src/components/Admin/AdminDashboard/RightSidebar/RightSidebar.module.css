@@ -1,0 +1,399 @@
+/* ─── Backdrop ────────────────────────────────────────────── */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 991;
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: fadeIn 200ms ease;
+}
+
+/* ─── Small Floating Edge Toggle (Smart Sidebar style) ──── */
+.smartToggle {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 990;
+  width: 14px;
+  height: 60px;
+  background: rgba(30, 41, 59, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition:
+    width 0.2s ease,
+    background 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.smartToggle:hover {
+  width: 20px;
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.smartToggleHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggleBar {
+  width: 2px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+}
+
+/* ─── Dark Glassmorphism Sidebar ──────────────────────────── */
+.sidebar {
+  position: fixed;
+  right: -320px;
+  top: 2%;
+  height: 96%;
+  width: 300px;
+  z-index: 992;
+  border-radius: 24px 0 0 24px;
+  
+  /* Dark Glassmorphism Effect */
+  background: rgba(15, 23, 42, 0.65); /* Dark slate */
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-right: none;
+  box-shadow:
+    -12px 0 40px rgba(0, 0, 0, 0.2),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.05);
+
+  display: flex;
+  flex-direction: column;
+  transition: right 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebarOpen {
+  right: 0;
+}
+
+/* ─── Top Control Bar ─────────────────────────────────────── */
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 10px;
+}
+
+.brandGroup {
+  display: flex;
+  gap: 6px;
+}
+
+.brandDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+.closeBtn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.closeBtn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  transform: rotate(90deg);
+}
+
+/* ─── Nav Menu (Pill style) ───────────────────────────────── */
+.navMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px;
+}
+
+.navBtn {
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.navBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.navBtnActive {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.navIconBox {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navBtnActive .navIconBox {
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  color: var(--color-primary-light);
+}
+
+.navChevron {
+  margin-left: auto;
+  opacity: 0.5;
+}
+
+/* ─── Divider ─────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  margin: 4px 16px 12px;
+}
+
+/* ─── Content Area ────────────────────────────────────────── */
+.contentArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 20px;
+}
+
+.contentArea::-webkit-scrollbar {
+  width: 3px;
+}
+
+.contentArea::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+/* ─── Sections ────────────────────────────────────────────── */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
+
+.sectionBadge {
+  font-size: 10px;
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  color: var(--color-primary-light);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.widgetList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ─── Widget Card ─────────────────────────────────────────── */
+.widgetCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 12px;
+  transition: all 0.25s ease;
+}
+
+.widgetCard:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.widgetCardActive {
+  background: rgba(255, 255, 255, 0.08); /* slight highlight */
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Card Top */
+.widgetCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.widgetInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.widgetIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--w-color, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.widgetLabel {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  line-height: 1.2;
+}
+
+.widgetDesc {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  margin-top: 2px;
+}
+
+/* Toggle Buttons (Plus / Minus) */
+.toggleActionBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.toggleActionBtn:hover {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  transform: scale(1.05);
+}
+
+.toggleActionBtnRemove {
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+}
+
+.toggleActionBtnRemove:hover {
+  background: rgba(248, 113, 113, 0.2);
+  transform: scale(1.05);
+}
+
+/* ─── Size Controls ───────────────────────────────────────── */
+.sizeControls {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sizeTitle {
+  font-size: 10px;
+  font-family: var(--font-sans);
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.5px;
+}
+
+.sizeOptions {
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.sizeBtn {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  width: 28px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sizeBtn:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sizeBtnActive {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* ─── Placeholders ────────────────────────────────────────── */
+.placeholderSection {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

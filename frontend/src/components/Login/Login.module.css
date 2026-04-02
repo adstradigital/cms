@@ -1,0 +1,542 @@
+/* ─── Login Page Container ─────────────────────────────────────────────── */
+.pageWrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-bg);
+  font-family: var(--font-sans);
+  padding: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .pageWrapper { padding: var(--space-8); }
+}
+
+/* ─── Main Card ────────────────────────────────────────────────────────── */
+.card {
+  display: flex;
+  width: 100%;
+  max-width: 1000px;
+  background: var(--color-surface);
+  border-radius: 2rem;
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  min-height: 600px;
+  position: relative;
+}
+
+/* ─── Left Branding Panel ──────────────────────────────────────────────── */
+.brandingPanel {
+  display: none;
+  width: 41.67%;
+  position: relative;
+  padding: var(--space-12);
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  background-color: var(--color-primary);
+  transition: background-color var(--transition-slow);
+}
+
+@media (min-width: 1024px) {
+  .brandingPanel { display: flex; }
+}
+
+.brandingCircleTop {
+  position: absolute;
+  top: -10%;
+  right: -10%;
+  width: 16rem;
+  height: 16rem;
+  background: #fff;
+  opacity: 0.1;
+  border-radius: var(--radius-full);
+  filter: blur(40px);
+}
+
+.brandingCircleBottom {
+  position: absolute;
+  bottom: -5%;
+  left: -10%;
+  width: 12rem;
+  height: 12rem;
+  background-color: var(--color-primary-dark);
+  opacity: 0.4;
+  border-radius: var(--radius-full);
+  filter: blur(24px);
+  transition: background-color var(--transition-slow);
+}
+
+.brandingContent {
+  position: relative;
+  z-index: 10;
+}
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: #fff;
+  margin-bottom: var(--space-12);
+}
+
+.logoIconWrap {
+  background: rgba(255, 255, 255, 0.2);
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logoText {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.05em;
+}
+
+.brandTitle {
+  font-size: var(--text-4xl);
+  font-weight: var(--font-bold);
+  color: #fff;
+  line-height: 1.3;
+  margin: 0 0 var(--space-4) 0;
+}
+
+.brandSubtitle {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  max-width: 250px;
+  opacity: 0.9;
+}
+
+.statusBadgeWrap {
+  position: relative;
+  z-index: 10;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.1);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  backdrop-filter: blur(8px);
+}
+
+.statusDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--color-primary-light);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ─── Right Form Panel ─────────────────────────────────────────────────── */
+.formPanel {
+  width: 100%;
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+}
+
+@media (min-width: 640px) {
+  .formPanel { padding: var(--space-12); }
+}
+
+@media (min-width: 1024px) {
+  .formPanel {
+    width: 58.33%;
+    padding: var(--space-16);
+  }
+}
+
+/* ─── Top Right Icons ──────────────────────────────────────────────────── */
+.topIcons {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  z-index: var(--z-dropdown);
+}
+
+@media (min-width: 1024px) {
+  .topIcons {
+    top: var(--space-8);
+    right: var(--space-8);
+  }
+}
+
+.iconBtn {
+  padding: 0.625rem;
+  color: var(--color-text-muted);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconBtn:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-border);
+}
+
+/* ─── Theme Dropdown ───────────────────────────────────────────────────── */
+.settingsWrap {
+  position: relative;
+}
+
+.themeDropdown {
+  position: absolute;
+  right: 0;
+  margin-top: var(--space-3);
+  width: 10rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-4);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.themeLabel {
+  font-size: 0.6875rem;
+  font-weight: var(--font-bold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: var(--space-3);
+}
+
+.themeSwatches {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.themeSwatch {
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-full);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.themeSwatch:hover {
+  transform: scale(1.1);
+}
+
+.themeSwatchActive {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;
+}
+
+.themeSwatchDot {
+  width: 0.625rem;
+  height: 0.625rem;
+  background: #fff;
+  border-radius: var(--radius-full);
+}
+
+/* ─── Mobile Logo ──────────────────────────────────────────────────────── */
+.mobileLogo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-8);
+  color: var(--color-primary);
+  transition: color var(--transition-slow);
+}
+
+@media (min-width: 1024px) {
+  .mobileLogo { display: none; }
+}
+
+.mobileLogoText {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.05em;
+  color: var(--color-text);
+}
+
+/* ─── Welcome Text ─────────────────────────────────────────────────────── */
+.welcomeBlock {
+  margin-bottom: var(--space-8);
+  margin-top: var(--space-4);
+}
+
+@media (min-width: 1024px) {
+  .welcomeBlock { margin-top: 0; }
+}
+
+.welcomeTitle {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.welcomeSubtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* ─── Role Selector ────────────────────────────────────────────────────── */
+.roleSelector {
+  display: flex;
+  padding: var(--space-1);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--space-6);
+}
+
+.roleBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.roleBtn:hover {
+  color: var(--color-text);
+  background: rgba(226, 232, 240, 0.5);
+}
+
+.roleBtnActive {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.roleBtnIcon {
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+}
+
+.roleBtnIconActive {
+  color: var(--color-primary);
+}
+
+/* ─── Error Alert ──────────────────────────────────────────────────────── */
+.errorAlert {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  background: #fef2f2;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-lg);
+  border: 1px solid #fee2e2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ─── Form ─────────────────────────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.fieldLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+  display: block;
+}
+
+.inputWrap {
+  position: relative;
+}
+
+.inputIcon {
+  position: absolute;
+  top: 50%;
+  left: var(--space-4);
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  transition: color var(--transition-base);
+}
+
+.input {
+  display: block;
+  width: 100%;
+  padding: var(--space-3-5) var(--space-4) var(--space-3-5) 2.75rem;
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  color: var(--color-text);
+  font-size: var(--text-base);
+  outline: none;
+  transition: all var(--transition-base);
+  box-sizing: border-box;
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input:focus {
+  background: var(--color-surface);
+  box-shadow: 0 0 0 3px rgba(30, 41, 59, 0.12);
+  border-color: var(--color-primary);
+}
+
+.inputWrap:focus-within .inputIcon {
+  color: var(--color-primary);
+}
+
+.inputPassword {
+  padding-right: 3rem;
+}
+
+.togglePasswordBtn {
+  position: absolute;
+  top: 50%;
+  right: var(--space-4);
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color var(--transition-fast);
+}
+
+.togglePasswordBtn:hover {
+  color: var(--color-primary);
+}
+
+/* ─── Remember & Forgot ────────────────────────────────────────────────── */
+.rememberRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-8);
+}
+
+.rememberLabel {
+  display: flex;
+  align-items: center;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  gap: var(--space-2);
+}
+
+.rememberCheckbox {
+  width: 1rem;
+  height: 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.forgotLink {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.forgotLink:hover {
+  color: var(--color-primary-dark);
+}
+
+/* ─── Submit Button ────────────────────────────────────────────────────── */
+.submitBtn {
+  width: 100%;
+  padding: var(--space-4);
+  background-color: var(--color-primary);
+  color: #fff;
+  font-weight: var(--font-bold);
+  font-size: var(--text-base);
+  border: none;
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  box-shadow: 0 4px 14px 0 rgba(30, 41, 59, 0.3);
+}
+
+.submitBtn:hover {
+  background-color: var(--color-primary-light);
+}
+
+.submitBtn:active {
+  background-color: var(--color-primary-dark);
+}
+
+.submitBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.submitBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.spinnerIcon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

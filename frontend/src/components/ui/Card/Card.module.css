@@ -1,0 +1,30 @@
+.card {
+  background: var(--theme-surface);
+  border: none;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  transition: all var(--transition-base);
+}
+
+.padded { padding: var(--space-8); }
+
+.hoverable:hover {
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.08);
+  transform: translateY(-4px);
+}
+
+.header {
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--theme-text);
+}
+
+.subtitle {
+  font-size: var(--text-sm);
+  color: var(--theme-text-secondary);
+  margin-top: var(--space-1);
+}

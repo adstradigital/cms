@@ -1,0 +1,342 @@
+.listContainer {
+  flex: 1;
+  background-color: var(--theme-surface);
+  border-radius: 16px; /* 2xl */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--theme-border); /* slate-100 */
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+/* Header */
+.listHeader {
+  padding: 24px;
+  border-bottom: 1px solid var(--theme-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.headerTitle {
+  font-size: 1.125rem; /* text-lg */
+  font-weight: 700;
+  color: var(--theme-text); /* slate-800 */
+  margin: 0;
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.searchWrap {
+  position: relative;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--theme-text-muted); /* slate-400 */
+}
+
+.searchInput {
+  padding: 8px 16px 8px 36px;
+  background-color: var(--theme-bg); /* slate-50 */
+  border: 1px solid var(--theme-border); /* slate-200 */
+  border-radius: 8px; /* rounded-lg */
+  font-size: 0.875rem; /* text-sm */
+  width: 256px; /* w-64 */
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.searchInput:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent); /* ring focus */
+  border-color: var(--color-primary);
+}
+
+.filterBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: var(--theme-bg);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-secondary); /* slate-600 */
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.filterBtn:hover {
+  background-color: var(--theme-border); /* slate-100 */
+}
+
+.addBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: background-color 0.2s ease;
+}
+
+.addBtn:hover {
+  background-color: var(--color-primary-dark);
+}
+
+/* Table Area */
+.tableScroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  /* Use padding at the bottom of the table body/container as a safety fallback */
+  padding-bottom: 80px; 
+  margin-bottom: -80px; 
+}
+
+.table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+}
+
+.table thead tr {
+  background-color: color-mix(in srgb, var(--theme-bg) 50%, transparent); /* bg-slate-50/50 */
+  color: var(--theme-text-muted); /* slate-500 */
+  font-size: 0.75rem; /* text-xs */
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.table th {
+  padding: 16px 24px;
+  font-weight: 600;
+}
+
+.thRight {
+  text-align: right;
+}
+
+/* divide-y divide-slate-100 removed empty ruleset */
+
+.tableRow {
+  border-bottom: 1px solid var(--theme-border);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.tableRow:hover {
+  background-color: var(--theme-bg); /* slate-50 */
+}
+
+.tableRowActive {
+  background-color: color-mix(in srgb, var(--theme-bg) 80%, transparent);
+}
+
+.tableRowActiveDropdown {
+  position: relative;
+  z-index: 100;
+}
+
+.tableRowActiveDropdown {
+  position: relative;
+  z-index: 100;
+}
+
+.table td {
+  padding: 16px 24px;
+}
+
+.studentNameCol {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--theme-border);
+}
+
+.studentName {
+  font-weight: 600;
+  color: var(--theme-text);
+}
+
+.studentId {
+  color: var(--theme-text-muted);
+  font-weight: 500;
+}
+
+.studentClass {
+  color: var(--theme-text-secondary);
+}
+
+.contactCol {
+  display: flex;
+  flex-direction: column;
+}
+
+.parentName {
+  color: var(--theme-text);
+  font-weight: 500;
+}
+
+.contactNumber {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+}
+
+/* Status Badges */
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.statusActive {
+  background-color: #dcfce7; /* green-100 */
+  color: #15803d; /* green-700 */
+}
+
+.statusAbsent {
+  background-color: #fef9c3; /* yellow-100 */
+  color: #a16207; /* yellow-700 */
+}
+
+.statusSuspended {
+  background-color: #fee2e2; /* red-100 */
+  color: #b91c1c; /* red-700 */
+}
+
+.actionBtn {
+  padding: 6px;
+  color: var(--theme-text-muted);
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.actionBtn:hover {
+  color: var(--theme-text-secondary);
+  background-color: var(--theme-border);
+}
+
+.actionBtnWrapper {
+  position: relative;
+  display: inline-block;
+  z-index: 20;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+  z-index: 1200;
+  animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--theme-text);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.dropdownItem:hover {
+  background-color: var(--theme-bg);
+  color: var(--color-primary);
+}
+
+.dropdownItemDanger {
+  color: #ef4444; /* red-500 */
+}
+
+.dropdownItemDanger:hover {
+  background-color: #fee2e2; /* red-100 */
+  color: #b91c1c; /* red-700 */
+}
+
+.tdRight {
+  text-align: right;
+  position: relative;
+  overflow: visible;
+}
+
+/* Pagination Footer */
+.footer {
+  padding: 16px;
+  border-top: 1px solid var(--theme-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--theme-text-muted);
+  font-size: 0.75rem;
+}
+
+.pageControls {
+  display: flex;
+  gap: 4px;
+}
+
+.pageBtn {
+  padding: 4px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 4px;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.pageBtn:hover {
+  background-color: var(--theme-bg);
+}
+
+.pageBtnActive {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+}

@@ -1,0 +1,66 @@
+/* ─── Calendar FAB ────────────────────────────────────────── */
+.calFab {
+  position: fixed;
+  z-index: 996;
+  width: 56px;
+  height: 60px;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-surface);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.18),
+    0 0 0 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.calFab:hover {
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.25),
+    0 0 0 4px rgba(0, 0, 0, 0.06);
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.dragging {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(0.96);
+}
+
+/* ─── Month Bar ───────────────────────────────────────────── */
+.monthBar {
+  width: 100%;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: var(--font-bold);
+  font-family: var(--font-sans);
+  text-align: center;
+  padding: 2px 0;
+  letter-spacing: 1px;
+}
+
+/* ─── Date Number ─────────────────────────────────────────── */
+.dateNum {
+  font-size: 22px;
+  font-weight: var(--font-bold);
+  font-family: var(--font-sans);
+  color: var(--color-primary);
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
+/* ─── Day Name ────────────────────────────────────────────── */
+.dayName {
+  font-size: 8px;
+  font-weight: var(--font-semibold);
+  font-family: var(--font-sans);
+  color: var(--color-text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}

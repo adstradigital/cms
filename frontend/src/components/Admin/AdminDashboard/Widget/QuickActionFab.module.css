@@ -1,0 +1,147 @@
+/* ─── Backdrop ─────────────────────────────────────────────── */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(2px);
+  z-index: 998;
+  animation: fadeIn 200ms ease;
+}
+
+/* ─── FAB Container ───────────────────────────────────────── */
+.fabContainer {
+  position: fixed;
+  z-index: 999;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+}
+
+/* ─── Main Button ─────────────────────────────────────────── */
+.fab {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  border: none;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  box-shadow:
+    0 4px 14px rgba(30, 41, 59, 0.35),
+    0 0 0 4px rgba(30, 41, 59, 0.08);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+  user-select: none;
+  position: relative;
+  z-index: 2;
+}
+
+.fab:hover {
+  box-shadow:
+    0 6px 20px rgba(30, 41, 59, 0.45),
+    0 0 0 6px rgba(30, 41, 59, 0.1);
+  transform: scale(1.05);
+}
+
+.fab:active,
+.fabDragging {
+  cursor: grabbing;
+  transform: scale(0.95);
+}
+
+.fabOpen {
+  background: linear-gradient(135deg, var(--color-danger) 0%, #f87171 100%);
+  box-shadow:
+    0 4px 14px rgba(239, 68, 68, 0.4),
+    0 0 0 4px rgba(239, 68, 68, 0.1);
+}
+
+.fabOpen svg {
+  transition: transform var(--transition-base);
+  transform: rotate(90deg);
+}
+
+/* ─── Radial Action Ring ──────────────────────────────────── */
+.actionsRing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.actionsRingOpen {
+  pointer-events: auto;
+}
+
+/* ─── Individual Action Items ─────────────────────────────── */
+.actionItem {
+  position: absolute;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-full);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: var(--action-color, var(--color-primary));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  transition:
+    transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 200ms ease,
+    box-shadow var(--transition-fast);
+  transition-delay: var(--delay, 0ms);
+  z-index: 1;
+}
+
+.actionsRingOpen .actionItem {
+  transform: translate(
+    calc(-50% + var(--tx)),
+    calc(-50% + var(--ty))
+  ) scale(1);
+  opacity: 1;
+}
+
+.actionItem:hover {
+  transform: translate(
+    calc(-50% + var(--tx)),
+    calc(-50% + var(--ty))
+  ) scale(1.2);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Tooltip ─────────────────────────────────────────────── */
+.actionTooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.actionItem:hover .actionTooltip {
+  opacity: 1;
+}
+
+/* ─── Animations ──────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

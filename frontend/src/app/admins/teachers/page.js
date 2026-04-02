@@ -1,0 +1,8 @@
+export default function TeachersPage() {
+  return (
+    <div style={{ padding: '2rem', color: 'var(--theme-text)' }}>
+      <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Teachers</h1>
+      <p style={{ opacity: 0.7 }}>Teachers management module coming soon...</p>
+    </div>
+  );
+}

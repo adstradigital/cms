@@ -1,0 +1,59 @@
+/* Light theme (default) */
+[data-theme='light'],
+:root {
+  --theme-bg: var(--color-bg);
+  --theme-surface: var(--color-surface);
+  --theme-border: var(--color-border);
+  --theme-text: var(--color-text);
+  --theme-text-secondary: var(--color-text-secondary);
+  --theme-text-muted: var(--color-text-muted);
+  --theme-sidebar-bg: var(--color-primary); /* Use Primary for Sidebar */
+  --theme-sidebar-text: #ffffff;
+  --theme-sidebar-active: #ffffff;
+  --theme-sidebar-active-text: var(--color-primary);
+}
+
+/* Multi-color Theme Overrides */
+.theme-green {
+  --color-primary: #00a676;
+  --color-primary-light: #00c48c;
+  --color-primary-dark: #008f64;
+}
+
+.theme-blue {
+  --color-primary: #2563eb;
+  --color-primary-light: #3b82f6;
+  --color-primary-dark: #1d4ed8;
+}
+
+.theme-red {
+  --color-primary: #dc2626;
+  --color-primary-light: #ef4444;
+  --color-primary-dark: #b91c1c;
+}
+
+.theme-purple {
+  --color-primary: #7c3aed;
+  --color-primary-light: #8b5cf6;
+  --color-primary-dark: #6d28d9;
+}
+
+.theme-orange {
+  --color-primary: #f97316;
+  --color-primary-light: #fb923c;
+  --color-primary-dark: #ea580c;
+}
+
+/* Dark theme */
+[data-theme='dark'] {
+  --theme-bg: #0f172a;
+  --theme-surface: #1e293b;
+  --theme-border: #334155;
+  --theme-text: #f1f5f9;
+  --theme-text-secondary: #94a3b8;
+  --theme-text-muted: #64748b;
+  --theme-sidebar-bg: #020617;
+  --theme-sidebar-text: #cbd5e1;
+  --theme-sidebar-active: var(--color-primary-light);
+  --theme-sidebar-active-text: #020617;
+}

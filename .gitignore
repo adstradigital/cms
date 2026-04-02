@@ -1,0 +1,41 @@
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# Backend
+backend/__pycache__/
+backend/*.py[cod]
+backend/*$py.class
+backend/.env
+backend/.venv
+backend/venv/
+backend/ENV/
+backend/env/
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+backend/.vscode/
+backend/.idea/
+
+# OS/System
+.DS_Store
+Thumbs.db
+ .antigravity*
+ .gemini*
+ .agents*
+ .agent*
+ _agents*
+ _agent*
+ brain/
+ .system_generated/

@@ -65,6 +65,132 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
             
         return qs
 
+    @action(detail=False, methods=['GET'])
+    def leaderboard(self, request):
+        """
+        Returns top performing students across the school or filtered by class/section.
+        """
+        from django.db.models import Sum, Max, F, FloatField, ExpressionWrapper
+        from apps.exams.models import ReportCard, Exam, ExamResult, ExamSchedule
+        from apps.academics.models import Subject
+
+        section_id = request.query_params.get("section")
+        class_id = request.query_params.get("class")
+        exam_id = request.query_params.get("exam")
+        exam_type = request.query_params.get("exam_type")
+        subject_id = request.query_params.get("subject_id")
+        previous_exam_id = request.query_params.get("previous_exam")
+
+        def build_class_section(student):
+            if not student.section:
+                return ""
+            return f"{student.section.school_class.name} - {student.section.name}"
+
+        # Subject-wise leaderboard (uses ExamResult aggregates)
+        if subject_id:
+            try:
+                subject = Subject.objects.get(pk=subject_id)
+            except Subject.DoesNotExist:
+                return Response({"error": "Subject not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            exam_qs = Exam.objects.filter(is_published=True)
+            if exam_id:
+                exam_qs = exam_qs.filter(pk=exam_id)
+            if exam_type:
+                exam_qs = exam_qs.filter(exam_type=exam_type)
+            if class_id:
+                exam_qs = exam_qs.filter(school_class_id=class_id)
+            elif section_id:
+                exam_qs = exam_qs.filter(school_class_id=Section.objects.filter(pk=section_id).values_list("school_class_id", flat=True).first())
+
+            exam = exam_qs.order_by("-start_date", "-id").first()
+            if not exam:
+                return Response([], status=status.HTTP_200_OK)
+
+            schedules = ExamSchedule.objects.filter(exam_id=exam.id, subject_id=subject.id)
+            res_qs = ExamResult.objects.select_related("student", "student__user", "student__section", "student__section__school_class").filter(exam_schedule__in=schedules)
+            if section_id:
+                res_qs = res_qs.filter(student__section_id=section_id)
+            elif class_id:
+                res_qs = res_qs.filter(student__section__school_class_id=class_id)
+
+            agg = res_qs.values(
+                "student_id",
+                "student__user__first_name",
+                "student__user__last_name",
+                "student__roll_number",
+                "student__section__school_class__name",
+                "student__section__name",
+            ).annotate(
+                obtained=Sum("marks_obtained"),
+                max_total=Sum("exam_schedule__max_marks"),
+            )
+
+            rows = []
+            for row in agg:
+                max_total = row["max_total"] or 0
+                obtained = row["obtained"] or 0
+                score = float(obtained) / float(max_total) * 100.0 if max_total else 0.0
+                rows.append({
+                    "student_id": row["student_id"],
+                    "name": f"{row['student__user__first_name']} {row['student__user__last_name']}".strip(),
+                    "roll": row["student__roll_number"],
+                    "score": score,
+                    "rank": None,
+                    "class_section": f"{row['student__section__school_class__name']} - {row['student__section__name']}".strip(" -"),
+                    "subject_name": subject.name,
+                    "term_name": exam.exam_type,
+                })
+            rows.sort(key=lambda x: x["score"], reverse=True)
+            rows = rows[:20]
+            for i, r in enumerate(rows):
+                r["rank"] = i + 1
+            return Response(rows)
+
+        # Overall leaderboard (uses published ReportCard)
+        qs = ReportCard.objects.select_related(
+            "student", "student__user", "student__section", "student__section__school_class", "exam"
+        ).filter(is_published=True)
+
+        if section_id:
+            qs = qs.filter(student__section_id=section_id)
+        elif class_id:
+            qs = qs.filter(student__section__school_class_id=class_id)
+        if exam_id:
+            qs = qs.filter(exam_id=exam_id)
+        if exam_type:
+            qs = qs.filter(exam__exam_type=exam_type)
+
+        qs = qs.order_by("-percentage")[:20]
+
+        prev_map = {}
+        if previous_exam_id:
+            prev_qs = ReportCard.objects.filter(is_published=True, exam_id=previous_exam_id)
+            if section_id:
+                prev_qs = prev_qs.filter(student__section_id=section_id)
+            elif class_id:
+                prev_qs = prev_qs.filter(student__section__school_class_id=class_id)
+            for rc in prev_qs:
+                prev_map[rc.student_id] = float(rc.percentage) if rc.percentage else 0.0
+
+        data = []
+        for rc in qs:
+            score = float(rc.percentage) if rc.percentage else 0.0
+            prev = prev_map.get(rc.student_id)
+            delta = (score - prev) if prev is not None else None
+            data.append({
+                "student_id": rc.student.id,
+                "name": rc.student.user.get_full_name(),
+                "roll": rc.student.roll_number,
+                "score": score,
+                "rank": rc.rank,
+                "class_section": build_class_section(rc.student),
+                "subject_name": None,
+                "term_name": rc.exam.exam_type,
+                "improvement_pct": delta,
+            })
+        return Response(data)
+
     @action(detail=False, methods=['GET'], url_path='admission/(?P<admission_number>[^/.]+)')
     def by_admission(self, request, admission_number=None):
         try:

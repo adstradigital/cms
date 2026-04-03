@@ -1,0 +1,393 @@
+/* Elections.module.css — High Fidelity Redesign */
+
+.container {
+  padding: var(--space-6) var(--space-6) 120px;
+  background: var(--theme-bg);
+  height: calc(100vh - var(--navbar-height));
+  color: var(--theme-text);
+  overflow-y: auto;
+  font-family: var(--font-sans);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-8);
+  background: var(--theme-surface);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.titleArea h2 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+/* —— Setup Form —— */
+.setupCard {
+  background: var(--theme-surface);
+  padding: var(--space-10);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--theme-border);
+  max-width: 900px;
+  margin: 0 auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.formGroup {
+  margin-bottom: var(--space-8);
+}
+
+.label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  margin-bottom: var(--space-2);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.input, .select {
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--theme-border);
+  background: #f8fafc;
+  color: var(--theme-text);
+  font-size: var(--text-base);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.input:focus, .select:focus {
+  border-color: var(--color-secondary);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
+}
+
+.candidateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+}
+
+.candidateCard {
+  background: white;
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--theme-border);
+  text-align: center;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.candidateCard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-secondary);
+}
+
+/* —— Kiosk View (Premium Overhaul) —— */
+.kioskOverlay {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 50%, #e0e7ff 100%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-16);
+  overflow: hidden;
+  color: #1e293b;
+}
+
+.kioskHeader {
+  text-align: center;
+  margin-bottom: var(--space-16);
+  animation: slideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kioskHeader h1 {
+  font-size: 4rem;
+  font-weight: 900;
+  color: #0f172a;
+  margin-bottom: var(--space-2);
+  letter-spacing: -0.04em;
+  background: linear-gradient(to bottom, #0f172a, #334155);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.kioskHeader p {
+  font-size: 1.5rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.votingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: var(--space-12);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  padding-bottom: 150px; /* Space for the floating button */
+  flex: 1;
+  overflow-y: auto;
+}
+
+.voteCard {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 40px;
+  padding: 60px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+}
+
+.voteCard:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-20px) scale(1.02);
+  box-shadow: 0 40px 80px -20px rgba(14, 165, 233, 0.15);
+  border-color: #0ea5e9;
+}
+
+.voteCardActive {
+  background: white !important;
+  border-color: #0ea5e9 !important;
+  border-width: 4px !important;
+  box-shadow: 0 30px 60px -10px rgba(14, 165, 233, 0.25) !important;
+}
+
+.candidateAvatar {
+  width: 140px;
+  height: 140px;
+  border-radius: 70px;
+  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+  margin: 0 auto 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  font-weight: 900;
+  color: #475569;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+  border: 4px solid white;
+}
+
+.voteCardActive .candidateAvatar {
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+  color: white;
+  box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
+}
+
+.voteCard h2 {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.voteCard div {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.submitSection {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 60px 40px 80px;
+  background: linear-gradient(to top, #f0f4ff, transparent);
+  pointer-events: none; /* Let scroll events pass through the gradient area */
+  z-index: 100;
+}
+
+.submitBtnLarge {
+  pointer-events: auto; /* Re-enable clicks for the button itself */
+  padding: 28px 80px;
+  font-size: 2rem;
+  font-weight: 900;
+  border-radius: 100px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border: 4px solid white;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  box-shadow: 0 15px 45px rgba(37, 99, 235, 0.4);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.submitBtnLarge:hover:not(:disabled) {
+  transform: scale(1.1) translateY(-5px);
+  box-shadow: 0 30px 60px -10px rgba(37, 99, 235, 0.6);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+}
+
+.submitBtnLarge:disabled {
+  opacity: 0.2;
+  background: #cbd5e1;
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+}
+
+/* —— Confirmation Screen (Polished) —— */
+.confirmScreen {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  text-align: center;
+  animation: fadeIn 0.5s ease;
+}
+
+.successIconContainer {
+  background: #f0fdf4;
+  padding: 40px;
+  border-radius: 100px;
+  margin-bottom: 40px;
+  border: 4px solid #dcfce7;
+}
+
+.countdownCircle {
+  margin-top: 60px;
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.countdownValue {
+  position: absolute;
+  font-size: 3rem;
+  font-weight: 900;
+  color: #1e293b;
+}
+
+/* —— Results View —— */
+.resultsGrid {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: var(--space-10);
+}
+
+.winnerCard {
+  background: #fffbeb;
+  border: 4px solid #fde047;
+  padding: 60px 40px;
+  border-radius: 40px;
+  text-align: center;
+  box-shadow: 0 40px 80px -20px rgba(251, 191, 36, 0.2);
+}
+
+.chartContainer {
+  background: white;
+  padding: 40px;
+  border-radius: 40px;
+  border: 1px solid var(--theme-border);
+}
+
+.barTrack {
+  height: 48px;
+  background: #f1f5f9;
+  border-radius: 24px;
+}
+
+/* —— Utilities —— */
+.btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btnPrimary { background: #1e293b; color: white; }
+.btnSecondary { background: #0ea5e9; color: white; }
+.btnDanger { background: #dc2626; color: white; }
+.btnOutline { border: 2px solid #e2e8f0; background: transparent; color: #1e293b; }
+
+@keyframes slideDown {
+  from { transform: translateY(-100px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.spin {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.kioskAuthCard {
+  margin: 0 auto;
+  max-width: 520px;
+  background: rgba(255,255,255,0.88);
+  border: 1px solid #dbeafe;
+  border-radius: 20px;
+  padding: 28px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(30,64,175,0.08);
+}
+
+.kioskExitBtn {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  border: 1px solid var(--theme-border);
+  background: white;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+  z-index: 10001;
+}
+
+.countdownProgressAnimated {
+  transform-origin: center;
+  transform: rotate(-90deg);
+  stroke-dashoffset: 0;
+  animation: countdownStroke 8s linear forwards;
+}
+
+@keyframes countdownStroke {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 351; }
+}

@@ -5,10 +5,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
-from .models import Subject, Timetable, Period, Homework, HomeworkSubmission, SubstituteLog
+from .models import (
+    Subject, SyllabusUnit, SyllabusChapter, SyllabusTopic, SubjectAllocation, LessonPlan,
+    Timetable, Period, Homework, HomeworkSubmission, SubstituteLog, Assignment, Material
+)
 from .serializers import (
-    SubjectSerializer, TimetableSerializer, PeriodSerializer,
+    SubjectSerializer, SyllabusUnitSerializer, SyllabusChapterSerializer, SyllabusTopicSerializer,
+    SubjectAllocationSerializer, LessonPlanSerializer,
+    TimetableSerializer, PeriodSerializer,
     HomeworkSerializer, HomeworkSubmissionSerializer, SubstituteLogSerializer,
+    AssignmentSerializer, MaterialSerializer,
 )
 
 
@@ -19,13 +25,7 @@ from .serializers import (
 def subject_list_view(request):
     try:
         if request.method == "GET":
-            class_id = request.query_params.get("class")
-            teacher_id = request.query_params.get("teacher")
-            qs = Subject.objects.select_related("school_class", "teacher").all()
-            if class_id:
-                qs = qs.filter(school_class_id=class_id)
-            if teacher_id:
-                qs = qs.filter(teacher_id=teacher_id)
+            qs = Subject.objects.prefetch_related("units__chapters").all()
             return Response(SubjectSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         serializer = SubjectSerializer(data=request.data)
@@ -43,7 +43,7 @@ def subject_list_view(request):
 def subject_detail_view(request, pk):
     try:
         try:
-            subject = Subject.objects.select_related("school_class", "teacher").get(pk=pk)
+            subject = Subject.objects.prefetch_related("units__chapters").get(pk=pk)
         except Subject.DoesNotExist:
             return Response({"error": "Subject not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -377,3 +377,300 @@ def available_substitutes_view(request):
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Assignment ───────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def assignment_list_view(request):
+    try:
+        if request.method == "GET":
+            subject_id = request.query_params.get("subject")
+            section_id = request.query_params.get("section")
+            is_project = request.query_params.get("is_project")
+
+            qs = Assignment.objects.select_related("subject", "section", "teacher").all()
+            if subject_id: qs = qs.filter(subject_id=subject_id)
+            if section_id: qs = qs.filter(section_id=section_id)
+            if is_project is not None: qs = qs.filter(is_project=is_project.lower() == "true")
+
+            return Response(AssignmentSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+        serializer = AssignmentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save(teacher=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def assignment_detail_view(request, pk):
+    try:
+        try:
+            assignment = Assignment.objects.get(pk=pk)
+        except Assignment.DoesNotExist:
+            return Response({"error": "Assignment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(AssignmentSerializer(assignment).data, status=status.HTTP_200_OK)
+
+        if request.method == "PATCH":
+            serializer = AssignmentSerializer(assignment, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        assignment.delete()
+        return Response({"message": "Assignment deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Material ─────────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def material_list_view(request):
+    try:
+        if request.method == "GET":
+            subject_id = request.query_params.get("subject")
+            section_id = request.query_params.get("section")
+            type = request.query_params.get("type")
+
+            qs = Material.objects.select_related("subject", "section", "teacher").all()
+            if subject_id: qs = qs.filter(subject_id=subject_id)
+            if section_id: qs = qs.filter(section_id=section_id)
+            if type: qs = qs.filter(material_type=type)
+
+            return Response(MaterialSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+        serializer = MaterialSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save(teacher=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def material_detail_view(request, pk):
+    try:
+        try:
+            material = Material.objects.get(pk=pk)
+        except Material.DoesNotExist:
+            return Response({"error": "Material not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(MaterialSerializer(material).data, status=status.HTTP_200_OK)
+
+        if request.method == "PATCH":
+            serializer = MaterialSerializer(material, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        material.delete()
+        return Response({"message": "Material deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ─── Syllabus & Lesson Planning ───────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def syllabus_unit_list_view(request):
+    if request.method == "GET":
+        subject_id = request.query_params.get("subject")
+        qs = SyllabusUnit.objects.all()
+        if subject_id: qs = qs.filter(subject_id=subject_id)
+        return Response(SyllabusUnitSerializer(qs, many=True).data)
+    
+    serializer = SyllabusUnitSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def syllabus_unit_detail_view(request, pk):
+    try:
+        unit = SyllabusUnit.objects.get(pk=pk)
+    except SyllabusUnit.DoesNotExist:
+        return Response({"error": "Unit not found."}, status=404)
+    if request.method == "GET":
+        return Response(SyllabusUnitSerializer(unit).data)
+    if request.method == "DELETE":
+        unit.delete()
+        return Response(status=204)
+    serializer = SyllabusUnitSerializer(unit, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=400)
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def syllabus_chapter_list_view(request):
+    if request.method == "GET":
+        unit_id = request.query_params.get("unit")
+        qs = SyllabusChapter.objects.all()
+        if unit_id: qs = qs.filter(unit_id=unit_id)
+        return Response(SyllabusChapterSerializer(qs, many=True).data)
+    
+    serializer = SyllabusChapterSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def syllabus_chapter_detail_view(request, pk):
+    try:
+        chapter = SyllabusChapter.objects.get(pk=pk)
+    except SyllabusChapter.DoesNotExist:
+        return Response({"error": "Chapter not found."}, status=404)
+    if request.method == "GET":
+        return Response(SyllabusChapterSerializer(chapter).data)
+    if request.method == "DELETE":
+        chapter.delete()
+        return Response(status=204)
+    serializer = SyllabusChapterSerializer(chapter, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=400)
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def syllabus_topic_list_view(request):
+    if request.method == "GET":
+        chapter_id = request.query_params.get("chapter")
+        qs = SyllabusTopic.objects.all()
+        if chapter_id: qs = qs.filter(chapter_id=chapter_id)
+        return Response(SyllabusTopicSerializer(qs, many=True).data)
+    
+    serializer = SyllabusTopicSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def syllabus_topic_detail_view(request, pk):
+    try:
+        topic = SyllabusTopic.objects.get(pk=pk)
+    except SyllabusTopic.DoesNotExist:
+        return Response({"error": "Topic not found."}, status=404)
+    if request.method == "GET":
+        return Response(SyllabusTopicSerializer(topic).data)
+    if request.method == "DELETE":
+        topic.delete()
+        return Response(status=204)
+    serializer = SyllabusTopicSerializer(topic, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=400)
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def subject_allocation_list_view(request):
+    if request.method == "GET":
+        section_id = request.query_params.get("section")
+        teacher_id = request.query_params.get("teacher")
+        subject_id = request.query_params.get("subject")
+        qs = SubjectAllocation.objects.select_related("subject", "section").prefetch_related("teachers").all()
+        if section_id: qs = qs.filter(section_id=section_id)
+        if teacher_id: qs = qs.filter(teachers__id=teacher_id)
+        if subject_id: qs = qs.filter(subject_id=subject_id)
+        return Response(SubjectAllocationSerializer(qs, many=True).data)
+    
+    serializer = SubjectAllocationSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def subject_allocation_detail_view(request, pk):
+    try:
+        allocation = SubjectAllocation.objects.get(pk=pk)
+    except SubjectAllocation.DoesNotExist:
+        return Response({"error": "NotFound"}, status=404)
+    if request.method == "DELETE":
+        allocation.delete()
+        return Response(status=204)
+    serializer = SubjectAllocationSerializer(allocation, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=400)
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def lesson_plan_list_view(request):
+    if request.method == "GET":
+        allocation_id = request.query_params.get("allocation")
+        topic_id = request.query_params.get("topic")
+        master = request.query_params.get("master")
+        
+        qs = LessonPlan.objects.all()
+        if allocation_id: 
+            qs = qs.filter(allocation_id=allocation_id)
+        elif master == "true":
+            qs = qs.filter(allocation__isnull=True)
+            
+        if topic_id: qs = qs.filter(topic_id=topic_id)
+        return Response(LessonPlanSerializer(qs, many=True).data)
+    
+    data = request.data
+    try:
+        plan, created = LessonPlan.objects.update_or_create(
+            allocation_id=data.get("allocation"),
+            topic_id=data.get("topic"),
+            defaults={
+                "title": data.get("title", "Plan"),
+                "status": data.get("status", "pending"),
+                "description": data.get("description", ""),
+                "planned_date": data.get("planned_date") if data.get("planned_date") else None,
+                "actual_date": timezone.now().date() if data.get("status") == "completed" else None
+            }
+        )
+        return Response(LessonPlanSerializer(plan).data, status=200 if not created else 201)
+    except Exception as e:
+        print("PLAN SAVE ERROR:", str(e), "DATA:", data)
+        return Response({"error": str(e)}, status=400)
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def lesson_plan_detail_view(request, pk):
+    try:
+        plan = LessonPlan.objects.get(pk=pk)
+    except LessonPlan.DoesNotExist:
+        return Response({"error": "Plan not found."}, status=404)
+    if request.method == "GET":
+        return Response(LessonPlanSerializer(plan).data)
+    if request.method == "DELETE":
+        plan.delete()
+        return Response(status=204)
+    serializer = LessonPlanSerializer(plan, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=400)

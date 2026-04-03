@@ -17,4 +17,5 @@ urlpatterns = [
     # Student Fee Statement & Defaulters
     path("students/<int:student_id>/statement/", views.student_fee_statement_view, name="student-fee-statement"),
     path("defaulters/", views.fee_defaulters_view, name="fee-defaulters"),
+    path("section-overview/", views.fee_section_overview_view, name="fee-section-overview"),
 ]

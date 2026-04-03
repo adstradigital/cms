@@ -34,6 +34,21 @@
   gap: var(--space-2);
 }
 
+.metaRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 0.72rem;
+  color: var(--theme-text-muted);
+}
+
+.metaRow span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
 /* Compact Alert Banner */
 .alertBanner {
   display: flex;
@@ -229,6 +244,20 @@
   color: var(--theme-text-muted);
   margin-top: 4px;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.subTag {
+  margin-top: 4px;
+  font-size: 0.6rem;
+  color: #0f766e;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  border-radius: 10px;
+  padding: 2px 6px;
+  width: fit-content;
 }
 
 .emptySlot {
@@ -293,10 +322,118 @@
 
 .primary { background: var(--color-primary); color: #fff; }
 .secondary { background: var(--color-info); color: #fff; }
+.success { background: #10b981; color: #fff; }
 .outline { background: var(--theme-surface); border: 1px solid var(--theme-border); color: var(--theme-text); }
 .outline:hover { border-color: var(--color-secondary); color: var(--color-secondary); }
 .warning { background: #fffbeb; border: 1px solid #f97316; color: #9a3412; }
 .danger { background: var(--color-danger); color: #fff; }
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--theme-border);
+  background: var(--theme-bg);
+  color: var(--theme-text);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--color-primary);
+}
+
+.checkRow {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--theme-text);
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.periodSelector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.daySelector {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.periodConfigList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.periodConfigRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.infoBox {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg);
+  font-size: 0.78rem;
+}
+
+.teacherView {
+  flex: 1;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  background: var(--theme-surface);
+  padding: 16px;
+  overflow: auto;
+}
+
+.teacherViewHeader h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.teacherViewHeader p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+}
+
+.teacherCards {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.teacherCard {
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--theme-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.teacherEmpty {
+  margin-top: 14px;
+  border: 1px dashed var(--theme-border);
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+  color: var(--theme-text-muted);
+}
 
 .modalOverlay {
   position: fixed;

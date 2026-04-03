@@ -1,0 +1,88 @@
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from .models import Staff, TeacherDetail
+from apps.academics.models import SubjectAllocation
+from apps.permissions.models import Role as RoleV2
+
+User = get_user_model()
+
+class StaffSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+    phone = serializers.CharField(source='user.phone', read_only=True)
+    role_name = serializers.CharField(source='user.role.name', read_only=True)
+    user_role_id = serializers.IntegerField(source='user.role_id', read_only=True)
+    is_active = serializers.BooleanField(source='user.is_active', read_only=True)
+
+    class Meta:
+        model = Staff
+        fields = [
+            'id', 'user', 'full_name', 'email', 'phone', 'employee_id',
+            'designation', 'joining_date', 'status', 'is_teaching_staff', 'role_name',
+            'user_role_id', 'is_active', 'experience_years', 'qualification'
+        ]
+
+
+class StaffCreateSerializer(serializers.Serializer):
+    # User fields
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    username = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True)
+
+    # Staff fields
+    employee_id = serializers.CharField(max_length=50)
+    designation = serializers.CharField(max_length=100)
+    joining_date = serializers.DateField()
+    status = serializers.ChoiceField(choices=Staff.STATUS_CHOICES, required=False)
+    is_teaching_staff = serializers.BooleanField(required=False)
+
+    # Role assignment (roles_v2)
+    role = serializers.IntegerField(required=False)
+
+    # Teacher-only
+    specialization = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    bio = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_role(self, value):
+        if value is None:
+            return value
+        if not RoleV2.objects.filter(pk=value).exists():
+            raise serializers.ValidationError("Role not found.")
+        return value
+
+
+class StaffUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=Staff.STATUS_CHOICES, required=False)
+    designation = serializers.CharField(max_length=100, required=False)
+    is_teaching_staff = serializers.BooleanField(required=False)
+
+    # user updates
+    role = serializers.IntegerField(required=False)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate_role(self, value):
+        if value is None:
+            return value
+        if not RoleV2.objects.filter(pk=value).exists():
+            raise serializers.ValidationError("Role not found.")
+        return value
+
+class TeacherDetailSerializer(serializers.ModelSerializer):
+    allocated_subjects = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TeacherDetail
+        fields = ['specialization', 'bio', 'allocated_subjects']
+
+    def get_allocated_subjects(self, obj):
+        allocations = SubjectAllocation.objects.filter(teachers=obj.staff.user)
+        return [
+            {
+                'subject_name': a.subject.name,
+                'section_name': a.section.name,
+                'class_name': a.section.school_class.name
+            } for a in allocations
+        ]

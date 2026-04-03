@@ -15,11 +15,20 @@ def notification_list_view(request):
         if request.method == "GET":
             notif_type = request.query_params.get("type")
             audience = request.query_params.get("audience")
-            qs = Notification.objects.select_related("created_by", "target_class").all()
+            section_id = request.query_params.get("section")
+            class_id = request.query_params.get("class")
+            published = request.query_params.get("published")
+            qs = Notification.objects.select_related("created_by", "target_class", "target_section").all()
             if notif_type:
                 qs = qs.filter(notification_type=notif_type)
             if audience:
                 qs = qs.filter(target_audience=audience)
+            if section_id:
+                qs = qs.filter(target_section_id=section_id)
+            if class_id:
+                qs = qs.filter(target_class_id=class_id)
+            if published in ["true", "false"]:
+                qs = qs.filter(is_published=(published == "true"))
             return Response(NotificationSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         serializer = NotificationSerializer(data=request.data)
@@ -37,7 +46,7 @@ def notification_list_view(request):
 def notification_detail_view(request, pk):
     try:
         try:
-            notification = Notification.objects.select_related("created_by", "target_class").get(pk=pk)
+            notification = Notification.objects.select_related("created_by", "target_class", "target_section").get(pk=pk)
         except Notification.DoesNotExist:
             return Response({"error": "Notification not found."}, status=status.HTTP_404_NOT_FOUND)
 

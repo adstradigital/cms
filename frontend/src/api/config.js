@@ -24,6 +24,8 @@ export const ENDPOINTS = {
   },
   ACADEMICS: {
     CLASSES: '/academics/classes/',
+    ASSIGNMENTS: '/academics/assignments/',
+    MATERIALS: '/academics/materials/',
   },
   ATTENDANCE: {
     MARK: '/attendance/mark/',

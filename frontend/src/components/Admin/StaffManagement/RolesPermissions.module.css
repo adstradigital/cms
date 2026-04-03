@@ -1,0 +1,287 @@
+.wrap {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 14px;
+}
+
+.left,
+.right {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+}
+
+.leftTop {
+  display: flex;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid var(--theme-border);
+  flex-wrap: wrap;
+}
+
+.btn {
+  border: 1.5px solid var(--theme-border);
+  background: var(--theme-bg);
+  color: var(--theme-text);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: var(--color-surface-hover);
+}
+
+.btnPrimary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.btnPrimary:hover {
+  filter: brightness(1.05);
+}
+
+.btnDanger {
+  border: 1.5px solid #fecaca;
+  background: #fff;
+  color: #991b1b;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.btnDanger:hover {
+  background: #fef2f2;
+}
+
+.roleList {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roleItem {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg);
+  border-radius: 16px;
+  padding: 12px 12px;
+  cursor: pointer;
+}
+
+.roleItem:hover {
+  background: var(--color-surface-hover);
+}
+
+.roleItemActive {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-bg);
+}
+
+.roleName {
+  font-weight: 950;
+  color: var(--theme-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roleMeta {
+  margin-top: 4px;
+  color: var(--theme-text-secondary);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.empty {
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--theme-text-secondary);
+  font-weight: 900;
+}
+
+.rightTop {
+  padding: 14px;
+  border-bottom: 1px solid var(--theme-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rightActions {
+  display: inline-flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-weight: 950;
+  color: var(--theme-text);
+}
+
+.sub {
+  margin-top: 4px;
+  color: var(--theme-text-secondary);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.panelEmpty {
+  padding: 18px 14px;
+  color: var(--theme-text-secondary);
+  font-weight: 900;
+}
+
+.permGrid {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.permGroup {
+  border: 1px solid var(--theme-border);
+  border-radius: 18px;
+  background: var(--theme-bg);
+  padding: 12px;
+}
+
+.groupTitle {
+  font-weight: 950;
+  color: var(--theme-text);
+  margin-bottom: 10px;
+  text-transform: capitalize;
+}
+
+.permRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.permRow:hover {
+  background: var(--color-surface-hover);
+}
+
+.permRow input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.permLabel {
+  font-weight: 900;
+  color: var(--theme-text);
+  font-size: 13px;
+}
+
+.permCode {
+  margin-top: 2px;
+  color: var(--theme-text-secondary);
+  font-weight: 800;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  padding: 16px;
+}
+
+.modal {
+  width: 100%;
+  max-width: 520px;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+}
+
+.modalHeader {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--theme-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalClose {
+  border: 1px solid var(--theme-border);
+  background: transparent;
+  color: var(--theme-text);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.modalBody {
+  padding: 16px;
+}
+
+.fieldLabel {
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--theme-text-secondary);
+  margin-bottom: 8px;
+}
+
+.input {
+  width: 100%;
+  border: 1.5px solid var(--theme-border);
+  background: var(--theme-bg);
+  color: var(--theme-text);
+  border-radius: 12px;
+  padding: 12px;
+  font-weight: 800;
+  outline: none;
+}
+
+.modalActions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+  .wrap {
+    grid-template-columns: 1fr;
+  }
+  .permGrid {
+    grid-template-columns: 1fr;
+  }
+}
+

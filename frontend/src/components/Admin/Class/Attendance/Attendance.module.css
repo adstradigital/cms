@@ -1,0 +1,299 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xl);
+  padding: 16px 18px;
+}
+
+.subtitle {
+  color: var(--theme-text-secondary);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.btnPrimary {
+  background: var(--color-primary);
+  border-color: transparent;
+  color: white;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.controlsRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.controlGroup {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.controlGroup label {
+  font-size: 11px;
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+
+.controlGroup input,
+.controlGroup select {
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--theme-bg);
+  color: var(--theme-text);
+  outline: none;
+}
+
+.summaryBar {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--theme-surface);
+  border: 1px dashed var(--theme-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.summaryItem {
+  color: var(--theme-text-secondary);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.calendarCard,
+.tableCard {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.cardHeader {
+  padding: 14px 16px;
+  background: var(--color-surface-hover);
+  border-bottom: 1px solid var(--theme-border);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.calendarGrid {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendarDay {
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg);
+  color: var(--theme-text);
+  border-radius: 12px;
+  padding: 10px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.calendarDayActive {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-bg);
+}
+
+.calendarDayNum {
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.calendarDayMeta {
+  font-size: 11px;
+  color: var(--theme-text-muted);
+  font-weight: 800;
+}
+
+.bulkBtns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btnSm {
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  border-radius: 999px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.btnSm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tableWrap {
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  font-size: 11px;
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 12px 16px;
+}
+
+.table td {
+  border-top: 1px solid var(--theme-border);
+  padding: 12px 16px;
+  vertical-align: middle;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  color: var(--theme-text-muted);
+  font-size: 12px;
+}
+
+.subText {
+  color: var(--theme-text-secondary);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.empty {
+  padding: 24px;
+  color: var(--theme-text-secondary);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.badge {
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-weight: 900;
+  cursor: pointer;
+  background: var(--theme-bg);
+}
+
+.badgeUnmarked {
+  color: var(--theme-text-secondary);
+}
+
+.badgePresent {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #065f46;
+}
+
+.badgeAbsent {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #7f1d1d;
+}
+
+.badgeLate {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #7c2d12;
+}
+
+.badgeLeave {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e3a8a;
+}
+
+.ok {
+  font-weight: 900;
+  color: var(--theme-text);
+}
+
+.low {
+  font-weight: 900;
+  color: var(--color-danger);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1000px) {
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+  .controlsRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+

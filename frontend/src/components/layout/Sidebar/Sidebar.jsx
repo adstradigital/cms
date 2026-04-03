@@ -11,6 +11,7 @@ const menuItems = {
     { label: 'Teachers', href: '/admins/teachers', icon: '👨‍🏫' },
     { label: 'Students', href: '/admins/students', icon: '🎓' },
     { label: 'Classes', href: '/admins/classes', icon: '🏫' },
+  
     { label: 'Course Sessions', href: '/admins/courses', icon: '📚' },
     { label: 'Admissions', href: '/admins/admissions', icon: '📝' },
     { label: 'Examinations', href: '/admins/exams', icon: '📑' },
@@ -41,7 +42,7 @@ export default function Sidebar({ role = 'admin', collapsed = false, onToggle })
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
       <div className={styles.logo}>
-        {!collapsed && <span className={styles.logoText}>Schoolastica.</span>}
+        {!collapsed && <span className={styles.logoText}>CMS.</span>}
         <button className={styles.toggleBtn} onClick={onToggle}>
           {collapsed ? '→' : '←'}
         </button>

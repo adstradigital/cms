@@ -40,6 +40,9 @@ urlpatterns = [
     path('api/hostel/', include('apps.hostel.urls')),
     path('api/transport/', include('apps.transport.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
+    path('api/permissions/', include('apps.permissions.urls')),
+    path('api/staff/', include('apps.staff.urls')),
+    path('api/elections/', include('apps.elections.urls')),
 ]
 
 # Serve media files in development

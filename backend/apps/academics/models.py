@@ -8,19 +8,94 @@ from apps.students.models import Class, Section
 
 
 class Subject(models.Model):
-    school_class = models.ForeignKey(Class, on_delete=models.CASCADE, related_name="subjects")
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20, blank=True)
-    teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="subjects")
-    max_marks = models.PositiveSmallIntegerField(default=100)
-    is_optional = models.BooleanField(default=False)
+    code = models.CharField(max_length=20, unique=True)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.name} — {self.school_class.name}"
+        return f"{self.name} ({self.code})"
 
     class Meta:
         db_table = "subjects"
-        unique_together = ("school_class", "name")
+
+
+class SyllabusUnit(models.Model):
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="units")
+    title = models.CharField(max_length=255)
+    order = models.PositiveSmallIntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.subject.name} - Unit {self.order}: {self.title}"
+
+    class Meta:
+        db_table = "syllabus_units"
+        ordering = ["order"]
+
+
+class SyllabusChapter(models.Model):
+    unit = models.ForeignKey(SyllabusUnit, on_delete=models.CASCADE, related_name="chapters")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    order = models.PositiveSmallIntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.unit.title} - Ch {self.order}: {self.title}"
+
+    class Meta:
+        db_table = "syllabus_chapters"
+        ordering = ["order"]
+
+
+class SyllabusTopic(models.Model):
+    chapter = models.ForeignKey(SyllabusChapter, on_delete=models.CASCADE, related_name="topics")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    order = models.PositiveSmallIntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.chapter.title} - Topic {self.order}: {self.title}"
+
+    class Meta:
+        db_table = "syllabus_topics"
+        ordering = ["order"]
+
+
+class SubjectAllocation(models.Model):
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="allocations")
+    section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="subject_allocations")
+    teachers = models.ManyToManyField(User, related_name="allocated_subjects", blank=True)
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="subject_allocations")
+
+    def __str__(self):
+        return f"{self.subject.name} in {self.section}"
+
+    class Meta:
+        db_table = "subject_allocations"
+        unique_together = ("subject", "section", "academic_year")
+
+
+class LessonPlan(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("in_progress", "In Progress"),
+        ("completed", "Completed"),
+    ]
+    allocation = models.ForeignKey(SubjectAllocation, on_delete=models.CASCADE, related_name="lesson_plans", null=True, blank=True)
+    topic = models.ForeignKey(SyllabusTopic, on_delete=models.CASCADE, related_name="lesson_plans", null=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    planned_date = models.DateField(null=True, blank=True)
+    actual_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} - {self.status}"
+
+    class Meta:
+        db_table = "lesson_plans"
+        unique_together = ("allocation", "topic")
 
 
 class Timetable(models.Model):
@@ -112,3 +187,49 @@ class SubstituteLog(models.Model):
 
     class Meta:
         db_table = "substitute_logs"
+
+
+class Assignment(models.Model):
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="assignments")
+    section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="assignments")
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_assignments")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    due_date = models.DateTimeField()
+    attachment = models.FileField(upload_to="assignments/", null=True, blank=True)
+    is_project = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.title} — {self.subject.name}"
+
+    class Meta:
+        db_table = "assignments"
+        ordering = ["-created_at"]
+
+
+class Material(models.Model):
+    MATERIAL_TYPE_CHOICES = [
+        ("video", "Video"),
+        ("document", "Document"),
+        ("link", "External Link"),
+        ("other", "Other"),
+    ]
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="materials")
+    section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="materials")
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_materials")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    material_type = models.CharField(max_length=10, choices=MATERIAL_TYPE_CHOICES, default="document")
+    file = models.FileField(upload_to="materials/", null=True, blank=True)
+    external_url = models.URLField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.title} — {self.subject.name}"
+
+    class Meta:
+        db_table = "materials"
+        ordering = ["-created_at"]

@@ -77,6 +77,8 @@ INSTALLED_APPS = [
     'apps.hostel',
     'apps.library',
     'apps.notifications',
+    'apps.staff',
+    'apps.elections',
 ]
 
 MIDDLEWARE = [

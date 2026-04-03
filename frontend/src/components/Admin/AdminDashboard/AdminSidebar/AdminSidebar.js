@@ -27,12 +27,28 @@ const AdminSidebar = () => {
   const { logout } = useAuth();
   
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [expandedMenu, setExpandedMenu] = useState(null);
+  const [expandedMenu, setExpandedMenu] = useState(
+    pathname?.startsWith('/admins/students') ? 'Students' : 
+    pathname?.startsWith('/admins/classes') ? 'Classes' : 
+    pathname?.startsWith('/admins/staff') ? 'Staff' : null
+  );
+  const [lastPath, setLastPath] = useState(pathname);
+
+  // Sync expanded state with path navigation
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
+    if (pathname?.startsWith('/admins/students')) setExpandedMenu('Students');
+    else if (pathname?.startsWith('/admins/classes')) setExpandedMenu('Classes');
+    else if (pathname?.startsWith('/admins/staff')) setExpandedMenu('Staff');
+  }
+  
   const isStudentsPath = pathname?.startsWith('/admins/students');
   const isClassesPath = pathname?.startsWith('/admins/classes');
+  const isStaffPath = pathname?.startsWith('/admins/staff');
   
-  const isStudentsExpanded = expandedMenu === 'Students' || (expandedMenu === null && isStudentsPath);
-  const isClassesExpanded = expandedMenu === 'Classes' || (expandedMenu === null && isClassesPath);
+  const isStudentsExpanded = expandedMenu === 'Students';
+  const isClassesExpanded = expandedMenu === 'Classes';
+  const isStaffExpanded = expandedMenu === 'Staff';
 
   const navigate = (path) => {
     router.push(path);
@@ -44,7 +60,7 @@ const AdminSidebar = () => {
       {/* Logo */}
       <div className={`${styles.logoContainer} ${isCollapsed ? styles.logoContainerCollapsed : ''}`}>
         <div className={styles.logoIcon}>
-          <Atom size={18} strokeWidth={2.25} className={styles.logoReactIcon} />
+          <Atom size={16} strokeWidth={2.25} className={styles.logoReactIcon} />
         </div>
         {!isCollapsed && (
           <div className={styles.logoCopy}>
@@ -59,7 +75,7 @@ const AdminSidebar = () => {
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {isCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          {isCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
         </button>
       </div>
 
@@ -67,23 +83,51 @@ const AdminSidebar = () => {
       <nav className={styles.nav}>
         {!isCollapsed && <p className={styles.sectionLabel}>Main</p>}
         <NavItem 
-          icon={<Home size={20} />} 
+          icon={<Home size={18} />} 
           label="Dashboard" 
           collapsed={isCollapsed}
           active={pathname === '/admins'} 
           onClick={() => { navigate('/admins'); setExpandedMenu(null); }} 
         />
-        <NavItem 
-          icon={<Users size={20} />} 
-          label="Teachers" 
-          collapsed={isCollapsed}
-          active={pathname === '/admins/teachers'} 
-          onClick={() => { navigate('/admins/teachers'); setExpandedMenu(null); }} 
-        />
+
+        {/* Staff Section */}
+        {isCollapsed ? (
+          <NavItem 
+            icon={<Users size={18} />} 
+            label="Staff" 
+            collapsed={isCollapsed}
+            active={isStaffPath} 
+            onClick={() => navigate('/admins/staff/all')} 
+          />
+        ) : (
+          <div className={styles.expandableMenuContainer}>
+            <div 
+              onClick={() => setExpandedMenu(expandedMenu === 'Staff' ? null : 'Staff')}
+              className={`${styles.expandableMenu} ${isStaffExpanded ? styles.expanded : styles.collapsed}`}
+            >
+              <div className={styles.expandableMenuContent}>
+                <div className={`${styles.expandableMenuIcon} ${isStaffExpanded ? styles.expanded : styles.collapsed}`}>
+                  <Users size={18} />
+                </div>
+                <span>Staff</span>
+              </div>
+              <ChevronDown size={14} className={`${styles.expandableChevron} ${isStaffExpanded ? styles.rotated : ''}`} />
+            </div>
+
+            <div className={`${styles.subItemsContainer} ${isStaffExpanded ? styles.expanded : styles.collapsed}`}>
+              <SubNavItem label="All Staff" active={pathname === '/admins/staff/all'} onClick={() => navigate('/admins/staff/all')} />
+              <SubNavItem label="Teachers" active={pathname === '/admins/staff/teachers'} onClick={() => navigate('/admins/staff/teachers')} />
+              <SubNavItem label="Roles & Permissions" active={pathname === '/admins/staff/roles'} onClick={() => navigate('/admins/staff/roles')} />
+              <SubNavItem label="Attendance & HR" active={pathname === '/admins/staff/hr'} onClick={() => navigate('/admins/staff/hr')} />
+              <SubNavItem label="Teacher Leaderboard" active={pathname === '/admins/staff/leaderboard'} onClick={() => navigate('/admins/staff/leaderboard')} />
+              <SubNavItem label="Tasks & Events" active={pathname === '/admins/staff/tasks'} onClick={() => navigate('/admins/staff/tasks')} />
+            </div>
+          </div>
+        )}
 
         {isCollapsed ? (
           <NavItem
-            icon={<GraduationCap size={20} />}
+            icon={<GraduationCap size={18} />}
             label="Students"
             collapsed={isCollapsed}
             active={isStudentsPath}
@@ -97,11 +141,11 @@ const AdminSidebar = () => {
             >
               <div className={styles.expandableMenuContent}>
                 <div className={`${styles.expandableMenuIcon} ${isStudentsExpanded ? styles.expanded : styles.collapsed}`}>
-                  <GraduationCap size={20} />
+                  <GraduationCap size={18} />
                 </div>
                 <span>Students</span>
               </div>
-              <ChevronDown size={16} className={`${styles.expandableChevron} ${isStudentsExpanded ? styles.rotated : ''}`} />
+              <ChevronDown size={14} className={`${styles.expandableChevron} ${isStudentsExpanded ? styles.rotated : ''}`} />
             </div>
 
             <div className={`${styles.subItemsContainer} ${isStudentsExpanded ? styles.expanded : styles.collapsed}`}>
@@ -114,7 +158,7 @@ const AdminSidebar = () => {
 
         {isCollapsed ? (
           <NavItem 
-            icon={<LayoutGrid size={20} />} 
+            icon={<LayoutGrid size={18} />} 
             label="Classes" 
             collapsed={isCollapsed}
             active={isClassesPath} 
@@ -128,37 +172,37 @@ const AdminSidebar = () => {
             >
               <div className={styles.expandableMenuContent}>
                 <div className={`${styles.expandableMenuIcon} ${isClassesExpanded ? styles.expanded : styles.collapsed}`}>
-                  <LayoutGrid size={20} />
+                  <LayoutGrid size={18} />
                 </div>
                 <span>Classes</span>
               </div>
-              <ChevronDown size={16} className={`${styles.expandableChevron} ${isClassesExpanded ? styles.rotated : ''}`} />
+              <ChevronDown size={14} className={`${styles.expandableChevron} ${isClassesExpanded ? styles.rotated : ''}`} />
             </div>
 
             <div className={`${styles.subItemsContainer} ${isClassesExpanded ? styles.expanded : styles.collapsed}`}>
               <SubNavItem label="Class" active={pathname === '/admins/classes/management'} onClick={() => navigate('/admins/classes/management')} />
               <SubNavItem label="Subject" active={pathname === '/admins/classes/subjects'} onClick={() => navigate('/admins/classes/subjects')} />
-              <SubNavItem label="Syllabus" active={pathname === '/admins/classes/syllabus'} onClick={() => navigate('/admins/classes/syllabus')} />
+              <SubNavItem label="Elections" active={pathname === '/admins/classes/elections'} onClick={() => navigate('/admins/classes/elections')} />
               <SubNavItem label="Timetable Builder" active={pathname === '/admins/classes/timetable'} onClick={() => navigate('/admins/classes/timetable')} />
             </div>
           </div>
         )}
         <NavItem 
-          icon={<Calendar size={20} />} 
+          icon={<Calendar size={18} />} 
           label="Course Sessions" 
           collapsed={isCollapsed}
           active={pathname === '/admins/sessions'} 
           onClick={() => { navigate('/admins/sessions'); setExpandedMenu(null); }} 
         />
         <NavItem 
-          icon={<BookOpen size={20} />} 
+          icon={<BookOpen size={18} />} 
           label="Admissions" 
           collapsed={isCollapsed}
           active={pathname === '/admins/admissions'} 
           onClick={() => { navigate('/admins/admissions'); setExpandedMenu(null); }} 
         />
         <NavItem 
-          icon={<FileText size={20} />} 
+          icon={<FileText size={18} />} 
           label="Examinations" 
           collapsed={isCollapsed}
           active={pathname === '/admins/examinations'} 
@@ -169,9 +213,9 @@ const AdminSidebar = () => {
       {/* Bottom Navigation */}
       <div className={styles.bottomNav}>
         {!isCollapsed && <p className={styles.sectionLabel}>Workspace</p>}
-        <NavItem icon={<Settings size={20} />} label="Settings" collapsed={isCollapsed} />
-        <NavItem icon={<HelpCircle size={20} />} label="Support" collapsed={isCollapsed} />
-        <NavItem icon={<LogOut size={20} />} label="Log out" collapsed={isCollapsed} onClick={logout} />
+        <NavItem icon={<Settings size={18} />} label="Settings" collapsed={isCollapsed} />
+        <NavItem icon={<HelpCircle size={18} />} label="Support" collapsed={isCollapsed} />
+        <NavItem icon={<LogOut size={18} />} label="Log out" collapsed={isCollapsed} onClick={logout} />
       </div>
     </div>
   );

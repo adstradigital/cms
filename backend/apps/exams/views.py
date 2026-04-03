@@ -108,6 +108,7 @@ def exam_result_list_view(request):
         if request.method == "GET":
             student_id = request.query_params.get("student")
             exam_id = request.query_params.get("exam")
+            section_id = request.query_params.get("section")
             qs = ExamResult.objects.select_related(
                 "student", "student__user", "exam_schedule", "exam_schedule__subject"
             ).all()
@@ -115,6 +116,8 @@ def exam_result_list_view(request):
                 qs = qs.filter(student_id=student_id)
             if exam_id:
                 qs = qs.filter(exam_schedule__exam_id=exam_id)
+            if section_id:
+                qs = qs.filter(student__section_id=section_id)
             return Response(ExamResultSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         serializer = ExamResultSerializer(data=request.data)
@@ -201,11 +204,14 @@ def report_card_list_view(request):
         if request.method == "GET":
             student_id = request.query_params.get("student")
             exam_id = request.query_params.get("exam")
+            section_id = request.query_params.get("section")
             qs = ReportCard.objects.select_related("student", "student__user", "exam").all()
             if student_id:
                 qs = qs.filter(student_id=student_id)
             if exam_id:
                 qs = qs.filter(exam_id=exam_id)
+            if section_id:
+                qs = qs.filter(student__section_id=section_id)
             return Response(ReportCardSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         serializer = ReportCardSerializer(data=request.data)

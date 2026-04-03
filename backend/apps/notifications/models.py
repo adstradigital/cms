@@ -26,6 +26,16 @@ class Notification(models.Model):
         "students.Class", on_delete=models.SET_NULL,
         null=True, blank=True, related_name="notifications",
     )
+    target_section = models.ForeignKey(
+        "students.Section", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="notifications",
+    )
+
+    # Used by Notice Board / Events
+    is_pinned = models.BooleanField(default=False)
+    event_start = models.DateTimeField(null=True, blank=True)
+    event_end = models.DateTimeField(null=True, blank=True)
+    location = models.CharField(max_length=255, blank=True, default="")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="notifications_sent")
     is_published = models.BooleanField(default=False)
     publish_at = models.DateTimeField(null=True, blank=True)
@@ -36,4 +46,4 @@ class Notification(models.Model):
 
     class Meta:
         db_table = "notifications"
-        ordering = ["-created_at"]
+        ordering = ["-is_pinned", "-created_at"]

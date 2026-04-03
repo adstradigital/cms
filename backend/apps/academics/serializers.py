@@ -1,14 +1,66 @@
 from rest_framework import serializers
-from .models import Subject, Timetable, Period, Homework, HomeworkSubmission, SubstituteLog
+from .models import (
+    Subject, SyllabusUnit, SyllabusChapter, SyllabusTopic, SubjectAllocation, LessonPlan,
+    Timetable, Period, Homework, HomeworkSubmission, SubstituteLog, Assignment, Material
+)
+
+
+class LessonPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LessonPlan
+        fields = ["id", "allocation", "topic", "status", "planned_date", "actual_date", "description"]
+
+
+class SyllabusTopicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SyllabusTopic
+        fields = "__all__"
+
+
+class SyllabusChapterSerializer(serializers.ModelSerializer):
+    topics = SyllabusTopicSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SyllabusChapter
+        fields = ["id", "unit", "title", "order", "topics"]
+
+
+class SyllabusUnitSerializer(serializers.ModelSerializer):
+    chapters = SyllabusChapterSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SyllabusUnit
+        fields = "__all__"
 
 
 class SubjectSerializer(serializers.ModelSerializer):
-    teacher_name = serializers.CharField(source="teacher.get_full_name", read_only=True)
-    class_name = serializers.CharField(source="school_class.name", read_only=True)
+    units = SyllabusUnitSerializer(many=True, read_only=True)
+    allocation_count = serializers.IntegerField(source="allocations.count", read_only=True)
 
     class Meta:
         model = Subject
         fields = "__all__"
+
+
+class SubjectAllocationSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
+    section_name = serializers.CharField(source="section.name", read_only=True)
+    class_name = serializers.CharField(source="section.school_class.name", read_only=True)
+    teacher_names = serializers.SerializerMethodField()
+    progress = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SubjectAllocation
+        fields = ["id", "subject", "section", "teachers", "academic_year", "subject_name", "section_name", "class_name", "teacher_names", "progress"]
+
+    def get_teacher_names(self, obj):
+        return ", ".join([t.get_full_name() for t in obj.teachers.all()])
+
+    def get_progress(self, obj):
+        total = SyllabusTopic.objects.filter(chapter__unit__subject=obj.subject).count()
+        if total == 0: return 0
+        completed = LessonPlan.objects.filter(allocation=obj, status="completed").count()
+        return int((completed / total) * 100)
 
 
 class PeriodSerializer(serializers.ModelSerializer):
@@ -72,3 +124,30 @@ class SubstituteLogSerializer(serializers.ModelSerializer):
             "section": str(p.timetable.section),
             "subject": p.subject.name if p.subject else None,
         }
+
+
+class AssignmentSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
+    section_name = serializers.SerializerMethodField()
+    teacher_name = serializers.CharField(source="teacher.get_full_name", read_only=True)
+
+    class Meta:
+        model = Assignment
+        fields = "__all__"
+
+    def get_section_name(self, obj):
+        return f"{obj.section.school_class.name} — {obj.section.name}"
+
+
+class MaterialSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
+    section_name = serializers.SerializerMethodField()
+    teacher_name = serializers.CharField(source="teacher.get_full_name", read_only=True)
+    material_type_display = serializers.CharField(source="get_material_type_display", read_only=True)
+
+    class Meta:
+        model = Material
+        fields = "__all__"
+
+    def get_section_name(self, obj):
+        return f"{obj.section.school_class.name} — {obj.section.name}"

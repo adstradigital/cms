@@ -39,3 +39,14 @@ Thumbs.db
  _agent*
  brain/
  .system_generated/
+
+
+backend/apps/academics/migrations/__pycache__/
+backend/apps/academics/__pycache__/
+backend/apps/elections/__pycache__/
+
+backend/apps/elections/migrations/__pycache__/
+backend/apps/staff/__pycache__/
+backend/core/__pycache__/
+
+backend/apps/students/__pycache__/

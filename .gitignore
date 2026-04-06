@@ -13,10 +13,11 @@ frontend/yarn-debug.log*
 frontend/yarn-error.log*
 frontend/.pnpm-debug.log*
 
-# Backend
-backend/__pycache__/
-backend/*.py[cod]
-backend/*$py.class
+# Python
+**/__pycache__/
+**/*.py[cod]
+*$py.class
+*.pyc
 backend/.env
 backend/.venv
 backend/venv/
@@ -41,12 +42,4 @@ Thumbs.db
  .system_generated/
 
 
-backend/apps/academics/migrations/__pycache__/
-backend/apps/academics/__pycache__/
-backend/apps/elections/__pycache__/
-
-backend/apps/elections/migrations/__pycache__/
-backend/apps/staff/__pycache__/
-backend/core/__pycache__/
-
-backend/apps/students/__pycache__/
+# Removed explicit file patterns

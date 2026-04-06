@@ -1,10 +1,13 @@
-export default function StaffTasksPage() {
+import StaffShell from '@/components/Admin/StaffManagement/StaffShell';
+import TasksEvents from '@/components/Admin/StaffManagement/TasksEvents';
+
+export default function TasksPage() {
   return (
-    <div style={{ padding: 18, opacity: 0.75, color: 'var(--theme-text)' }}>
-      <h2 style={{ margin: 0 }}>Tasks & Events</h2>
-      <p style={{ marginTop: 8 }}>
-        Placeholder: we can reuse Notifications for events, but tasks and club assignments still need models + UI.
-      </p>
-    </div>
+    <StaffShell 
+      title="Tasks, Events & Clubs" 
+      subtitle="Manage school-wide events, clubs, and tracking of specific staff delegations."
+    >
+      <TasksEvents />
+    </StaffShell>
   );
 }

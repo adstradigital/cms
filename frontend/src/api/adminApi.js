@@ -111,6 +111,35 @@ const adminApi = {
   updateRoleV2: (id, data) => instance.patch(`/permissions/roles/${id}/`, data),
   deleteRoleV2: (id) => instance.delete(`/permissions/roles/${id}/`),
   getPermissions: () => instance.get('/permissions/permissions/'),
+  getUserPermissions: (userId) => instance.get(`/permissions/users/${userId}/permissions/`),
+  updateUserPermissions: (userId, data) => instance.patch(`/permissions/users/${userId}/permissions/`, data),
+  getUserEffectivePermissions: (userId) => instance.get(`/permissions/users/${userId}/effective/`),
+  getPermissionChangelog: (params) => instance.get('/permissions/changelog/', { params }),
+  getPermStaffUsers: (params) => instance.get('/permissions/staff-users/', { params }),
+
+  // Phase 2: Staff HR
+  getStaffAttendance: (params) => instance.get('/staff/attendance/', { params }),
+  clockInStaff: () => instance.post('/staff/attendance/', { action: 'clock_in' }),
+  clockOutStaff: () => instance.post('/staff/attendance/', { action: 'clock_out' }),
+  getStaffLeaves: (params) => instance.get('/staff/leaves/', { params }),
+  applyStaffLeave: (data) => instance.post('/staff/leaves/', data),
+  updateStaffLeave: (id, data) => instance.patch(`/staff/leaves/${id}/`, data),
+  
+  // Leaderboard & Tasks
+  getTeacherLeaderboard: (params) => instance.get('/staff/leaderboard/', { params }),
+  getStaffTasks: (params) => instance.get('/staff/tasks/', { params }),
+  createStaffTask: (data) => instance.post('/staff/tasks/', data),
+  updateStaffTask: (id, data) => instance.patch(`/staff/tasks/${id}/`, data),
+
+  // Events & Clubs
+  getEvents: (params) => instance.get('/events/events/', { params }),
+  createEvent: (data) => instance.post('/events/events/', data),
+  updateEvent: (id, data) => instance.patch(`/events/events/${id}/`, data),
+  deleteEvent: (id) => instance.delete(`/events/events/${id}/`),
+  
+  getClubs: (params) => instance.get('/events/clubs/', { params }),
+  createClub: (data) => instance.post('/events/clubs/', data),
+  updateClub: (id, data) => instance.patch(`/events/clubs/${id}/`, data),
 };
 
 export default adminApi;

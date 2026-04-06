@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Staff, TeacherDetail
+from .models import Staff, TeacherDetail, StaffAttendance, StaffLeaveRequest, StaffTask, ParentFeedback, TeacherLeaderboardSnapshot
 from apps.academics.models import SubjectAllocation
 from apps.permissions.models import Role as RoleV2
 
@@ -73,6 +73,10 @@ class StaffUpdateSerializer(serializers.Serializer):
 class TeacherDetailSerializer(serializers.ModelSerializer):
     allocated_subjects = serializers.SerializerMethodField()
 
+
+class TeacherDetailSerializer(serializers.ModelSerializer):
+    allocated_subjects = serializers.SerializerMethodField()
+
     class Meta:
         model = TeacherDetail
         fields = ['specialization', 'bio', 'allocated_subjects']
@@ -86,3 +90,38 @@ class TeacherDetailSerializer(serializers.ModelSerializer):
                 'class_name': a.section.school_class.name
             } for a in allocations
         ]
+
+
+class StaffAttendanceSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source='staff.user.get_full_name', read_only=True)
+
+    class Meta:
+        model = StaffAttendance
+        fields = '__all__'
+
+
+class StaffLeaveRequestSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source='staff.user.get_full_name', read_only=True)
+    reviewed_by_name = serializers.CharField(source='reviewed_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = StaffLeaveRequest
+        fields = '__all__'
+
+
+class StaffTaskSerializer(serializers.ModelSerializer):
+    assigned_to_name = serializers.CharField(source='assigned_to.user.get_full_name', read_only=True)
+    assigned_by_name = serializers.CharField(source='assigned_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = StaffTask
+        fields = '__all__'
+
+
+class TeacherLeaderboardSnapshotSerializer(serializers.ModelSerializer):
+    teacher_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
+    academic_year_name = serializers.CharField(source='academic_year.name', read_only=True)
+
+    class Meta:
+        model = TeacherLeaderboardSnapshot
+        fields = '__all__'

@@ -63,6 +63,11 @@ class User(AbstractUser):
     school      = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name="users")
     role        = models.ForeignKey('permissions.Role', null=True, blank=True, on_delete=models.SET_NULL, related_name="users")
     assigned_class = models.ForeignKey('students.Class', null=True, blank=True, on_delete=models.SET_NULL, related_name="assigned_teachers")
+    individual_permissions = models.ManyToManyField(
+        'permissions.Permission', blank=True,
+        related_name='users_individual',
+        help_text='Extra permissions granted to this user on top of their role'
+    )
     
     phone       = models.CharField(max_length=20, blank=True)
     is_verified = models.BooleanField(default=False)
@@ -73,11 +78,16 @@ class User(AbstractUser):
         return f"{self.get_full_name()} ({self.username})"
 
     def has_perm_code(self, codename):
+        """Check role permissions + individual overrides."""
         if self.is_superuser:
             return True
-        if not self.role:
-            return False
-        return self.role.permissions.filter(codename=codename).exists()
+        # Check individual user-level permissions first
+        if self.individual_permissions.filter(codename=codename).exists():
+            return True
+        # Then check role permissions
+        if self.role and self.role.permissions.filter(codename=codename).exists():
+            return True
+        return False
 
     def get_class_filter(self):
         """Returns queryset filter kwargs scoped to this user's class."""

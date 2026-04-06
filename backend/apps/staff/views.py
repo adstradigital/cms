@@ -5,8 +5,9 @@ from django.db import models
 from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from .models import Staff, TeacherDetail
-from .serializers import StaffSerializer, TeacherDetailSerializer, StaffCreateSerializer, StaffUpdateSerializer
+from .models import Staff, TeacherDetail, StaffAttendance, StaffLeaveRequest, StaffTask, TeacherLeaderboardSnapshot
+from .serializers import StaffSerializer, TeacherDetailSerializer, StaffCreateSerializer, StaffUpdateSerializer, StaffAttendanceSerializer, StaffLeaveRequestSerializer, StaffTaskSerializer, TeacherLeaderboardSnapshotSerializer
+from django.utils import timezone
 from apps.accounts.models import User
 from apps.permissions.models import Role as RoleV2
 
@@ -150,3 +151,129 @@ def staff_reset_credentials_view(request, pk):
     staff.user.set_password(temp_password)
     staff.user.save(update_fields=["password"])
     return Response({"username": staff.user.username, "temp_password": temp_password}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def staff_attendance_view(request):
+    if request.method == 'GET':
+        qs = StaffAttendance.objects.all()
+        serializer = StaffAttendanceSerializer(qs, many=True)
+        return Response(serializer.data)
+    
+    # POST - Clock In / Clock Out
+    action = request.data.get('action')
+    try:
+        staff = request.user.staff_profile
+    except:
+        return Response({"error": "Not a staff member"}, status=status.HTTP_403_FORBIDDEN)
+        
+    date_today = timezone.now().date()
+    attendance, created = StaffAttendance.objects.get_or_create(staff=staff, date=date_today)
+    
+    if action == 'clock_in':
+        if attendance.in_time:
+            return Response({"error": "Already clocked in"}, status=status.HTTP_400_BAD_REQUEST)
+        attendance.in_time = timezone.now().time()
+        attendance.status = 'present'
+        # Simple late logic: if after 9:00 AM
+        if attendance.in_time.hour >= 9:
+            attendance.is_late = True
+        attendance.save()
+    elif action == 'clock_out':
+        if not attendance.in_time:
+            return Response({"error": "Clock in first"}, status=status.HTTP_400_BAD_REQUEST)
+        attendance.out_time = timezone.now().time()
+        attendance.save()
+    else:
+        return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    serializer = StaffAttendanceSerializer(attendance)
+    return Response(serializer.data)
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def staff_leave_view(request):
+    if request.method == 'GET':
+        qs = StaffLeaveRequest.objects.all()
+        serializer = StaffLeaveRequestSerializer(qs, many=True)
+        return Response(serializer.data)
+        
+    # Apply for leave
+    try:
+        staff = request.user.staff_profile
+    except:
+        return Response({"error": "Not a staff member"}, status=status.HTTP_403_FORBIDDEN)
+        
+    data = request.data.copy()
+    data['staff'] = staff.id
+    serializer = StaffLeaveRequestSerializer(data=data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['PATCH'])
+@permission_classes([permissions.IsAuthenticated])
+def staff_leave_detail_view(request, pk):
+    try:
+        leave = StaffLeaveRequest.objects.get(pk=pk)
+    except StaffLeaveRequest.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    data = request.data
+    if 'status' in data:
+        leave.status = data['status']
+        leave.reviewed_by = request.user
+        leave.reviewed_at = timezone.now()
+        leave.save()
+        
+        # If approved, auto mark attendance
+        if leave.status == 'approved':
+            import datetime
+            current_date = leave.from_date
+            while current_date <= leave.to_date:
+                StaffAttendance.objects.update_or_create(
+                    staff=leave.staff,
+                    date=current_date,
+                    defaults={'status': 'on_leave'}
+                )
+                current_date += datetime.timedelta(days=1)
+                
+    return Response(StaffLeaveRequestSerializer(leave).data)
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def staff_task_view(request):
+    if request.method == 'GET':
+        qs = StaffTask.objects.all()
+        serializer = StaffTaskSerializer(qs, many=True)
+        return Response(serializer.data)
+        
+    serializer = StaffTaskSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(assigned_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['PATCH'])
+@permission_classes([permissions.IsAuthenticated])
+def staff_task_detail_view(request, pk):
+    try:
+        task = StaffTask.objects.get(pk=pk)
+    except StaffTask.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = StaffTaskSerializer(task, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def teacher_leaderboard_view(request):
+    qs = TeacherLeaderboardSnapshot.objects.all().order_by('-composite_score')
+    serializer = TeacherLeaderboardSnapshotSerializer(qs, many=True)
+    return Response(serializer.data)
+

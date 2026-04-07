@@ -222,12 +222,18 @@ def class_list_view(request):
             qs = Class.objects.all()
             if school_id:
                 qs = qs.filter(school_id=school_id)
+            elif not request.user.is_superuser and request.user.school:
+                qs = qs.filter(school=request.user.school)
             return Response(ClassSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         serializer = ClassSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        serializer.save()
+        
+        if not request.user.school:
+            return Response({"error": "Your account is not linked to a school."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        serializer.save(school=request.user.school)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
@@ -267,6 +273,11 @@ def section_list_view(request):
         if request.method == "GET":
             class_id = request.query_params.get("class")
             qs = Section.objects.select_related("school_class", "class_teacher").all()
+            
+            # Filter by school if possible
+            if not request.user.is_superuser and request.user.school:
+                qs = qs.filter(school_class__school=request.user.school)
+                
             if class_id:
                 qs = qs.filter(school_class_id=class_id)
             return Response(SectionSerializer(qs, many=True).data, status=status.HTTP_200_OK)

@@ -5,12 +5,14 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, School, AcademicYear, Role, UserProfile
+from .models import User, School, AcademicYear, UserProfile
+from apps.permissions.models import Role
 from .serializers import (
     UserSerializer, UserCreateSerializer, UserProfileSerializer,
-    SchoolSerializer, AcademicYearSerializer, RoleSerializer,
+    SchoolSerializer, AcademicYearSerializer,
     ChangePasswordSerializer, ParentSerializer,
 )
+from apps.permissions.serializers import RoleSerializer
 
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -41,14 +43,17 @@ def login_view(request):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Auto-assign super_admin role for superusers without a role
+        # Auto-assign Admin role for superusers without a role
         if user.is_superuser and not user.role:
-            role, _ = Role.objects.get_or_create(
-                name="super_admin",
-                defaults={"description": "Full system administrator"},
-            )
-            user.role = role
-            user.save(update_fields=["role"])
+            try:
+                # Use 'Admin' role as defined in seed_permissions.py
+                admin_role = Role.objects.get(name="Admin")
+                user.role = admin_role
+                user.portal = User.PORTAL_ADMIN
+                user.save(update_fields=["role", "portal"])
+            except Role.DoesNotExist:
+                # Fallback if seed script hasn't run
+                pass
 
         refresh = RefreshToken.for_user(user)
         return Response({
@@ -303,5 +308,29 @@ def role_list_view(request):
     try:
         roles = Role.objects.all()
         return Response(RoleSerializer(roles, many=True).data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_school_config_view(request):
+    """
+    Get the global school configuration for branding.
+    Currently returns the first school record found.
+    """
+    try:
+        school = School.objects.first()
+        if not school:
+            return Response({
+                "name": "Schoolastica",
+                "tagline": "Inspiring Excellence every day.",
+                "primary_color": "#00a676",
+                "secondary_color": "#3b82f6"
+            })
+        
+        from .serializers import SchoolSerializer
+        serializer = SchoolSerializer(school)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

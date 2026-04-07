@@ -177,7 +177,7 @@ def seed():
             defaults={'label': label, 'module': module, 'description': desc}
         )
         perm_objs[code] = obj
-        status_txt = "✔ created" if created else "↻ updated"
+        status_txt = "SUCCESS created" if created else "UPDATED updated"
         print(f"  {status_txt}  {code:30s}  [{module}]")
 
     all_perm_objs = list(perm_objs.values())
@@ -198,7 +198,7 @@ def seed():
             role.permissions.set([perm_objs[c] for c in cfg['perms'] if c in perm_objs])
 
         n = role.permissions.count()
-        status_txt = "✔ created" if created else "↻ updated"
+        status_txt = "SUCCESS created" if created else "UPDATED updated"
         print(f"  {status_txt}  {name:20s}  [{n} permissions, scope={cfg['scope']}]")
 
     # ── 3. Assign Admin to superusers ──────────────────────────────
@@ -208,7 +208,7 @@ def seed():
         user.role = admin_role
         user.portal = User.PORTAL_ADMIN
         user.save()
-        print(f"  → assigned Admin role to superuser: {user.username}")
+        print(f"  -> assigned Admin role to superuser: {user.username}")
 
     print()
     print(f"  Done! {len(PERMISSIONS)} permissions, {len(ROLES)} roles seeded.")

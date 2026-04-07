@@ -26,4 +26,7 @@ urlpatterns = [
     
     # Roles
     path("roles/", views.role_list_view, name="role_list"),
+    
+    # Public Config
+    path("school-config/", views.public_school_config_view, name="school_config"),
 ]

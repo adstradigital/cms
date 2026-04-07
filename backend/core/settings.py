@@ -67,7 +67,6 @@ INSTALLED_APPS = [
     # Project apps
     'apps.accounts',
     'apps.permissions',
-    'apps.school',
     'apps.students',
     'apps.academics',
     'apps.attendance',

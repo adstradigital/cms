@@ -21,12 +21,10 @@ const QuickActionFab = ({ onAction, scale = 1 }) => {
   const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
   const hasMoved = useRef(false);
 
-  // Initialize position on mount
+  // Initialize position on mount — currently empty to favor CSS defaults
   useEffect(() => {
-    setPosition({
-      x: window.innerWidth - 90,
-      y: window.innerHeight - 90,
-    });
+    // We let CSS (right: 30px, bottom: 30px) handle the initial state
+    // only update if we have a saved position or specific requirement
   }, []);
 
   const handlePointerDown = useCallback((e) => {
@@ -70,8 +68,6 @@ const QuickActionFab = ({ onAction, scale = 1 }) => {
     onAction?.(actionId);
   };
 
-  if (position.x === null) return null;
-
   return (
     <>
       {/* Backdrop when menu is open */}
@@ -81,7 +77,10 @@ const QuickActionFab = ({ onAction, scale = 1 }) => {
 
       <div
         className={styles.fabContainer}
-        style={{ left: position.x, top: position.y, transform: `translate(-50%, -50%) scale(${scale})` }}
+        style={{ 
+          ...(position.x !== null ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : {}),
+          transform: `translate(-50%, -50%) scale(${scale})` 
+        }}
       >
         {/* Action items radial menu */}
         <div className={`${styles.actionsRing} ${isOpen ? styles.actionsRingOpen : ''}`}>

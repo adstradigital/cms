@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, Save, Trash2, Search, Filter, Shield, User, Clock, CheckSquare, Square, ChevronDown } from 'lucide-react';
 import adminApi from '@/api/adminApi';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -33,6 +34,7 @@ function formatDate(dateStr) {
 // Main Component
 // ----------------------------------------------------------------------
 const RolesPermissionsView = () => {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('roles'); // 'roles', 'users', 'changelog'
   const [loading, setLoading] = useState(false);
   const { toasts, push, dismiss } = useToast();
@@ -62,6 +64,11 @@ const RolesPermissionsView = () => {
   const [createRoleOpen, setCreateRoleOpen] = useState(false);
   const [newRoleForm, setNewRoleForm] = useState({ name: '', scope: 'school' });
   const [confirmDeleteRole, setConfirmDeleteRole] = useState(null);
+
+  const requestedTab = searchParams.get('tab');
+  const requestedRoleId = searchParams.get('roleId');
+  const requestedUserId = searchParams.get('userId');
+  const requestedUserName = searchParams.get('user');
 
   // ----------------------------------------------------------------------
   // Data Loading
@@ -116,10 +123,22 @@ const RolesPermissionsView = () => {
   }, []);
 
   useEffect(() => {
+    if (requestedTab === 'roles' || requestedTab === 'users' || requestedTab === 'changelog') {
+      setActiveTab(requestedTab);
+    }
+  }, [requestedTab]);
+
+  useEffect(() => {
     if (activeTab === 'changelog') loadChangelog();
     if (activeTab === 'users' && staffUsers.length === 0) loadStaffUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!requestedRoleId || roles.length === 0) return;
+    const match = roles.find((role) => String(role.id) === String(requestedRoleId));
+    if (match) setSelectedRoleId(match.id);
+  }, [requestedRoleId, roles]);
 
   // ----------------------------------------------------------------------
   // Roles Tab Logic
@@ -268,6 +287,22 @@ const RolesPermissionsView = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab !== 'users') return;
+
+    if (requestedUserId) {
+      fetchUserPermissions(requestedUserId);
+      return;
+    }
+
+    if (requestedUserName) {
+      setUserSearch(requestedUserName);
+      loadStaffUsers(requestedUserName);
+      setUserDropdownOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, requestedUserId, requestedUserName]);
 
   // ----------------------------------------------------------------------
   // Render Helpers

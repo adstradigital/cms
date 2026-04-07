@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useMemo } from 'react';
 import { 
@@ -611,17 +611,29 @@ const Class = () => {
 
       {!loading && filteredSections.length === 0 && (
         <div className={styles.emptyStateCard}>
-          <Info size={24} />
-          <h3>No Sections Found</h3>
-          <p>
-            Sections are student groups inside a class (for example, Grade 10-A). Create a class first, then add sections to start managing students.
-          </p>
-          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+          <Info size={32} style={{ color: 'var(--color-primary)', marginBottom: 16 }} />
+          {classes.length > 0 ? (
+            <>
+              <h3>Ready to Create Sections</h3>
+              <p>
+                You have created <b>{classes.length} {classes.length === 1 ? 'class' : 'classes'}</b> ({classes.map(c => c.name).join(', ')}). 
+                Now, create a <b>Section</b> (like "A" or "B") inside these classes to start managing students and attendance.
+              </p>
+            </>
+          ) : (
+            <>
+              <h3>No Sections Found</h3>
+              <p>
+                Sections are student groups inside a class (for example, Grade 10-A). Create a class first, then add sections to start managing students.
+              </p>
+            </>
+          )}
+          <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
             <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => { setEditingClass(null); setIsNewClassModalOpen(true); }}>
-              <Plus size={16} /> Create Class
+              <Plus size={16} /> New Class
             </button>
             <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => { setEditingSection(null); setIsNewSectionModalOpen(true); }}>
-              <Plus size={16} /> Create Section
+              <Plus size={16} /> Create Your First Section
             </button>
           </div>
         </div>
@@ -1376,7 +1388,7 @@ const Class = () => {
           </select>
           <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsPreferencesModalOpen(true)}><Settings size={18} /> Preferences</button>
           <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => { setEditingClass(null); setIsNewClassModalOpen(true); }}><Plus size={18} /> New Class</button>
-          <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => { setEditingSection(null); setIsNewSectionModalOpen(true); }}><Plus size={18} /> New Section</button>
+              <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => { setEditingSection(null); setIsNewSectionModalOpen(true); }}><Plus size={18} /> New Section</button>
         </div>
       </div>
       
@@ -1401,7 +1413,8 @@ const Class = () => {
                 loadDashboard();
                 setIsNewSectionModalOpen(false);
               } catch (err) {
-                alert('Operation failed');
+                const msg = err.response?.data?.error || err.response?.data?.detail || 'Operation failed';
+                alert(msg);
               }
             }}>
               <div className={styles.formGroup}>
@@ -1451,7 +1464,6 @@ const Class = () => {
               e.preventDefault();
               const formData = new FormData(e.target);
               const data = Object.fromEntries(formData);
-              data.school = 1; // Temporary: Default school ID
               try {
                 if (editingClass) {
                   await adminApi.updateClass(editingClass.id, data);
@@ -1462,7 +1474,8 @@ const Class = () => {
                 loadDashboard();
                 setIsNewClassModalOpen(false);
               } catch (err) {
-                alert('Operation failed');
+                const msg = err.response?.data?.error || err.response?.data?.detail || 'Operation failed';
+                alert(msg);
               }
             }}>
               <div className={styles.formGroup}>

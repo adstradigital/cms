@@ -13,10 +13,12 @@ frontend/yarn-debug.log*
 frontend/yarn-error.log*
 frontend/.pnpm-debug.log*
 
-# Backend
+# Backend & Python
 **/__pycache__/
 **/*.py[cod]
 **/*$py.class
+*.pyc
+
 backend/.env
 backend/.venv
 backend/venv/

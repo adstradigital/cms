@@ -205,28 +205,6 @@ def user_profile_view(request, user_pk):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ─── School Onboarding (Creator Only) ────────────────────────────────────────
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def school_onboarding_view(request):
-    """
-    Onboard a new school and its first admin.
-    Restricted to Platform Creators (superusers).
-    """
-    if not (request.user.is_superuser or request.user.portal == User.PORTAL_CREATOR):
-        return Response({"error": "Only platform creators can onboard new schools."}, status=status.HTTP_403_FORBIDDEN)
-
-    serializer = SchoolOnboardingSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    result = serializer.save()
-    return Response({
-        "message": f"School '{result['school'].name}' and admin '{result['admin'].username}' created successfully.",
-        "school": SchoolSerializer(result['school']).data,
-        "admin": UserSerializer(result['admin']).data
-    }, status=status.HTTP_201_CREATED)
 
 
 # ─── School ───────────────────────────────────────────────────────────────────

@@ -47,13 +47,11 @@ class User(AbstractUser):
     PORTAL_ADMIN   = 'admin'
     PORTAL_STUDENT = 'student'
     PORTAL_PARENT  = 'parent'
-    PORTAL_CREATOR = 'creator'
 
     PORTAL_CHOICES = [
         (PORTAL_ADMIN,   'Admin Portal'),
         (PORTAL_STUDENT, 'Student Portal'),
         (PORTAL_PARENT,  'Parent Portal'),
-        (PORTAL_CREATOR, 'Creator Portal'),
     ]
 
     portal      = models.CharField(max_length=20, choices=PORTAL_CHOICES, default=PORTAL_ADMIN)

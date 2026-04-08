@@ -44,7 +44,6 @@ export function AuthProvider({ children }) {
         'admin': '/admins', 
         'super admin': '/admins',
         'super_admin': '/admins',
-        'creator': '/admins',
         'principal': '/admins',
         'staff': '/staff', 
         'student': '/student', 

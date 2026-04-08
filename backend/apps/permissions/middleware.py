@@ -4,7 +4,6 @@ PORTAL_PATHS = {
     '/api/admin/':   'admin',
     '/api/student/': 'student',
     '/api/parent/':  'parent',
-    '/api/creator/': 'creator',
 }
 
 class PortalGuardMiddleware:

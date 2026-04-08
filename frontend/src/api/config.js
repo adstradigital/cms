@@ -17,7 +17,11 @@ export const ENDPOINTS = {
     ONBOARD_SCHOOL: '/accounts/onboard-school/',
   },
   SCHOOL: {
-    CONFIG: '/school/config/',
+    CONFIG: '/accounts/school-config/',
+    LIST: '/accounts/schools/',
+    DETAIL: (id) => `/accounts/schools/${id}/`,
+    YEARS: '/accounts/academic-years/',
+    YEAR_DETAIL: (id) => `/accounts/academic-years/${id}/`,
   },
   STUDENTS: {
     LIST: '/students/',

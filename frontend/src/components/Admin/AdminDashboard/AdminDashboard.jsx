@@ -11,6 +11,7 @@ import AnalogClockFab from './Widget/AnalogClockFab';
 import StickyNoteFab from './Widget/StickyNoteFab';
 import CalendarDateFab from './Widget/CalendarDateFab';
 import RightSidebar from './RightSidebar/RightSidebar';
+import SchoolSettings from './AdminDashboardContent/SchoolSettings';
 
 // Sub-Feature Modules
 import Class from '../Class/Class';
@@ -64,6 +65,7 @@ const AdminDashboard = () => {
     else if (pathname === '/admins/students/directory') setActiveItem('Directory');
     else if (pathname === '/admins/students/attendance') setActiveItem('Attendance');
     else if (pathname === '/admins/students/performance') setActiveItem('Performance');
+    else if (pathname === '/admins/settings') setActiveItem('Settings');
   }, [pathname]);
 
   // Hydrate from localStorage on mount
@@ -107,6 +109,7 @@ const AdminDashboard = () => {
           {activeItem === 'Subject' && <Subjects />}
           {activeItem === 'Syllabus' && <Syllabus />}
           {activeItem === 'Timetable Builder' && <TimeTable />}
+          {activeItem === 'Settings' && <SchoolSettings />}
           
           {/* Fallback for Students (can add Student directory here) */}
           {(['Directory', 'Attendance', 'Performance'].includes(activeItem)) && (

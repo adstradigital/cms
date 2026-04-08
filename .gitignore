@@ -13,11 +13,12 @@ frontend/yarn-debug.log*
 frontend/yarn-error.log*
 frontend/.pnpm-debug.log*
 
-# Python
+# Backend & Python
 **/__pycache__/
 **/*.py[cod]
-*$py.class
+**/*$py.class
 *.pyc
+
 backend/.env
 backend/.venv
 backend/venv/
@@ -26,7 +27,7 @@ backend/env/
 backend/db.sqlite3
 backend/media/
 backend/staticfiles/
-backend/.vscode/
+.vscode/
 backend/.idea/
 
 # OS/System
@@ -40,6 +41,3 @@ Thumbs.db
  _agent*
  brain/
  .system_generated/
-
-
-# Removed explicit file patterns

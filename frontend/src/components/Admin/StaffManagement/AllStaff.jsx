@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Download, LayoutGrid, List, MoreVertical, Plus, RefreshCw, Search, Shield, UserRoundX, UserRoundCheck, KeyRound } from 'lucide-react';
 import styles from './AllStaff.module.css';
 import adminApi from '@/api/adminApi';
@@ -20,6 +21,7 @@ function csvExport(rows, filename) {
 }
 
 const AllStaffView = () => {
+  const router = useRouter();
   const [view, setView] = useState('table'); // table | grid
   const [loading, setLoading] = useState(false);
   const [staff, setStaff] = useState([]);
@@ -34,6 +36,7 @@ const AllStaffView = () => {
   const [profile, setProfile] = useState(null);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [addTab, setAddTab] = useState('personal'); // personal | professional | contact
   const [addForm, setAddForm] = useState({
     first_name: '',
     last_name: '',
@@ -45,6 +48,15 @@ const AllStaffView = () => {
     is_teaching_staff: true,
     role: '',
     password: '',
+    // Detailed fields
+    gender: 'other',
+    dob: '',
+    blood_group: '',
+    qualification: '',
+    experience_years: 0,
+    address: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
   });
 
   const [confirmDeactivate, setConfirmDeactivate] = useState(null);
@@ -192,6 +204,19 @@ const AllStaffView = () => {
     }
   };
 
+  const openRolePermissions = (staffRow) => {
+    const roleId = staffRow.user_role_id || staffRow.role_id || staffRow.role;
+    if (roleId) {
+      router.push(`/admins/staff/roles?tab=roles&roleId=${roleId}`);
+      return;
+    }
+    router.push(`/admins/staff/roles?tab=users&userId=${staffRow.user_id || staffRow.id}&user=${encodeURIComponent(staffRow.full_name || '')}`);
+  };
+
+  const openUserOverrides = (staffRow) => {
+    router.push(`/admins/staff/roles?tab=users&userId=${staffRow.user_id || staffRow.id}&user=${encodeURIComponent(staffRow.full_name || '')}`);
+  };
+
   const createStaff = async () => {
     if (!addForm.first_name.trim() || !addForm.employee_id.trim() || !addForm.designation.trim() || !addForm.joining_date) return;
     try {
@@ -207,11 +232,25 @@ const AllStaffView = () => {
         is_teaching_staff: !!addForm.is_teaching_staff,
         role: addForm.role ? Number(addForm.role) : undefined,
         password: addForm.password || 'TempPass123',
+        // New detailed fields
+        gender: addForm.gender,
+        dob: addForm.dob,
+        blood_group: addForm.blood_group,
+        qualification: addForm.qualification,
+        experience_years: Number(addForm.experience_years),
+        address: addForm.address,
+        emergency_contact_name: addForm.emergency_contact_name,
+        emergency_contact_phone: addForm.emergency_contact_phone,
       };
       const res = await adminApi.createStaff(payload);
       setStaff((prev) => [res.data, ...prev]);
       setAddOpen(false);
-      setAddForm({ first_name: '', last_name: '', email: '', phone: '', employee_id: '', designation: '', joining_date: '', is_teaching_staff: true, role: '', password: '' });
+      setAddForm({
+        first_name: '', last_name: '', email: '', phone: '', employee_id: '',
+        designation: '', joining_date: '', is_teaching_staff: true, role: '',
+        password: '', gender: 'other', dob: '', blood_group: '', qualification: '',
+        experience_years: 0, address: '', emergency_contact_name: '', emergency_contact_phone: ''
+      });
       push('Staff created', 'success');
     } catch {
       push('Could not create staff', 'error');
@@ -295,6 +334,8 @@ const AllStaffView = () => {
                 {menuId === s.id && (
                   <div className={styles.menu} onClick={(e) => e.stopPropagation()}>
                     <button className={styles.menuItem} onClick={() => openProfile(s.id)}>View Profile</button>
+                    <button className={styles.menuItem} onClick={() => openRolePermissions(s)}>Manage Role</button>
+                    <button className={styles.menuItem} onClick={() => openUserOverrides(s)}>User Overrides</button>
                     <button className={styles.menuItem} onClick={() => setConfirmReset(s)}>Reset Credentials</button>
                     <button className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => setConfirmDeactivate(s)}>
                       {s.status === 'inactive' ? 'Reactivate' : 'Deactivate'}
@@ -306,6 +347,18 @@ const AllStaffView = () => {
               <div className={styles.cardName}>{s.full_name}</div>
               <div className={styles.cardMeta}>{s.designation} - {s.employee_id}</div>
               <div style={{ marginTop: 10 }}>{roleBadge(s)}</div>
+              <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+                <select
+                  className={styles.inlineSelect}
+                  value={String(s.user_role_id || s.role_id || s.role || '')}
+                  onChange={(e) => assignRole(s.id, e.target.value)}
+                >
+                  <option value="">No role</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
               <div className={styles.cardFooter}>
                 <span className={styles.small}>{s.email || ''}</span>
               </div>
@@ -353,12 +406,13 @@ const AllStaffView = () => {
                   <td>{statusBadge(s)}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className={styles.rowActions}>
-                      <select className={styles.inlineSelect} defaultValue={String(s.user_role_id || '')} onChange={(e) => assignRole(s.id, e.target.value)}>
+                      <select className={styles.inlineSelect} value={String(s.user_role_id || s.role_id || s.role || '')} onChange={(e) => assignRole(s.id, e.target.value)}>
                         <option value="">No role</option>
                         {roles.map((r) => (
                           <option key={r.id} value={r.id}>{r.name}</option>
                         ))}
                       </select>
+                      <button className={styles.iconBtn} title="Manage role permissions" onClick={() => openRolePermissions(s)}><Shield size={16} /></button>
                       <button className={styles.iconBtn} title="Reset credentials" onClick={() => { setConfirmReset(s); }}><KeyRound size={16} /></button>
                       <button className={styles.iconBtn} title={s.status === 'inactive' ? 'Reactivate' : 'Deactivate'} onClick={() => setConfirmDeactivate(s)}>
                         {s.status === 'inactive' ? <UserRoundCheck size={16} /> : <UserRoundX size={16} />}
@@ -374,63 +428,151 @@ const AllStaffView = () => {
 
       {addOpen && (
         <div className={styles.modalOverlay} onClick={() => setAddOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+          <div className={`${styles.modal} ${styles.modalLg}`} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3 style={{ margin: 0 }}>Add Staff</h3>
-              <button className={styles.modalClose} onClick={() => setAddOpen(false)}>X</button>
-            </div>
-            <div className={styles.modalBody}>
-              <div className={styles.formGrid}>
-                <div>
-                  <label>First Name</label>
-                  <input value={addForm.first_name} onChange={(e) => setAddForm((p) => ({ ...p, first_name: e.target.value }))} />
-                </div>
-                <div>
-                  <label>Last Name</label>
-                  <input value={addForm.last_name} onChange={(e) => setAddForm((p) => ({ ...p, last_name: e.target.value }))} />
-                </div>
-                <div>
-                  <label>Employee ID</label>
-                  <input value={addForm.employee_id} onChange={(e) => setAddForm((p) => ({ ...p, employee_id: e.target.value }))} />
-                </div>
-                <div>
-                  <label>Designation</label>
-                  <input value={addForm.designation} onChange={(e) => setAddForm((p) => ({ ...p, designation: e.target.value }))} />
-                </div>
-                <div>
-                  <label>Email</label>
-                  <input value={addForm.email} onChange={(e) => setAddForm((p) => ({ ...p, email: e.target.value }))} />
-                </div>
-                <div>
-                  <label>Phone</label>
-                  <input value={addForm.phone} onChange={(e) => setAddForm((p) => ({ ...p, phone: e.target.value }))} />
-                </div>
-                <div>
-                  <label>Joining Date</label>
-                  <input type="date" value={addForm.joining_date} onChange={(e) => setAddForm((p) => ({ ...p, joining_date: e.target.value }))} />
-                </div>
-                <div>
-                  <label>Role Badge</label>
-                  <select value={addForm.role} onChange={(e) => setAddForm((p) => ({ ...p, role: e.target.value }))}>
-                    <option value="">(optional)</option>
+              <h3 style={{ margin: 0 }}>Detailed Staff Onboarding</h3>
+              <div className={styles.modalHeaderActions}>
+                <div className={styles.headerRoleWrap}>
+                  <span className={styles.headerHint}>Role</span>
+                  <select
+                    className={styles.headerRoleSelect}
+                    value={addForm.role}
+                    onChange={(e) => setAddForm((p) => ({ ...p, role: e.target.value }))}
+                  >
+                    <option value="">Select role</option>
                     {roles.map((r) => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                   </select>
                 </div>
+                <span className={styles.staffTypeChip}>
+                  {addForm.is_teaching_staff ? 'Teacher Flow' : 'Staff Flow'}
+                </span>
+                <button className={styles.modalClose} onClick={() => setAddOpen(false)}>X</button>
               </div>
-              <label className={styles.checkRow}>
-                <input type="checkbox" checked={addForm.is_teaching_staff} onChange={(e) => setAddForm((p) => ({ ...p, is_teaching_staff: e.target.checked }))} />
-                Teaching staff (teacher)
-              </label>
-              <div style={{ marginTop: 10 }}>
-                <label>Temporary Password</label>
-                <input value={addForm.password} onChange={(e) => setAddForm((p) => ({ ...p, password: e.target.value }))} placeholder="Defaults to TempPass123" />
-              </div>
+            </div>
+
+            <div className={styles.modalTabs}>
+              <button className={`${styles.tabBtn} ${addTab === 'personal' ? styles.tabBtnActive : ''}`} onClick={() => setAddTab('personal')}>Personal Details</button>
+              <button className={`${styles.tabBtn} ${addTab === 'professional' ? styles.tabBtnActive : ''}`} onClick={() => setAddTab('professional')}>Professional Info</button>
+              <button className={`${styles.tabBtn} ${addTab === 'contact' ? styles.tabBtnActive : ''}`} onClick={() => setAddTab('contact')}>Contact & Others</button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {addTab === 'personal' && (
+                <div className={styles.formGrid}>
+                  <div>
+                    <label>First Name*</label>
+                    <input value={addForm.first_name} onChange={(e) => setAddForm((p) => ({ ...p, first_name: e.target.value }))} placeholder="Required" />
+                  </div>
+                  <div>
+                    <label>Last Name</label>
+                    <input value={addForm.last_name} onChange={(e) => setAddForm((p) => ({ ...p, last_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Date of Birth</label>
+                    <input type="date" value={addForm.dob} onChange={(e) => setAddForm((p) => ({ ...p, dob: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Gender</label>
+                    <select value={addForm.gender} onChange={(e) => setAddForm((p) => ({ ...p, gender: e.target.value }))}>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Blood Group</label>
+                    <select value={addForm.blood_group} onChange={(e) => setAddForm((p) => ({ ...p, blood_group: e.target.value }))}>
+                      <option value="">Select</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Teaching Staff?</label>
+                    <select value={String(addForm.is_teaching_staff)} onChange={(e) => setAddForm((p) => ({ ...p, is_teaching_staff: e.target.value === 'true' }))}>
+                      <option value="true">Yes (Teacher)</option>
+                      <option value="false">No (Staff)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {addTab === 'professional' && (
+                <div className={styles.formGrid}>
+                  <div>
+                    <label>Employee ID*</label>
+                    <input value={addForm.employee_id} onChange={(e) => setAddForm((p) => ({ ...p, employee_id: e.target.value }))} placeholder="Required (e.g. STF001)" />
+                  </div>
+                  <div>
+                    <label>Designation*</label>
+                    <input value={addForm.designation} onChange={(e) => setAddForm((p) => ({ ...p, designation: e.target.value }))} placeholder="Required (e.g. Senior Teacher)" />
+                  </div>
+                  <div>
+                    <label>Joining Date*</label>
+                    <input type="date" value={addForm.joining_date} onChange={(e) => setAddForm((p) => ({ ...p, joining_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Role Badge</label>
+                    <select value={addForm.role} onChange={(e) => setAddForm((p) => ({ ...p, role: e.target.value }))}>
+                      <option value="">(optional)</option>
+                      {roles.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Qualification</label>
+                    <input value={addForm.qualification} onChange={(e) => setAddForm((p) => ({ ...p, qualification: e.target.value }))} placeholder="e.g. M.Ed, PhD" />
+                  </div>
+                  <div>
+                    <label>Exp. Years</label>
+                    <input type="number" value={addForm.experience_years} onChange={(e) => setAddForm((p) => ({ ...p, experience_years: e.target.value }))} />
+                  </div>
+                </div>
+              )}
+
+              {addTab === 'contact' && (
+                <div className={styles.formGrid}>
+                  <div>
+                    <label>Email Address</label>
+                    <input type="email" value={addForm.email} onChange={(e) => setAddForm((p) => ({ ...p, email: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Phone Number</label>
+                    <input value={addForm.phone} onChange={(e) => setAddForm((p) => ({ ...p, phone: e.target.value }))} />
+                  </div>
+                  <div className={styles.fullRow}>
+                    <label>Permanent Address</label>
+                    <textarea value={addForm.address} onChange={(e) => setAddForm((p) => ({ ...p, address: e.target.value }))} className={styles.textarea} rows={3} />
+                  </div>
+                  <div>
+                    <label>Emergency Contact Name</label>
+                    <input value={addForm.emergency_contact_name} onChange={(e) => setAddForm((p) => ({ ...p, emergency_contact_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Emergency Contact Phone</label>
+                    <input value={addForm.emergency_contact_phone} onChange={(e) => setAddForm((p) => ({ ...p, emergency_contact_phone: e.target.value }))} />
+                  </div>
+                  <div className={styles.fullRow} style={{ marginTop: 10, borderTop: '1px solid var(--theme-border)', paddingTop: 14 }}>
+                    <label>Temporary Password</label>
+                    <input value={addForm.password} onChange={(e) => setAddForm((p) => ({ ...p, password: e.target.value }))} placeholder="Defaults to TempPass123" />
+                    <p style={{ fontSize: 11, color: 'var(--theme-text-secondary)', marginTop: 4 }}>User will be asked to change this on first login.</p>
+                  </div>
+                </div>
+              )}
+
               <div className={styles.modalActions}>
                 <button className={styles.btn} onClick={() => setAddOpen(false)}>Cancel</button>
                 <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={createStaff} disabled={loading}>
-                  <Plus size={16} /> Create
+                  <Plus size={16} /> Complete Onboarding
                 </button>
               </div>
             </div>
@@ -474,12 +616,13 @@ const AllStaffView = () => {
               </div>
 
               <div className={styles.profileActions}>
-                <select className={styles.select} value={String(profile.user_role_id || '')} onChange={(e) => assignRole(profile.id, e.target.value)}>
+                <select className={styles.select} value={String(profile.user_role_id || profile.role_id || profile.role || '')} onChange={(e) => assignRole(profile.id, e.target.value)}>
                   <option value="">No role</option>
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
+                <button className={styles.btn} onClick={() => openRolePermissions(profile)}><Shield size={16} /> Role Permissions</button>
                 <button className={styles.btn} onClick={() => setConfirmReset(profile)}><KeyRound size={16} /> Reset Credentials</button>
                 <button className={styles.btn} onClick={() => setConfirmDeactivate(profile)}>
                   {profile.status === 'inactive' ? <UserRoundCheck size={16} /> : <UserRoundX size={16} />}

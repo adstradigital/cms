@@ -213,7 +213,13 @@ const AdminSidebar = () => {
       {/* Bottom Navigation */}
       <div className={styles.bottomNav}>
         {!isCollapsed && <p className={styles.sectionLabel}>Workspace</p>}
-        <NavItem icon={<Settings size={18} />} label="Settings" collapsed={isCollapsed} />
+        <NavItem 
+          icon={<Settings size={18} />} 
+          label="Settings" 
+          collapsed={isCollapsed} 
+          active={pathname === '/admins/settings'}
+          onClick={() => navigate('/admins/settings')}
+        />
         <NavItem icon={<HelpCircle size={18} />} label="Support" collapsed={isCollapsed} />
         <NavItem icon={<LogOut size={18} />} label="Log out" collapsed={isCollapsed} onClick={logout} />
       </div>

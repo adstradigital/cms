@@ -4,11 +4,17 @@ from django.db import models
 
 class School(models.Model):
     name = models.CharField(max_length=255)
+    tagline = models.CharField(max_length=255, blank=True)
     logo = models.ImageField(upload_to="school/logos/", null=True, blank=True)
     address = models.TextField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     website = models.URLField(blank=True)
+    
+    # Branding
+    primary_color = models.CharField(max_length=7, default="#00a676")
+    secondary_color = models.CharField(max_length=7, default="#3b82f6")
+    
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -34,16 +40,7 @@ class AcademicYear(models.Model):
         unique_together = ("school", "name")
 
 
-class Role(models.Model):
-    """DEPRECATED: Use apps.permissions.Role instead."""
-    name = models.CharField(max_length=50, unique=True)
-    description = models.TextField(blank=True)
 
-    def __str__(self):
-        return f"OLD ROLE: {self.name}"
-
-    class Meta:
-        db_table = "roles"
 
 
 class User(AbstractUser):

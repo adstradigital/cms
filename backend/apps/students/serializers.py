@@ -1,14 +1,16 @@
 from rest_framework import serializers
 from django.db import transaction
 from .models import Class, Section, Student, StudentDocument
-from apps.accounts.models import User, UserProfile, Role
+from apps.accounts.models import User, UserProfile
+from apps.permissions.models import Role
 from apps.accounts.serializers import UserSerializer, UserProfileSerializer
 
 
 class ClassSerializer(serializers.ModelSerializer):
     class Meta:
         model = Class
-        fields = "__all__"
+        fields = ["id", "school", "name", "code", "created_at"]
+        read_only_fields = ["school"]
 
 
 class SectionSerializer(serializers.ModelSerializer):

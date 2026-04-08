@@ -30,7 +30,6 @@ urlpatterns = [
 
     # App URLs
     path('api/accounts/', include('apps.accounts.urls')),
-    path('api/school/', include('apps.school.urls')),
     path('api/students/', include('apps.students.urls')),
     path('api/academics/', include('apps.academics.urls')),
     path('api/attendance/', include('apps.attendance.urls')),

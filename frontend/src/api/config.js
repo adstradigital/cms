@@ -14,6 +14,7 @@ export const ENDPOINTS = {
     LOGIN: '/accounts/login/',
     LOGOUT: '/accounts/logout/',
     PROFILE: '/accounts/me/',
+    ONBOARD_SCHOOL: '/accounts/onboard-school/',
   },
   SCHOOL: {
     CONFIG: '/school/config/',

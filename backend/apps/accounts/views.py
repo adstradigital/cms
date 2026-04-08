@@ -5,11 +5,12 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, School, AcademicYear, Role, UserProfile
+from .models import User, School, AcademicYear, UserProfile
+from apps.permissions.models import Role as PermissionsRole
 from .serializers import (
     UserSerializer, UserCreateSerializer, UserProfileSerializer,
     SchoolSerializer, AcademicYearSerializer, RoleSerializer,
-    ChangePasswordSerializer, ParentSerializer,
+    ChangePasswordSerializer, ParentSerializer, SchoolOnboardingSerializer,
 )
 
 
@@ -41,14 +42,18 @@ def login_view(request):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Auto-assign super_admin role for superusers without a role
-        if user.is_superuser and not user.role:
-            role, _ = Role.objects.get_or_create(
-                name="super_admin",
-                defaults={"description": "Full system administrator"},
-            )
-            user.role = role
-            user.save(update_fields=["role"])
+        # Auto-assign super_admin role and creator portal for superusers
+        if user.is_superuser:
+            role, _ = PermissionsRole.objects.get_or_create(name="super_admin")
+            save_needed = False
+            if user.role != role:
+                user.role = role
+                save_needed = True
+            if user.portal != User.PORTAL_CREATOR:
+                user.portal = User.PORTAL_CREATOR
+                save_needed = True
+            if save_needed:
+                user.save(update_fields=["role", "portal"])
 
         refresh = RefreshToken.for_user(user)
         return Response({
@@ -200,6 +205,30 @@ def user_profile_view(request, user_pk):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ─── School Onboarding (Creator Only) ────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def school_onboarding_view(request):
+    """
+    Onboard a new school and its first admin.
+    Restricted to Platform Creators (superusers).
+    """
+    if not (request.user.is_superuser or request.user.portal == User.PORTAL_CREATOR):
+        return Response({"error": "Only platform creators can onboard new schools."}, status=status.HTTP_403_FORBIDDEN)
+
+    serializer = SchoolOnboardingSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    result = serializer.save()
+    return Response({
+        "message": f"School '{result['school'].name}' and admin '{result['admin'].username}' created successfully.",
+        "school": SchoolSerializer(result['school']).data,
+        "admin": UserSerializer(result['admin']).data
+    }, status=status.HTTP_201_CREATED)
+
+
 # ─── School ───────────────────────────────────────────────────────────────────
 
 @api_view(["GET", "POST"])
@@ -295,13 +324,11 @@ def academic_year_detail_view(request, pk):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ─── Role ─────────────────────────────────────────────────────────────────────
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def role_list_view(request):
     try:
-        roles = Role.objects.all()
+        roles = PermissionsRole.objects.all()
         return Response(RoleSerializer(roles, many=True).data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import User, School, AcademicYear, Role, UserProfile, Parent
+from .models import User, School, AcademicYear, UserProfile, Parent
+from apps.permissions.models import Role as PermissionsRole
 
 
 class SchoolSerializer(serializers.ModelSerializer):
@@ -17,7 +18,7 @@ class AcademicYearSerializer(serializers.ModelSerializer):
 
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Role
+        model = PermissionsRole
         fields = "__all__"
 
 
@@ -92,3 +93,44 @@ class ParentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Parent
         fields = ["id", "user", "occupation", "annual_income", "student_ids"]
+
+
+class SchoolOnboardingSerializer(serializers.Serializer):
+    school_name = serializers.CharField(max_length=255)
+    admin_username = serializers.CharField(max_length=150)
+    admin_email = serializers.EmailField()
+    admin_password = serializers.CharField(write_only=True, validators=[validate_password])
+    admin_first_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
+    admin_last_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
+
+    def create(self, validated_data):
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # 1. Create School
+            school = School.objects.create(name=validated_data['school_name'])
+            
+            # 2. Create Admin User
+            admin_user = User.objects.create(
+                username=validated_data['admin_username'],
+                email=validated_data['admin_email'],
+                first_name=validated_data['admin_first_name'],
+                last_name=validated_data['admin_last_name'],
+                school=school,
+                portal=User.PORTAL_ADMIN,
+                is_active=True
+            )
+            admin_user.set_password(validated_data['admin_password'])
+            
+            # 3. Assign Role (Admin)
+            admin_role, _ = PermissionsRole.objects.get_or_create(name='Admin')
+            admin_user.role = admin_role
+            admin_user.save()
+            
+            # 4. Create Profile
+            UserProfile.objects.create(user=admin_user)
+            
+            return {
+                "school": school,
+                "admin": admin_user
+            }

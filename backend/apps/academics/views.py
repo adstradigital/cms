@@ -17,6 +17,9 @@ from .serializers import (
     AssignmentSerializer, MaterialSerializer,
 )
 
+from apps.staff.models import StaffAttendance, Staff
+from apps.students.models import Section
+
 
 # ─── Subject ──────────────────────────────────────────────────────────────────
 
@@ -71,6 +74,7 @@ def subject_detail_view(request, pk):
 def timetable_list_view(request):
     try:
         if request.method == "GET":
+            class_name_input = request.query_params.get("class_name")
             section_id = request.query_params.get("section")
             academic_year_id = request.query_params.get("academic_year")
             day = request.query_params.get("day")
@@ -79,11 +83,26 @@ def timetable_list_view(request):
                 "section", "section__school_class", "academic_year"
             ).prefetch_related("periods__subject", "periods__teacher").all()
 
+            if class_name_input:
+                try:
+                    parts = class_name_input.split(" - ")
+                    if len(parts) == 2:
+                        c_name, s_name = parts
+                        qs = qs.filter(section__school_class__name=c_name, section__name=s_name)
+                    else:
+                        qs = qs.filter(section__name=class_name_input)
+                except Exception:
+                    pass
+
             if section_id:
                 qs = qs.filter(section_id=section_id)
             if academic_year_id:
                 qs = qs.filter(academic_year_id=academic_year_id)
             if day:
+                # Handle both code (1-6) and name
+                day_map = {name: code for code, name in Timetable.DAY_CHOICES}
+                if day in day_map:
+                    day = day_map[day]
                 qs = qs.filter(day_of_week=day)
 
             return Response(TimetableSerializer(qs, many=True).data, status=status.HTTP_200_OK)
@@ -674,3 +693,79 @@ def lesson_plan_detail_view(request, pk):
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors, status=400)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def timetable_settings_view(request):
+    """
+    Returns general timetable configuration.
+    """
+    return Response({
+        "standard_periods": 8,
+        "period_duration_minutes": 45,
+        "lunch_break_period": 4,
+        "school_start_time": "08:30",
+        "school_end_time": "15:30",
+        "working_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def absence_status_view(request):
+    """
+    Checks teacher attendance and maps it to timetable periods for a class/day.
+    """
+    class_name_input = request.query_params.get("class_name")
+    day_name = request.query_params.get("day")
+    
+    if not class_name_input or not day_name:
+        return Response({"error": "class_name and day are required."}, status=400)
+    
+    try:
+        parts = class_name_input.split(" - ")
+        if len(parts) == 2:
+            c_name, s_name = parts
+            section = Section.objects.get(school_class__name=c_name, name=s_name)
+        else:
+            section = Section.objects.get(name=class_name_input)
+    except (IndexError, Section.DoesNotExist):
+        return Response({"error": f"Section '{class_name_input}' not found."}, status=404)
+
+    day_map = {name: code for code, name in Timetable.DAY_CHOICES}
+    day_code = day_map.get(day_name)
+    if not day_code:
+        return Response({"error": f"Invalid day '{day_name}'."}, status=400)
+
+    timetable = Timetable.objects.filter(section=section, day_of_week=day_code).first()
+    if not timetable:
+        return Response({"error": "No timetable found for this section/day."}, status=404)
+
+    today = timezone.now().date()
+    absent_staff_ids = StaffAttendance.objects.filter(
+        date=today,
+        status__in=['absent', 'on_leave']
+    ).values_list('staff__user_id', flat=True)
+
+    periods = []
+    for period in timetable.periods.select_related('subject', 'teacher'):
+        status_info = "present"
+        if period.teacher_id in absent_staff_ids:
+            status_info = "absent"
+        
+        periods.append({
+            "period_number": period.period_number,
+            "subject": period.subject.name if period.subject else "None",
+            "teacher": period.teacher.get_full_name() if period.teacher else "None",
+            "status": status_info,
+            "start_time": period.start_time.strftime("%H:%M"),
+            "end_time": period.end_time.strftime("%H:%M")
+        })
+
+    return Response({
+        "class_name": class_name_input,
+        "day": day_name,
+        "date": today.isoformat(),
+        "periods": periods
+    }, status=status.HTTP_200_OK)

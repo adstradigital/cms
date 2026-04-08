@@ -19,6 +19,7 @@ urlpatterns = [
     # Schools
     path("schools/", views.school_list_view, name="school_list"),
     path("schools/<int:pk>/", views.school_detail_view, name="school_detail"),
+    path("onboard-school/", views.school_onboarding_view, name="onboard_school"),
     
     # Academic Years
     path("academic-years/", views.academic_year_list_view, name="academic_year_list"),

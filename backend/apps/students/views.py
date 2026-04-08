@@ -230,10 +230,20 @@ def class_list_view(request):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        if not request.user.school:
+        # Fallback for superusers/admins not explicitly linked to a school
+        school = request.user.school
+        if not school and request.user.is_superuser:
+            from apps.accounts.models import School
+            school = School.objects.first()
+            if school:
+                # Optional: auto-link the user for future requests
+                request.user.school = school
+                request.user.save(update_fields=['school'])
+
+        if not school:
             return Response({"error": "Your account is not linked to a school."}, status=status.HTTP_400_BAD_REQUEST)
             
-        serializer.save(school=request.user.school)
+        serializer.save(school=school)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     except Exception as e:

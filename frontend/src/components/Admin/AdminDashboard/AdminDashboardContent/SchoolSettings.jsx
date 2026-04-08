@@ -15,12 +15,16 @@ import {
 import styles from './SchoolSettings.module.css';
 
 import schoolApi from '@/api/schoolApi';
+import authApi from '@/api/authApi';
+import { useAuth } from '@/context/AuthContext';
 
 const SchoolSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeSchool, setActiveSchool] = useState(null);
   const [academicYears, setAcademicYears] = useState([]);
+  const { user, loading: authLoading } = useAuth();
+  const [linking, setLinking] = useState(false);
 
   // Fetch school data
   const fetchData = async () => {
@@ -63,6 +67,21 @@ const SchoolSettings = () => {
     }
   };
 
+  const handleLinkProfile = async () => {
+    if (!activeSchool) return;
+    setLinking(true);
+    try {
+      await authApi.updateProfile({ school: activeSchool.id });
+      alert("Profile linked to school successfully! Please refresh or log in again to see all changes.");
+      window.location.reload();
+    } catch (error) {
+      console.error("Error linking profile:", error);
+      alert("Error linking profile. Please try again.");
+    } finally {
+      setLinking(false);
+    }
+  };
+
   if (loading) return <div className={styles.loading}>Loading settings...</div>;
 
   return (
@@ -72,10 +91,22 @@ const SchoolSettings = () => {
           <h1 className={styles.title}>School Settings</h1>
           <p className={styles.subtitle}>Manage your institution's identity, branding, and academic cycles.</p>
         </div>
-        <button className={styles.saveButton} onClick={handleSave} disabled={saving}>
-          <Save size={18} />
-          {saving ? 'Saving...' : 'Save Changes'}
-        </button>
+        <div className={styles.headerActions}>
+          {user && !user.school && (
+            <button 
+              className={styles.linkButton} 
+              onClick={handleLinkProfile} 
+              disabled={linking}
+              title="Click to link your account to this school"
+            >
+              {linking ? 'Linking...' : 'Link My Account to This School'}
+            </button>
+          )}
+          <button className={styles.saveButton} onClick={handleSave} disabled={saving}>
+            <Save size={18} />
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
       </header>
 
       <div className={styles.grid}>

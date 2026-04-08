@@ -8,6 +8,8 @@ from apps.students.models import Class, Section
 
 
 class Subject(models.Model):
+    school = models.ForeignKey("accounts.School", on_delete=models.CASCADE, related_name="subjects", null=True, blank=True)
+    school_class = models.ForeignKey("students.Class", on_delete=models.CASCADE, related_name="subjects", null=True, blank=True)
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, unique=True)
     description = models.TextField(blank=True)

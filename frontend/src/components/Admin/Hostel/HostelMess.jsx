@@ -237,7 +237,7 @@ const HostelMess = () => {
       }
 
       if (activeSection === 'attendance') {
-        const params = {};
+        const params = monthRange(selectedMonth);
         if (selectedHostel) params.hostel = selectedHostel;
         const res = await hostelApi.getMessAttendance(params);
         setAttendance(normalizeListPayload(res.data));
@@ -251,7 +251,7 @@ const HostelMess = () => {
       }
 
       if (activeSection === 'feedback') {
-        const params = {};
+        const params = monthRange(selectedMonth);
         if (selectedHostel) params.hostel = selectedHostel;
         const res = await hostelApi.getMessFeedback(params);
         const rows = normalizeListPayload(res.data);
@@ -396,8 +396,18 @@ const HostelMess = () => {
       alert('Feedback saved.');
       setFeedbackForm((prev) => ({ ...prev, student: '', complaint: '' }));
       if (created?.id) {
-        setFeedback((prev) => [created, ...prev.filter((row) => String(row.id) !== String(created.id))]);
-        setFeedbackStatusDrafts((prev) => ({ ...prev, [created.id]: created.status || 'open' }));
+        // Augment with display labels missed in POST response
+        const studentObj = students.find((s) => String(s.id) === String(payload.student));
+        const hostelObj = hostels.find((h) => String(h.id) === String(payload.hostel));
+        
+        const row = {
+          ...created,
+          student_name: studentObj ? getStudentLabel(studentObj) : 'Student',
+          hostel_name: hostelObj ? hostelObj.name : '-',
+        };
+
+        setFeedback((prev) => [row, ...prev.filter((r) => String(r.id) !== String(row.id))]);
+        setFeedbackStatusDrafts((prev) => ({ ...prev, [row.id]: row.status || 'open' }));
       }
       fetchSectionData();
     } catch (error) {

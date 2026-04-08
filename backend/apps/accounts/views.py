@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -21,16 +22,30 @@ from apps.permissions.serializers import RoleSerializer
 @permission_classes([AllowAny])
 def login_view(request):
     try:
-        username = request.data.get("username")
+        identifier = request.data.get("username") or request.data.get("email") or request.data.get("phone")
         password = request.data.get("password")
 
-        if not username or not password:
+        if not identifier or not password:
             return Response(
                 {"error": "Username and password are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = authenticate(request, username=username, password=password)
+        identifier = str(identifier).strip()
+
+        # 1) Standard Django authentication by username
+        user = authenticate(request, username=identifier, password=password)
+
+        # 2) Fallback: allow login by email / phone / case-insensitive username
+        if not user:
+            candidate = User.objects.filter(
+                Q(username__iexact=identifier) |
+                Q(email__iexact=identifier) |
+                Q(phone__iexact=identifier)
+            ).first()
+            if candidate and candidate.check_password(password):
+                user = candidate
+
         if not user:
             return Response(
                 {"error": "Invalid credentials."},
@@ -306,7 +321,7 @@ def academic_year_detail_view(request, pk):
 @permission_classes([IsAuthenticated])
 def role_list_view(request):
     try:
-        roles = PermissionsRole.objects.all()
+        roles = Role.objects.all()
         return Response(RoleSerializer(roles, many=True).data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

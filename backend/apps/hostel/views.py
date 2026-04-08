@@ -1,106 +1,1449 @@
 from django.utils import timezone
+from django.db import transaction
+from django.db.models import Count, Sum, Avg, Q, F, Value, IntegerField
+from decimal import Decimal, InvalidOperation
+from datetime import date, timedelta
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import HostelBlock, HostelRoom, HostelAllotment
-from .serializers import HostelBlockSerializer, HostelRoomSerializer, HostelAllotmentSerializer
+from .models import (
+    Hostel, Floor, Room, RoomAllotment, RoomTransfer,
+    NightAttendance, EntryExitLog, RuleViolation, VisitorLog, HostelFee,
+    MessMenuPlan, MessMealAttendance, MessDietProfile, MessFeedback,
+    MessInventoryItem, MessInventoryLog, MessVendor, MessVendorSupply,
+    MessWastageLog, MessConsumptionLog
+)
+from .serializers import (
+    HostelSerializer, FloorSerializer, RoomSerializer, RoomAllotmentSerializer,
+    RoomTransferSerializer, NightAttendanceSerializer, EntryExitLogSerializer,
+    RuleViolationSerializer, VisitorLogSerializer, HostelFeeSerializer,
+    MessMenuPlanSerializer, MessMealAttendanceSerializer, MessDietProfileSerializer, MessFeedbackSerializer,
+    MessInventoryItemSerializer, MessInventoryLogSerializer, MessVendorSerializer, MessVendorSupplySerializer,
+    MessWastageLogSerializer, MessConsumptionLogSerializer
+)
+from apps.students.models import Student
 
+
+# ─── Hostel CRUD ──────────────────────────────────────────────────────────────
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
-def hostel_block_list_view(request):
+def hostel_list_view(request):
     try:
         if request.method == "GET":
-            qs = HostelBlock.objects.select_related("warden").all()
-            return Response(HostelBlockSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+            qs = Hostel.objects.select_related("warden").prefetch_related("rooms").all()
+            return Response(HostelSerializer(qs, many=True).data)
 
-        serializer = HostelBlockSerializer(data=request.data)
+        serializer = HostelSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+        
+        with transaction.atomic():
+            hostel = serializer.save()
+            # Auto-create floors
+            total_floors = hostel.total_floors
+            for i in range(total_floors):
+                Floor.objects.get_or_create(hostel=hostel, number=i)
+                
+        return Response(HostelSerializer(hostel).data, status=status.HTTP_201_CREATED)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["GET", "POST"])
+@api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
-def hostel_room_list_view(request):
+def hostel_detail_view(request, pk):
     try:
-        if request.method == "GET":
-            block_id = request.query_params.get("block")
-            qs = HostelRoom.objects.select_related("block").all()
-            if block_id:
-                qs = qs.filter(block_id=block_id)
-            return Response(HostelRoomSerializer(qs, many=True).data, status=status.HTTP_200_OK)
-
-        serializer = HostelRoomSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET", "POST"])
-@permission_classes([IsAuthenticated])
-def hostel_allotment_list_view(request):
-    try:
-        if request.method == "GET":
-            block_id = request.query_params.get("block")
-            qs = HostelAllotment.objects.select_related(
-                "student", "student__user", "room", "room__block"
-            ).filter(is_active=True)
-            if block_id:
-                qs = qs.filter(room__block_id=block_id)
-            return Response(HostelAllotmentSerializer(qs, many=True).data, status=status.HTTP_200_OK)
-
-        serializer = HostelAllotmentSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        room_id = request.data.get("room")
         try:
-            room = HostelRoom.objects.get(pk=room_id)
-        except HostelRoom.DoesNotExist:
+            hostel = Hostel.objects.select_related("warden").get(pk=pk)
+        except Hostel.DoesNotExist:
+            return Response({"error": "Hostel not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(HostelSerializer(hostel).data)
+        if request.method == "PATCH":
+            serializer = HostelSerializer(hostel, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data)
+        hostel.delete()
+        return Response({"message": "Hostel deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Floor CRUD ───────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def floor_list_view(request):
+    try:
+        if request.method == "GET":
+            hostel_id = request.query_params.get("hostel")
+            qs = Floor.objects.select_related("hostel").all()
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            return Response(FloorSerializer(qs, many=True).data)
+
+        serializer = FloorSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def floor_detail_view(request, pk):
+    try:
+        try:
+            floor = Floor.objects.select_related("hostel").get(pk=pk)
+        except Floor.DoesNotExist:
+            return Response({"error": "Floor not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(FloorSerializer(floor).data)
+        if request.method == "PATCH":
+            serializer = FloorSerializer(floor, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data)
+        floor.delete()
+        return Response({"message": "Floor deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Room CRUD ────────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def room_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = Room.objects.select_related("hostel", "floor").all()
+            hostel_id = request.query_params.get("hostel")
+            floor_id = request.query_params.get("floor")
+            room_type = request.query_params.get("type")
+            room_status = request.query_params.get("status")
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if floor_id:
+                qs = qs.filter(floor_id=floor_id)
+            if room_type:
+                qs = qs.filter(room_type=room_type)
+            if room_status:
+                qs = qs.filter(status=room_status)
+            return Response(RoomSerializer(qs, many=True).data)
+
+        serializer = RoomSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def room_detail_view(request, pk):
+    try:
+        try:
+            room = Room.objects.select_related("hostel", "floor").get(pk=pk)
+        except Room.DoesNotExist:
             return Response({"error": "Room not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        if request.method == "GET":
+            return Response(RoomSerializer(room).data)
+        if request.method == "PATCH":
+            serializer = RoomSerializer(room, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data)
+        room.delete()
+        return Response({"message": "Room deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Allotment ────────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def allotment_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = RoomAllotment.objects.select_related(
+                "student", "student__user", "room", "room__hostel", "room__floor", "allotted_by"
+            ).all()
+            hostel_id = request.query_params.get("hostel")
+            active_only = request.query_params.get("active", "true").lower() == "true"
+            if active_only:
+                qs = qs.filter(is_active=True)
+            if hostel_id:
+                qs = qs.filter(room__hostel_id=hostel_id)
+            return Response(RoomAllotmentSerializer(qs, many=True).data)
+
+        # Validate room availability
+        room_id = request.data.get("room")
+        try:
+            room = Room.objects.get(pk=room_id)
+        except Room.DoesNotExist:
+            return Response({"error": "Room not found."}, status=status.HTTP_404_NOT_FOUND)
         if room.occupied >= room.capacity:
             return Response({"error": "Room is at full capacity."}, status=status.HTTP_400_BAD_REQUEST)
 
-        allotment = serializer.save()
-        room.occupied += 1
-        room.save()
-        return Response(HostelAllotmentSerializer(allotment).data, status=status.HTTP_201_CREATED)
+        # Check if student already has an active allotment
+        student_id = request.data.get("student")
+        if RoomAllotment.objects.filter(student_id=student_id, is_active=True).exists():
+            return Response({"error": "Student already has an active allotment."}, status=status.HTTP_400_BAD_REQUEST)
 
+        existing_allotment = RoomAllotment.objects.filter(student_id=student_id).first()
+
+        with transaction.atomic():
+            if existing_allotment:
+                # OneToOne relation allows one historical record per student, so reactivate it.
+                existing_allotment.room = room
+                existing_allotment.allotted_by = request.user
+                existing_allotment.join_date = timezone.now().date()
+                existing_allotment.leave_date = None
+                existing_allotment.is_active = True
+                existing_allotment.remarks = request.data.get("remarks", "") or ""
+                existing_allotment.save()
+                allotment = existing_allotment
+            else:
+                serializer = RoomAllotmentSerializer(data=request.data)
+                if not serializer.is_valid():
+                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                allotment = serializer.save(allotted_by=request.user)
+
+            room.occupied += 1
+            room.update_status()
+            room.save()
+            # Mark student as hostel resident
+            Student.objects.filter(pk=student_id).update(hostel_resident=True)
+
+        return Response(RoomAllotmentSerializer(allotment).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def allotment_detail_view(request, pk):
+    try:
+        try:
+            allotment = RoomAllotment.objects.select_related(
+                "student", "student__user", "room", "room__hostel"
+            ).get(pk=pk)
+        except RoomAllotment.DoesNotExist:
+            return Response({"error": "Allotment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(RoomAllotmentSerializer(allotment).data)
+
+        serializer = RoomAllotmentSerializer(allotment, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def hostel_vacate_view(request, pk):
-    """Vacate a hostel allotment."""
+def vacate_view(request, pk):
+    """Vacate a student's hostel allotment."""
     try:
         try:
-            allotment = HostelAllotment.objects.select_related("room").get(pk=pk)
-        except HostelAllotment.DoesNotExist:
-            return Response({"error": "Allotment not found."}, status=status.HTTP_404_NOT_FOUND)
+            allotment = RoomAllotment.objects.select_related("room", "student").get(pk=pk, is_active=True)
+        except RoomAllotment.DoesNotExist:
+            return Response({"error": "Active allotment not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        allotment.is_active = False
-        allotment.leave_date = timezone.now().date()
-        allotment.save()
+        with transaction.atomic():
+            allotment.is_active = False
+            allotment.leave_date = timezone.now().date()
+            allotment.save()
+            room = allotment.room
+            room.occupied = max(0, room.occupied - 1)
+            room.update_status()
+            room.save()
+            Student.objects.filter(pk=allotment.student_id).update(hostel_resident=False)
 
-        room = allotment.room
-        room.occupied = max(0, room.occupied - 1)
-        room.save()
+        return Response({"message": "Student vacated successfully."})
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({"message": "Student vacated successfully."}, status=status.HTTP_200_OK)
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def auto_assign_view(request):
+    """Auto-assign a student using optional rules (gender, course, academic year)."""
+    try:
+        def parse_bool(raw_value, default=True):
+            if raw_value is None:
+                return default
+            if isinstance(raw_value, bool):
+                return raw_value
+            return str(raw_value).strip().lower() in ("1", "true", "yes", "on")
+
+        hostel_id = request.data.get("hostel")
+        student_id = request.data.get("student")
+        room_type = request.data.get("room_type")
+        apply_gender_rule = parse_bool(request.data.get("apply_gender_rule"), True)
+        apply_class_rule = parse_bool(
+            request.data.get("apply_class_rule", request.data.get("apply_course_rule")),
+            True
+        )
+        apply_year_rule = parse_bool(request.data.get("apply_year_rule"), True)
+
+        if not student_id:
+            return Response({"error": "Student is required for auto allocation."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            student = Student.objects.select_related(
+                "user", "user__profile", "section", "section__school_class", "academic_year"
+            ).get(pk=student_id)
+        except Student.DoesNotExist:
+            return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if RoomAllotment.objects.filter(student_id=student_id, is_active=True).exists():
+            return Response({"error": "Student already has an active allotment."}, status=status.HTTP_400_BAD_REQUEST)
+
+        hostel_qs = Hostel.objects.filter(is_active=True)
+        if hostel_id:
+            hostel_qs = hostel_qs.filter(pk=hostel_id)
+            if not hostel_qs.exists():
+                return Response({"error": "Hostel not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if apply_gender_rule:
+            student_gender = ""
+            if hasattr(student.user, "profile"):
+                student_gender = (student.user.profile.gender or "").lower()
+
+            if student_gender == "male":
+                hostel_qs = hostel_qs.filter(gender__in=["boys", "mixed"])
+            elif student_gender == "female":
+                hostel_qs = hostel_qs.filter(gender__in=["girls", "mixed"])
+            elif student_gender:
+                hostel_qs = hostel_qs.filter(gender="mixed")
+
+            if not hostel_qs.exists():
+                return Response(
+                    {"error": "No active hostels match this student's gender rule."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        qs = Room.objects.filter(
+            hostel__in=hostel_qs,
+            status="available",
+            occupied__lt=F("capacity")
+        ).select_related("hostel", "floor")
+
+        if room_type:
+            qs = qs.filter(room_type=room_type)
+
+        if apply_class_rule and student.section_id:
+            qs = qs.annotate(
+                same_course_count=Count(
+                    "allotments",
+                    filter=Q(
+                        allotments__is_active=True,
+                        allotments__student__section__school_class_id=student.section.school_class_id,
+                    ),
+                )
+            )
+        else:
+            qs = qs.annotate(same_course_count=Value(0, output_field=IntegerField()))
+
+        if apply_year_rule and student.academic_year_id:
+            qs = qs.annotate(
+                same_year_count=Count(
+                    "allotments",
+                    filter=Q(
+                        allotments__is_active=True,
+                        allotments__student__academic_year_id=student.academic_year_id,
+                    ),
+                )
+            )
+        else:
+            qs = qs.annotate(same_year_count=Value(0, output_field=IntegerField()))
+
+        qs = qs.annotate(
+            rule_score=F("same_course_count") + F("same_year_count")
+        ).order_by("-rule_score", "occupied", "id")
+
+        room = qs.first()
+        if not room:
+            if apply_gender_rule or apply_class_rule or apply_year_rule:
+                return Response(
+                    {"error": "No available rooms matched the selected auto-allocation rules."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            return Response({"error": "No available rooms matching criteria."}, status=status.HTTP_404_NOT_FOUND)
+
+        existing_allotment = RoomAllotment.objects.filter(student_id=student_id).first()
+
+        with transaction.atomic():
+            if existing_allotment:
+                # OneToOne relation allows one historical record per student, so reactivate it.
+                existing_allotment.room = room
+                existing_allotment.allotted_by = request.user
+                existing_allotment.join_date = timezone.now().date()
+                existing_allotment.leave_date = None
+                existing_allotment.is_active = True
+                existing_allotment.remarks = request.data.get("remarks", "") or ""
+                existing_allotment.save()
+                allotment = existing_allotment
+            else:
+                allotment = RoomAllotment.objects.create(
+                    student_id=student_id,
+                    room=room,
+                    allotted_by=request.user,
+                    join_date=timezone.now().date(),
+                )
+
+            room.occupied += 1
+            room.update_status()
+            room.save()
+            Student.objects.filter(pk=student_id).update(hostel_resident=True)
+
+        return Response(RoomAllotmentSerializer(allotment).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Room Transfer ────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def transfer_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = RoomTransfer.objects.select_related(
+                "student", "student__user", "from_room", "to_room", "transferred_by"
+            ).all()
+            student_id = request.query_params.get("student")
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            return Response(RoomTransferSerializer(qs, many=True).data)
+
+        student_id = request.data.get("student")
+        to_room_id = request.data.get("to_room")
+
+        try:
+            to_room = Room.objects.get(pk=to_room_id)
+        except Room.DoesNotExist:
+            return Response({"error": "Target room not found."}, status=status.HTTP_404_NOT_FOUND)
+        if to_room.occupied >= to_room.capacity:
+            return Response({"error": "Target room is full."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            allotment = RoomAllotment.objects.select_related("room").get(
+                student_id=student_id, is_active=True
+            )
+        except RoomAllotment.DoesNotExist:
+            return Response({"error": "Student has no active allotment."}, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            old_room = allotment.room
+            transfer = RoomTransfer.objects.create(
+                student_id=student_id,
+                from_room=old_room,
+                to_room=to_room,
+                reason=request.data.get("reason", ""),
+                transfer_date=timezone.now().date(),
+                transferred_by=request.user,
+            )
+            old_room.occupied = max(0, old_room.occupied - 1)
+            old_room.update_status()
+            old_room.save()
+            allotment.room = to_room
+            allotment.save()
+            to_room.occupied += 1
+            to_room.update_status()
+            to_room.save()
+
+        return Response(RoomTransferSerializer(transfer).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Night Attendance ─────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def night_attendance_list_view(request):
+    try:
+        if request.method == "GET":
+            date_str = request.query_params.get("date")
+            hostel_id = request.query_params.get("hostel")
+            qs = NightAttendance.objects.select_related(
+                "student", "student__user", "room", "room__hostel", "marked_by"
+            ).all()
+            if date_str:
+                qs = qs.filter(date=date_str)
+            if hostel_id:
+                qs = qs.filter(room__hostel_id=hostel_id)
+            return Response(NightAttendanceSerializer(qs, many=True).data)
+
+        # Bulk mark attendance
+        records = request.data if isinstance(request.data, list) else [request.data]
+        created = []
+        for rec in records:
+            rec["marked_by"] = request.user.pk
+            obj, _ = NightAttendance.objects.update_or_create(
+                student_id=rec.get("student"),
+                date=rec.get("date", timezone.now().date()),
+                defaults={
+                    "room_id": rec.get("room"),
+                    "status": rec.get("status", "present"),
+                    "marked_by": request.user,
+                    "remarks": rec.get("remarks", ""),
+                }
+            )
+            created.append(obj)
+        return Response(NightAttendanceSerializer(created, many=True).data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Entry / Exit Log ─────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def entry_exit_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = EntryExitLog.objects.select_related(
+                "student", "student__user", "logged_by"
+            ).all()
+            student_id = request.query_params.get("student")
+            direction = request.query_params.get("direction")
+            date_str = request.query_params.get("date")
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            if direction:
+                qs = qs.filter(direction=direction)
+            if date_str:
+                qs = qs.filter(timestamp__date=date_str)
+            return Response(EntryExitLogSerializer(qs, many=True).data)
+
+        serializer = EntryExitLogSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save(logged_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Rule Violation ───────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def violation_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = RuleViolation.objects.select_related(
+                "student", "student__user", "reported_by", "resolved_by"
+            ).all()
+            hostel_id = request.query_params.get("hostel")
+            viol_status = request.query_params.get("status")
+            severity = request.query_params.get("severity")
+            if hostel_id:
+                qs = qs.filter(student__hostel_allotment__room__hostel_id=hostel_id)
+            if viol_status:
+                qs = qs.filter(status=viol_status)
+            if severity:
+                qs = qs.filter(severity=severity)
+            return Response(RuleViolationSerializer(qs, many=True).data)
+
+        serializer = RuleViolationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save(reported_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def violation_detail_view(request, pk):
+    try:
+        try:
+            violation = RuleViolation.objects.get(pk=pk)
+        except RuleViolation.DoesNotExist:
+            return Response({"error": "Violation not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(RuleViolationSerializer(violation).data)
+
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if data.get("status") == "resolved" and not violation.resolved_by_id:
+            violation.resolved_by = request.user
+            violation.save(update_fields=["resolved_by"])
+        serializer = RuleViolationSerializer(violation, data=data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Visitor Log ──────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def visitor_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = VisitorLog.objects.select_related(
+                "student", "student__user", "approved_by"
+            ).all()
+            student_id = request.query_params.get("student")
+            appr_status = request.query_params.get("status")
+            date_str = request.query_params.get("date")
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            if appr_status:
+                qs = qs.filter(approval_status=appr_status)
+            if date_str:
+                qs = qs.filter(check_in__date=date_str)
+            return Response(VisitorLogSerializer(qs, many=True).data)
+
+        serializer = VisitorLogSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def visitor_detail_view(request, pk):
+    try:
+        try:
+            visitor = VisitorLog.objects.select_related("student", "student__user", "approved_by").get(pk=pk)
+        except VisitorLog.DoesNotExist:
+            return Response({"error": "Visitor log not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(VisitorLogSerializer(visitor).data)
+
+        serializer = VisitorLogSerializer(visitor, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def visitor_approve_view(request, pk):
+    """Approve or deny a visitor."""
+    try:
+        try:
+            visitor = VisitorLog.objects.get(pk=pk)
+        except VisitorLog.DoesNotExist:
+            return Response({"error": "Visitor log not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        decision = request.data.get("decision")
+        if decision not in ("approved", "denied"):
+            return Response({"error": "decision must be 'approved' or 'denied'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        visitor.approval_status = decision
+        visitor.approved_by = request.user
+        visitor.save(update_fields=["approval_status", "approved_by"])
+        return Response(VisitorLogSerializer(visitor).data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def visitor_checkout_view(request, pk):
+    """Record visitor check-out time."""
+    try:
+        try:
+            visitor = VisitorLog.objects.get(pk=pk)
+        except VisitorLog.DoesNotExist:
+            return Response({"error": "Visitor log not found."}, status=status.HTTP_404_NOT_FOUND)
+        visitor.check_out = timezone.now()
+        visitor.save(update_fields=["check_out"])
+        return Response(VisitorLogSerializer(visitor).data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Hostel Fee ───────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def hostel_fee_list_view(request):
+    try:
+        def parse_amount(raw_value, default="0"):
+            if raw_value is None or raw_value == "":
+                raw_value = default
+            try:
+                return Decimal(str(raw_value))
+            except (InvalidOperation, TypeError, ValueError):
+                raise ValueError(f"Invalid amount value: {raw_value}")
+
+        if request.method == "GET":
+            qs = HostelFee.objects.select_related(
+                "student", "student__user", "room", "room__hostel", "collected_by"
+            ).all()
+            hostel_id = request.query_params.get("hostel")
+            fee_status = request.query_params.get("status")
+            student_id = request.query_params.get("student")
+            if hostel_id:
+                qs = qs.filter(room__hostel_id=hostel_id)
+            if fee_status:
+                qs = qs.filter(status=fee_status)
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            return Response(HostelFeeSerializer(qs, many=True).data)
+
+        payload = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        student_id = payload.get("student")
+        period_label = payload.get("period_label")
+        due_date = payload.get("due_date")
+        room_id = payload.get("room")
+
+        if not student_id:
+            return Response({"error": "student is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not period_label:
+            return Response({"error": "period_label is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not due_date:
+            return Response({"error": "due_date is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if HostelFee.objects.filter(student_id=student_id, period_label=period_label).exists():
+            return Response(
+                {"error": "A hostel fee bill for this student and period already exists."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if room_id:
+            try:
+                room = Room.objects.get(pk=room_id)
+            except Room.DoesNotExist:
+                return Response({"error": "Room not found."}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            try:
+                allotment = RoomAllotment.objects.select_related("room").get(student_id=student_id, is_active=True)
+            except RoomAllotment.DoesNotExist:
+                return Response(
+                    {"error": "Student has no active room allotment. Room is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            room = allotment.room
+            payload["room"] = room.pk
+
+        try:
+            room_rent = parse_amount(payload.get("room_rent"), default=str(room.monthly_rent))
+            electricity = parse_amount(payload.get("electricity_charges"), default="0")
+            mess_fee = parse_amount(payload.get("mess_fee"), default="0")
+            amount_due = parse_amount(
+                payload.get("amount_due"),
+                default=str(room_rent + electricity + mess_fee)
+            )
+            amount_paid = parse_amount(payload.get("amount_paid"), default="0")
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if any(value < 0 for value in [room_rent, electricity, mess_fee, amount_due, amount_paid]):
+            return Response({"error": "Amounts cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload["room_rent"] = str(room_rent)
+        payload["electricity_charges"] = str(electricity)
+        payload["mess_fee"] = str(mess_fee)
+        payload["amount_due"] = str(amount_due)
+        payload["amount_paid"] = str(amount_paid)
+
+        if amount_paid >= amount_due and amount_due > 0:
+            payload["status"] = "paid"
+        elif amount_paid > 0:
+            payload["status"] = "partial"
+
+        serializer = HostelFeeSerializer(data=payload)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def hostel_fee_pay_view(request, pk):
+    """Record a payment against a hostel fee record."""
+    try:
+        try:
+            fee = HostelFee.objects.get(pk=pk)
+        except HostelFee.DoesNotExist:
+            return Response({"error": "Fee record not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        amount = float(request.data.get("amount_paid", 0))
+        payment_method = request.data.get("payment_method", "cash")
+        transaction_id = request.data.get("transaction_id", "")
+
+        fee.amount_paid = float(fee.amount_paid) + amount
+        fee.payment_method = payment_method
+        fee.transaction_id = transaction_id
+        fee.payment_date = timezone.now().date()
+        fee.collected_by = request.user
+
+        if fee.amount_paid >= float(fee.amount_due):
+            fee.status = "paid"
+        elif fee.amount_paid > 0:
+            fee.status = "partial"
+
+        fee.save()
+        return Response(HostelFeeSerializer(fee).data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Analytics Dashboard ──────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def hostel_analytics_view(request):
+    """Aggregate stats for the hostel dashboard."""
+    try:
+        hostel_id = request.query_params.get("hostel")
+
+        rooms_qs = Room.objects.all()
+        allotments_qs = RoomAllotment.objects.filter(is_active=True)
+        violations_qs = RuleViolation.objects.all()
+        visitors_qs = VisitorLog.objects.all()
+        fees_qs = HostelFee.objects.all()
+
+        if hostel_id:
+            rooms_qs = rooms_qs.filter(hostel_id=hostel_id)
+            allotments_qs = allotments_qs.filter(room__hostel_id=hostel_id)
+            violations_qs = violations_qs.filter(
+                student__hostel_allotment__room__hostel_id=hostel_id
+            )
+            visitors_qs = visitors_qs.filter(
+                student__hostel_allotment__room__hostel_id=hostel_id
+            )
+            fees_qs = fees_qs.filter(room__hostel_id=hostel_id)
+
+        total_rooms = rooms_qs.count()
+        total_capacity = rooms_qs.aggregate(t=Sum("capacity"))["t"] or 0
+        total_occupied = rooms_qs.aggregate(t=Sum("occupied"))["t"] or 0
+        available_rooms = rooms_qs.filter(status="available").count()
+        full_rooms = rooms_qs.filter(status="full").count()
+        maintenance_rooms = rooms_qs.filter(status="maintenance").count()
+
+        today = timezone.now().date()
+        present_today = NightAttendance.objects.filter(date=today, status="present").count()
+        absent_today = NightAttendance.objects.filter(date=today, status="absent").count()
+
+        total_fees_due = fees_qs.aggregate(t=Sum("amount_due"))["t"] or 0
+        total_fees_collected = fees_qs.aggregate(t=Sum("amount_paid"))["t"] or 0
+        pending_fees = fees_qs.filter(status="pending").count()
+        overdue_fees = fees_qs.filter(status="overdue").count()
+
+        open_violations = violations_qs.filter(status="open").count()
+        pending_visitors = visitors_qs.filter(approval_status="pending").count()
+
+        # Room type breakdown
+        room_type_breakdown = list(
+            rooms_qs.values("room_type").annotate(count=Count("id"), occupied=Sum("occupied"))
+        )
+
+        # Occupancy by hostel
+        hostel_stats = list(
+            Hostel.objects.filter(is_active=True).values("id", "name").annotate(
+                total_rooms=Count("rooms"),
+                total_cap=Sum("rooms__capacity"),
+                total_occ=Sum("rooms__occupied"),
+            )
+        )
+
+        return Response({
+            "summary": {
+                "total_rooms": total_rooms,
+                "total_capacity": total_capacity,
+                "total_occupied": total_occupied,
+                "available_rooms": available_rooms,
+                "full_rooms": full_rooms,
+                "maintenance_rooms": maintenance_rooms,
+                "occupancy_rate": round((total_occupied / total_capacity * 100) if total_capacity else 0, 1),
+            },
+            "attendance_today": {
+                "present": present_today,
+                "absent": absent_today,
+            },
+            "fees": {
+                "total_due": float(total_fees_due),
+                "total_collected": float(total_fees_collected),
+                "pending_count": pending_fees,
+                "overdue_count": overdue_fees,
+                "collection_rate": round((float(total_fees_collected) / float(total_fees_due) * 100) if total_fees_due else 0, 1),
+            },
+            "alerts": {
+                "open_violations": open_violations,
+                "pending_visitors": pending_visitors,
+            },
+            "room_type_breakdown": room_type_breakdown,
+            "hostel_stats": hostel_stats,
+        })
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# Mess Module APIs
+
+def _resolve_month_range(month_str):
+    try:
+        year, month = month_str.split("-")
+        year = int(year)
+        month = int(month)
+        start_date = date(year, month, 1)
+    except Exception:
+        return None, None
+
+    if month == 12:
+        end_date = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month + 1, 1) - timedelta(days=1)
+    return start_date, end_date
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_menu_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessMenuPlan.objects.select_related("hostel", "created_by").all()
+            hostel_id = request.query_params.get("hostel")
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+            meal_type = request.query_params.get("meal_type")
+
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if start_date:
+                qs = qs.filter(plan_date__gte=start_date)
+            if end_date:
+                qs = qs.filter(plan_date__lte=end_date)
+            if meal_type:
+                qs = qs.filter(meal_type=meal_type)
+            return Response(MessMenuPlanSerializer(qs, many=True).data)
+
+        serializer = MessMenuPlanSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        obj = serializer.save(created_by=request.user)
+        return Response(MessMenuPlanSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_attendance_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessMealAttendance.objects.select_related(
+                "hostel", "student", "student__user", "marked_by"
+            ).all()
+            hostel_id = request.query_params.get("hostel")
+            student_id = request.query_params.get("student")
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+            meal_type = request.query_params.get("meal_type")
+
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            if start_date:
+                qs = qs.filter(date__gte=start_date)
+            if end_date:
+                qs = qs.filter(date__lte=end_date)
+            if meal_type:
+                qs = qs.filter(meal_type=meal_type)
+
+            return Response(MessMealAttendanceSerializer(qs, many=True).data)
+
+        records = request.data if isinstance(request.data, list) else [request.data]
+        saved_rows = []
+
+        with transaction.atomic():
+            for rec in records:
+                student_id = rec.get("student")
+                meal_type = rec.get("meal_type")
+                if not student_id or not meal_type:
+                    return Response(
+                        {"error": "student and meal_type are required."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                hostel_id = rec.get("hostel")
+                if not hostel_id:
+                    active_allotment = RoomAllotment.objects.filter(
+                        student_id=student_id, is_active=True
+                    ).select_related("room", "room__hostel").first()
+                    if active_allotment:
+                        hostel_id = active_allotment.room.hostel_id
+
+                if not hostel_id:
+                    return Response(
+                        {"error": "hostel is required or student must have active allotment."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                defaults = {
+                    "hostel_id": hostel_id,
+                    "status": rec.get("status", "ate"),
+                    "remarks": rec.get("remarks", ""),
+                    "marked_by": request.user,
+                }
+
+                obj, _ = MessMealAttendance.objects.update_or_create(
+                    student_id=student_id,
+                    date=rec.get("date", timezone.now().date()),
+                    meal_type=meal_type,
+                    defaults=defaults,
+                )
+                saved_rows.append(obj)
+
+        return Response(MessMealAttendanceSerializer(saved_rows, many=True).data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_diet_profile_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessDietProfile.objects.select_related("student", "student__user").all()
+            student_id = request.query_params.get("student")
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            return Response(MessDietProfileSerializer(qs, many=True).data)
+
+        student_id = request.data.get("student")
+        if not student_id:
+            return Response({"error": "student is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing = MessDietProfile.objects.filter(student_id=student_id).first()
+        serializer = MessDietProfileSerializer(existing, data=request.data, partial=bool(existing))
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        obj = serializer.save()
+        status_code = status.HTTP_200_OK if existing else status.HTTP_201_CREATED
+        return Response(MessDietProfileSerializer(obj).data, status=status_code)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_feedback_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessFeedback.objects.select_related("hostel", "student", "student__user").all()
+            hostel_id = request.query_params.get("hostel")
+            feedback_status = request.query_params.get("status")
+            meal_type = request.query_params.get("meal_type")
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if feedback_status:
+                qs = qs.filter(status=feedback_status)
+            if meal_type:
+                qs = qs.filter(meal_type=meal_type)
+            if start_date:
+                qs = qs.filter(date__gte=start_date)
+            if end_date:
+                qs = qs.filter(date__lte=end_date)
+            return Response(MessFeedbackSerializer(qs, many=True).data)
+
+        payload = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        if not payload.get("hostel") and payload.get("student"):
+            active_allotment = RoomAllotment.objects.filter(
+                student_id=payload.get("student"), is_active=True
+            ).select_related("room").first()
+            if active_allotment:
+                payload["hostel"] = active_allotment.room.hostel_id
+
+        serializer = MessFeedbackSerializer(data=payload)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        obj = serializer.save()
+        return Response(MessFeedbackSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def mess_feedback_detail_view(request, pk):
+    try:
+        try:
+            feedback = MessFeedback.objects.get(pk=pk)
+        except MessFeedback.DoesNotExist:
+            return Response({"error": "Feedback not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(MessFeedbackSerializer(feedback).data)
+
+        serializer = MessFeedbackSerializer(feedback, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_inventory_item_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessInventoryItem.objects.select_related("hostel").all()
+            hostel_id = request.query_params.get("hostel")
+            low_stock = request.query_params.get("low_stock")
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if str(low_stock).lower() == "true":
+                qs = qs.filter(current_stock__lte=F("minimum_stock"))
+            return Response(MessInventoryItemSerializer(qs, many=True).data)
+
+        serializer = MessInventoryItemSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        obj = serializer.save()
+        return Response(MessInventoryItemSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_inventory_log_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessInventoryLog.objects.select_related("item", "item__hostel", "logged_by").all()
+            hostel_id = request.query_params.get("hostel")
+            item_id = request.query_params.get("item")
+            if hostel_id:
+                qs = qs.filter(item__hostel_id=hostel_id)
+            if item_id:
+                qs = qs.filter(item_id=item_id)
+            return Response(MessInventoryLogSerializer(qs, many=True).data)
+
+        serializer = MessInventoryLogSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            obj = serializer.save(logged_by=request.user)
+            item = obj.item
+            quantity = Decimal(str(obj.quantity or 0))
+            stock = Decimal(str(item.current_stock or 0))
+
+            if obj.log_type == "in":
+                stock += quantity
+            elif obj.log_type == "out":
+                stock -= quantity
+            else:
+                stock = quantity
+
+            if stock < 0:
+                stock = Decimal("0")
+
+            item.current_stock = stock
+            item.save(update_fields=["current_stock", "updated_at"])
+
+        return Response(MessInventoryLogSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_vendor_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessVendor.objects.select_related("hostel").all()
+            hostel_id = request.query_params.get("hostel")
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            return Response(MessVendorSerializer(qs, many=True).data)
+
+        serializer = MessVendorSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        obj = serializer.save()
+        return Response(MessVendorSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_vendor_supply_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessVendorSupply.objects.select_related("hostel", "vendor").all()
+            hostel_id = request.query_params.get("hostel")
+            vendor_id = request.query_params.get("vendor")
+            payment_status = request.query_params.get("payment_status")
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if vendor_id:
+                qs = qs.filter(vendor_id=vendor_id)
+            if payment_status:
+                qs = qs.filter(payment_status=payment_status)
+            return Response(MessVendorSupplySerializer(qs, many=True).data)
+
+        serializer = MessVendorSupplySerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        obj = serializer.save()
+        return Response(MessVendorSupplySerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_wastage_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessWastageLog.objects.select_related("hostel", "recorded_by").all()
+            hostel_id = request.query_params.get("hostel")
+            date_filter = request.query_params.get("date")
+            meal_type = request.query_params.get("meal_type")
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if date_filter:
+                qs = qs.filter(date=date_filter)
+            if meal_type:
+                qs = qs.filter(meal_type=meal_type)
+            return Response(MessWastageLogSerializer(qs, many=True).data)
+
+        serializer = MessWastageLogSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        obj = serializer.save(recorded_by=request.user)
+        return Response(MessWastageLogSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_consumption_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessConsumptionLog.objects.select_related("hostel", "recorded_by").all()
+            hostel_id = request.query_params.get("hostel")
+            date_filter = request.query_params.get("date")
+            meal_type = request.query_params.get("meal_type")
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if date_filter:
+                qs = qs.filter(date=date_filter)
+            if meal_type:
+                qs = qs.filter(meal_type=meal_type)
+            return Response(MessConsumptionLogSerializer(qs, many=True).data)
+
+        serializer = MessConsumptionLogSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        obj = serializer.save(recorded_by=request.user)
+        return Response(MessConsumptionLogSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mess_student_cost_view(request):
+    try:
+        hostel_id = request.query_params.get("hostel")
+        month_label = request.query_params.get("month") or timezone.now().strftime("%Y-%m")
+        month_start, month_end = _resolve_month_range(month_label)
+        if not month_start:
+            return Response({"error": "Invalid month format. Use YYYY-MM."}, status=status.HTTP_400_BAD_REQUEST)
+
+        supply_qs = MessVendorSupply.objects.filter(supply_date__range=(month_start, month_end))
+        attendance_qs = MessMealAttendance.objects.filter(date__range=(month_start, month_end), status="ate")
+
+        if hostel_id:
+            supply_qs = supply_qs.filter(hostel_id=hostel_id)
+            attendance_qs = attendance_qs.filter(hostel_id=hostel_id)
+
+        total_cost = supply_qs.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        meal_rows = list(
+            attendance_qs.values(
+                "student_id",
+                "student__admission_number",
+                "student__user__first_name",
+                "student__user__last_name",
+            ).annotate(meal_count=Count("id")).order_by("-meal_count")
+        )
+
+        total_meals = sum(int(row["meal_count"]) for row in meal_rows)
+        per_meal_cost = (Decimal(total_cost) / Decimal(total_meals)) if total_meals else Decimal("0")
+
+        student_costs = []
+        if total_meals:
+            for row in meal_rows:
+                full_name = f"{row.get('student__user__first_name', '')} {row.get('student__user__last_name', '')}".strip()
+                cost_value = per_meal_cost * Decimal(int(row["meal_count"]))
+                student_costs.append({
+                    "student": row["student_id"],
+                    "student_name": full_name,
+                    "student_admission": row.get("student__admission_number", ""),
+                    "meals_taken": int(row["meal_count"]),
+                    "estimated_cost": round(float(cost_value), 2),
+                })
+        else:
+            student_qs = Student.objects.filter(hostel_allotment__is_active=True).select_related("user")
+            if hostel_id:
+                student_qs = student_qs.filter(hostel_allotment__room__hostel_id=hostel_id)
+            count = student_qs.count()
+            per_student_cost = (Decimal(total_cost) / Decimal(count)) if count else Decimal("0")
+            for st in student_qs:
+                student_costs.append({
+                    "student": st.pk,
+                    "student_name": st.user.get_full_name(),
+                    "student_admission": st.admission_number,
+                    "meals_taken": 0,
+                    "estimated_cost": round(float(per_student_cost), 2),
+                })
+
+        return Response({
+            "month": month_label,
+            "total_food_cost": round(float(total_cost), 2),
+            "total_meals_counted": total_meals,
+            "per_meal_cost": round(float(per_meal_cost), 2),
+            "student_costs": student_costs,
+        })
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mess_analytics_view(request):
+    try:
+        hostel_id = request.query_params.get("hostel")
+        month_label = request.query_params.get("month") or timezone.now().strftime("%Y-%m")
+        month_start, month_end = _resolve_month_range(month_label)
+        if not month_start:
+            return Response({"error": "Invalid month format. Use YYYY-MM."}, status=status.HTTP_400_BAD_REQUEST)
+
+        menu_qs = MessMenuPlan.objects.filter(plan_date__range=(month_start, month_end))
+        attendance_qs = MessMealAttendance.objects.filter(date__range=(month_start, month_end))
+        profile_qs = MessDietProfile.objects.select_related("student", "student__hostel_allotment__room")
+        feedback_qs = MessFeedback.objects.filter(date__range=(month_start, month_end))
+        inventory_qs = MessInventoryItem.objects.all()
+        supply_qs = MessVendorSupply.objects.filter(supply_date__range=(month_start, month_end))
+        wastage_qs = MessWastageLog.objects.filter(date__range=(month_start, month_end))
+        consumption_qs = MessConsumptionLog.objects.filter(date__range=(month_start, month_end))
+
+        if hostel_id:
+            menu_qs = menu_qs.filter(hostel_id=hostel_id)
+            attendance_qs = attendance_qs.filter(hostel_id=hostel_id)
+            profile_qs = profile_qs.filter(student__hostel_allotment__room__hostel_id=hostel_id)
+            feedback_qs = feedback_qs.filter(hostel_id=hostel_id)
+            inventory_qs = inventory_qs.filter(hostel_id=hostel_id)
+            supply_qs = supply_qs.filter(hostel_id=hostel_id)
+            wastage_qs = wastage_qs.filter(hostel_id=hostel_id)
+            consumption_qs = consumption_qs.filter(hostel_id=hostel_id)
+
+        total_ate = attendance_qs.filter(status="ate").count()
+        total_skipped = attendance_qs.filter(status="skipped").count()
+        total_records = total_ate + total_skipped
+
+        low_stock_items = list(
+            inventory_qs.filter(current_stock__lte=F("minimum_stock")).values(
+                "id", "name", "current_stock", "minimum_stock", "unit"
+            )
+        )
+
+        vendor_spend = list(
+            supply_qs.values("vendor__name").annotate(total=Sum("amount")).order_by("-total")
+        )
+        meal_consumption = list(
+            consumption_qs.values("meal_type").annotate(total_qty=Sum("quantity")).order_by("meal_type")
+        )
+        meal_wastage = list(
+            wastage_qs.values("meal_type").annotate(total_qty=Sum("quantity")).order_by("meal_type")
+        )
+        diet_distribution = list(
+            profile_qs.values("preference").annotate(count=Count("id")).order_by("-count")
+        )
+
+        total_food_cost = supply_qs.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+
+        return Response({
+            "month": month_label,
+            "menu": {
+                "total_plans": menu_qs.count(),
+            },
+            "attendance": {
+                "ate": total_ate,
+                "skipped": total_skipped,
+                "attendance_rate": round((total_ate / total_records * 100) if total_records else 0, 2),
+            },
+            "dietary": {
+                "preferences": diet_distribution,
+                "allergy_profiles_count": profile_qs.exclude(allergies="").count(),
+            },
+            "feedback": {
+                "average_rating": round(float(feedback_qs.aggregate(avg=Avg("rating"))["avg"] or 0), 2),
+                "open_complaints": feedback_qs.filter(status="open").count(),
+                "total_feedback": feedback_qs.count(),
+            },
+            "inventory": {
+                "total_items": inventory_qs.count(),
+                "low_stock_count": len(low_stock_items),
+                "low_stock_items": low_stock_items,
+            },
+            "vendor": {
+                "total_spend": round(float(total_food_cost), 2),
+                "pending_payments": supply_qs.filter(payment_status="pending").count(),
+                "vendor_spend": vendor_spend,
+            },
+            "wastage": {
+                "total_wastage_qty": round(float(wastage_qs.aggregate(total=Sum("quantity"))["total"] or 0), 2),
+                "meal_wastage": meal_wastage,
+            },
+            "consumption": {
+                "total_consumption_qty": round(float(consumption_qs.aggregate(total=Sum("quantity"))["total"] or 0), 2),
+                "meal_consumption": meal_consumption,
+            },
+        })
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

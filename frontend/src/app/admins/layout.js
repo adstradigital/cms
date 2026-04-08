@@ -9,6 +9,36 @@ export default function AdminsGlobalLayout({ children }) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
+  const getDashboardRoute = (userData) => {
+    const roleName = String(userData?.role_name || userData?.role || '').toLowerCase();
+    const portal = String(userData?.portal || '').toLowerCase();
+
+    const roleRoutes = {
+      'admin': '/admins',
+      'super admin': '/admins',
+      'super_admin': '/admins',
+      'principal': '/admins',
+      'staff': '/staff',
+      'student': '/student',
+      'parent': '/parent',
+    };
+
+    const portalRoutes = {
+      admin: '/admins',
+      student: '/student',
+      parent: '/parent',
+    };
+
+    return roleRoutes[roleName] || portalRoutes[portal] || '/login';
+  };
+
+  const hasAdminAccess = (userData) => {
+    const role = String(userData?.role_name || userData?.role || '').toLowerCase();
+    const portal = String(userData?.portal || '').toLowerCase();
+    const adminRoles = ['admin', 'super admin', 'super_admin', 'principal'];
+    return portal === 'admin' || adminRoles.includes(role);
+  };
+
   useEffect(() => {
     // Wait until auth has finished loading before making redirect decisions
     if (loading) return;
@@ -18,17 +48,8 @@ export default function AdminsGlobalLayout({ children }) {
       return;
     }
 
-    // Normalize role check
-    const role = String(user?.role_name || user?.role || '').toLowerCase();
-    const adminRoles = ['admin', 'super admin', 'super_admin', 'principal'];
-    
-    if (!adminRoles.includes(role)) {
-      const roleRoutes = { 
-        'staff': '/staff', 
-        'student': '/student', 
-        'parent': '/parent' 
-      };
-      router.replace(roleRoutes[role] || '/login');
+    if (!hasAdminAccess(user)) {
+      router.replace(getDashboardRoute(user));
     }
   }, [user, loading, router]);
 
@@ -44,9 +65,7 @@ export default function AdminsGlobalLayout({ children }) {
   // Not authenticated or wrong role — redirect is in progress
   if (!user) return null;
 
-  const role = String(user?.role_name || user?.role || '').toLowerCase();
-  const adminRoles = ['admin', 'super admin', 'super_admin', 'principal'];
-  if (!adminRoles.includes(role)) return null;
+  if (!hasAdminAccess(user)) return null;
 
   return (
     <AdminLayout>

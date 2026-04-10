@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'apps.staff',
     'apps.elections',
     'apps.events',
+    'apps.ai_brain',
 ]
 
 MIDDLEWARE = [

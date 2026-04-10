@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Calendar, CheckCircle2, Loader2, RefreshCw, Save, Users } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Loader2, RefreshCw, Save, Send, Users, X } from 'lucide-react';
 import styles from './Attendance.module.css';
 import adminApi from '@/api/adminApi';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
@@ -21,13 +21,68 @@ function statusLabel(status) {
   return 'Unmarked';
 }
 
-function statusClass(status) {
-  if (status === 'present') return styles.badgePresent;
-  if (status === 'absent') return styles.badgeAbsent;
-  if (status === 'late') return styles.badgeLate;
-  if (status === 'leave') return styles.badgeLeave;
-  return styles.badgeUnmarked;
-}
+const WarningModal = ({ student, threshold, onClose, onSent }) => {
+  const [message, setMessage] = useState(
+    `Warning: Attendance for ${student.student_name} has dropped to ${Number(student.percentage || 0).toFixed(1)}%, which is below the required threshold of ${threshold}%. Please ensure regular attendance to avoid further action.`
+  );
+  const [sending, setSending] = useState(false);
+  const { push } = useToast();
+
+  const handleSend = async () => {
+    try {
+      setSending(true);
+      await adminApi.sendAttendanceWarning({
+        student: student.student_id,
+        message,
+        threshold,
+        attendance_percentage: student.percentage,
+      });
+      push('Warning sent successfully', 'success');
+      onSent();
+    } catch (err) {
+      push('Failed to send warning', 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertTriangle className={styles.warningIcon} size={20} />
+            <h3 style={{ margin: 0 }}>Attendance Warning</h3>
+          </div>
+          <button className={styles.closeBtn} onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className={styles.modalBody}>
+          <p className={styles.modalSubtitle}>Sending warning to <b>{student.student_name}</b> and their parents.</p>
+          <div className={styles.formGroup}>
+            <label>Warning Message</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={5}
+              className={styles.textarea}
+            />
+          </div>
+          <div className={styles.modalStats}>
+            <div>Percentage: <b>{Number(student.percentage || 0).toFixed(1)}%</b></div>
+            <div>Threshold: <b>{threshold}%</b></div>
+          </div>
+        </div>
+        <div className={styles.modalFooter}>
+          <button className={styles.btn} onClick={onClose} disabled={sending}>Cancel</button>
+          <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={handleSend} disabled={sending}>
+            {sending ? <Loader2 size={16} className={styles.spin} /> : <Send size={16} />}
+            Send Warning
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AttendanceView = ({ section }) => {
   const [date, setDate] = useState(() => toISODate(new Date()));
@@ -40,6 +95,8 @@ const AttendanceView = ({ section }) => {
   const [overview, setOverview] = useState(null);
   const [dayRecords, setDayRecords] = useState([]);
   const [monthRecords, setMonthRecords] = useState([]);
+  
+  const [selectedWarningStudent, setSelectedWarningStudent] = useState(null);
 
   const { toasts, push, dismiss } = useToast();
 
@@ -143,13 +200,6 @@ const AttendanceView = ({ section }) => {
     setEditedStatuses(next);
   };
 
-  const cycleStatus = (studentId) => {
-    const current = effectiveStatus(studentId);
-    const idx = Math.max(STATUS_ORDER.indexOf(current), -1);
-    const next = STATUS_ORDER[(idx + 1) % STATUS_ORDER.length];
-    setEditedStatuses((prev) => ({ ...prev, [studentId]: next }));
-  };
-
   const save = async () => {
     if (!section?.id || students.length === 0) return;
     try {
@@ -216,7 +266,7 @@ const AttendanceView = ({ section }) => {
           </button>
           <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={save} disabled={saving || loading || !section?.id}>
             {saving ? <Loader2 size={16} className={styles.spin} /> : <Save size={16} />}
-            Save
+            Save Attendance
           </button>
         </div>
       </div>
@@ -230,7 +280,7 @@ const AttendanceView = ({ section }) => {
           <label>Month</label>
           <select value={month} onChange={(e) => setMonth(e.target.value)}>
             {Array.from({ length: 12 }, (_, idx) => String(idx + 1)).map((m) => (
-              <option key={m} value={m}>{m}</option>
+              <option key={m} value={m}>{new Date(2025, m - 1, 1).toLocaleString('default', { month: 'long' })}</option>
             ))}
           </select>
         </div>
@@ -243,17 +293,17 @@ const AttendanceView = ({ section }) => {
           </select>
         </div>
         <div className={styles.controlGroup}>
-          <label>Warning Threshold</label>
+          <label>Warning Threshold (%)</label>
           <input type="number" value={threshold} onChange={(e) => setThreshold(Number(e.target.value || 0))} />
         </div>
       </div>
 
       <div className={styles.summaryBar}>
         <div className={styles.summaryItem}><Users size={16} /> Total: <b>{daySummary.total}</b></div>
-        <div className={styles.summaryItem}>Present: <b>{daySummary.present}</b></div>
-        <div className={styles.summaryItem}>Absent: <b>{daySummary.absent}</b></div>
-        <div className={styles.summaryItem}>Late: <b>{daySummary.late}</b></div>
-        <div className={styles.summaryItem}>Leave: <b>{daySummary.leave}</b></div>
+        <div className={`${styles.summaryItem} ${styles.textSuccess}`}>Present: <b>{daySummary.present}</b></div>
+        <div className={`${styles.summaryItem} ${styles.textDanger}`}>Absent: <b>{daySummary.absent}</b></div>
+        <div className={`${styles.summaryItem} ${styles.textWarning}`}>Late: <b>{daySummary.late}</b></div>
+        <div className={`${styles.summaryItem} ${styles.textInfo}`}>Leave: <b>{daySummary.leave}</b></div>
         <div className={styles.summaryItem}>Unmarked: <b>{daySummary.unmarked}</b></div>
       </div>
 
@@ -267,17 +317,15 @@ const AttendanceView = ({ section }) => {
               <b>Mark Attendance</b>
             </div>
             <div className={styles.bulkBtns}>
-              <button className={styles.btnSm} onClick={() => setAll('present')} disabled={!section?.id}>All Present</button>
-              <button className={styles.btnSm} onClick={() => setAll('absent')} disabled={!section?.id}>All Absent</button>
-              <button className={styles.btnSm} onClick={() => setAll('late')} disabled={!section?.id}>All Late</button>
-              <button className={styles.btnSm} onClick={() => setAll('leave')} disabled={!section?.id}>All Leave</button>
+              <button className={styles.btnSm} onClick={() => setAll('present')} disabled={!section?.id}>Mark All Present</button>
+              <button className={styles.btnSm} onClick={() => setAll('')} disabled={!section?.id}>Reset All</button>
             </div>
           </div>
 
           {!section?.id ? (
             <div className={styles.empty}>Select a section from Dashboard first.</div>
           ) : loading ? (
-            <div className={styles.empty}><Loader2 size={18} className={styles.spin} /> Loading...</div>
+            <div className={styles.empty}><Loader2 size={18} className={styles.spin} /> Loading students...</div>
           ) : students.length === 0 ? (
             <div className={styles.empty}>No active students found in this section.</div>
           ) : (
@@ -286,30 +334,54 @@ const AttendanceView = ({ section }) => {
                 <thead>
                   <tr>
                     <th>Roll</th>
-                    <th>Student</th>
-                    <th>Today</th>
-                    <th>Month %</th>
+                    <th>Student Name</th>
+                    <th>Select Status</th>
+                    <th>Monthly %</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {students.map((s) => {
                     const st = effectiveStatus(s.student_id);
+                    const isLow = s.low_attendance || (s.percentage < threshold);
                     return (
                       <tr key={s.student_id}>
                         <td className={styles.mono}>{s.roll_number || '-'}</td>
                         <td>
-                          <b>{s.student_name}</b>
-                          <div className={styles.subText}>{s.admission_number || ''}</div>
+                          <div className={styles.studentCell}>
+                            <div className={styles.studentName}>
+                              {s.student_name}
+                              {isLow && <AlertTriangle size={14} className={styles.warningIcon} title="Below Threshold" />}
+                            </div>
+                            <div className={styles.subText}>{s.admission_number || ''}</div>
+                          </div>
                         </td>
                         <td>
-                          <button className={`${styles.badge} ${statusClass(st)}`} onClick={() => cycleStatus(s.student_id)}>
-                            {statusLabel(st)}
-                          </button>
+                          <select
+                            className={`${styles.statusSelect} ${st ? styles[`select-${st}`] : ''}`}
+                            value={st}
+                            onChange={(e) => setEditedStatuses(prev => ({ ...prev, [s.student_id]: e.target.value }))}
+                          >
+                            <option value="">Unmarked</option>
+                            <option value="present">Present</option>
+                            <option value="absent">Absent</option>
+                            <option value="late">Late</option>
+                            <option value="leave">Leave</option>
+                          </select>
                         </td>
                         <td>
-                          <span className={s.low_attendance ? styles.low : styles.ok}>
+                          <span className={isLow ? styles.low : styles.ok}>
                             {Number(s.percentage || 0).toFixed(1)}%
                           </span>
+                        </td>
+                        <td>
+                          <button
+                            className={`${styles.btnSm} ${isLow ? styles.btnWarn : ''}`}
+                            title="Send Warning Pop-up"
+                            onClick={() => setSelectedWarningStudent(s)}
+                          >
+                            <AlertTriangle size={14} /> Warning
+                          </button>
                         </td>
                       </tr>
                     );
@@ -320,6 +392,18 @@ const AttendanceView = ({ section }) => {
           )}
         </div>
       </div>
+
+      {selectedWarningStudent && (
+        <WarningModal
+          student={selectedWarningStudent}
+          threshold={threshold}
+          onClose={() => setSelectedWarningStudent(null)}
+          onSent={() => {
+            setSelectedWarningStudent(null);
+            load();
+          }}
+        />
+      )}
 
       <ToastStack toasts={toasts} dismiss={dismiss} />
     </div>

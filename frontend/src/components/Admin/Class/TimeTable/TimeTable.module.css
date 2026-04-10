@@ -467,9 +467,24 @@
 
 .periodConfigRow {
   display: grid;
-  grid-template-columns: 1fr 1fr auto auto;
+  grid-template-columns: 1fr 1fr 1fr auto auto;
   gap: 8px;
   align-items: center;
+}
+
+.timeSettingsRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 8px;
+}
+
+.periodTimePreview {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg);
+  font-size: 0.78rem;
+  color: var(--theme-text-muted);
 }
 
 .infoBox {

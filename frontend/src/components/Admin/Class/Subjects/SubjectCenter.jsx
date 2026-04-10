@@ -18,7 +18,17 @@ import adminApi from '@/api/adminApi';
 import LessonPlanner from './LessonPlanner';
 
 const SubjectCenter = () => {
-  const [view, setView] = useState('grid');
+  const [view, setView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('subjectViewMode') || 'grid';
+    }
+    return 'grid';
+  });
+
+  const handleSetView = (newView) => {
+    setView(newView);
+    localStorage.setItem('subjectViewMode', newView);
+  };
   const [subjects, setSubjects] = useState([]);
   const [allocations, setAllocations] = useState([]);
   const [lessonPlans, setLessonPlans] = useState([]);
@@ -322,8 +332,8 @@ const SubjectCenter = () => {
         </div>
         <div className={styles.actionRow}>
           <div className={styles.filters} style={{ marginRight: 12 }}>
-            <button className={styles.iconBtn} onClick={() => setView('grid')} style={{ background: view === 'grid' ? 'var(--color-primary)' : 'white', color: view === 'grid' ? 'white' : 'inherit' }}><LayoutGrid size={18} /></button>
-            <button className={styles.iconBtn} onClick={() => setView('list')} style={{ background: view === 'list' ? 'var(--color-primary)' : 'white', color: view === 'list' ? 'white' : 'inherit' }}><List size={18} /></button>
+            <button className={styles.iconBtn} onClick={() => handleSetView('grid')} style={{ background: view === 'grid' ? 'var(--color-primary)' : 'white', color: view === 'grid' ? 'white' : 'inherit' }}><LayoutGrid size={18} /></button>
+            <button className={styles.iconBtn} onClick={() => handleSetView('list')} style={{ background: view === 'list' ? 'var(--color-primary)' : 'white', color: view === 'list' ? 'white' : 'inherit' }}><List size={18} /></button>
           </div>
           <button className={`${styles.btn} ${styles.primary}`} onClick={() => setIsAddingSubject(true)}><Plus size={18} /> Add Subject</button>
         </div>

@@ -62,7 +62,6 @@ const Class = () => {
   const [academicYearsList, setAcademicYearsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [studentsLoading, setStudentsLoading] = useState(false);
-  const [showSummaryStats, setShowSummaryStats] = useState(true);
 
   // New States for CRUD modals
   const [isNewSectionModalOpen, setIsNewSectionModalOpen] = useState(false);
@@ -101,6 +100,7 @@ const Class = () => {
     includeInactiveStudents: false,
     showAttendanceColumn: true,
     showFeeColumn: true,
+    showSummaryStats: true,
   };
   const [prefs, setPrefs] = useState(defaultPrefs);
 
@@ -835,6 +835,13 @@ const Class = () => {
             <p>Managing students for Academic Year {academicYear}</p>
           </div>
           <div className={styles.headerActions}>
+            <button
+              className={`${styles.btn} ${styles.btnOutline} ${prefs.showSummaryStats ? styles.btnActive : ''}`}
+              onClick={() => setPrefs(prev => ({ ...prev, showSummaryStats: !prev.showSummaryStats }))}
+              title={prefs.showSummaryStats ? "Hide Stats" : "Show Stats"}
+            >
+              <BarChart2 size={18} />
+            </button>
             {canManageSection(selectedSection) && (
               <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsBulkNotifyModalOpen(true)}>
                 <Send size={16} /> Notify
@@ -852,7 +859,7 @@ const Class = () => {
         </div>
       </div>
 
-      {showSummaryStats && (
+      {prefs.showSummaryStats && (
         <div className={styles.statsRow} style={{ marginTop: 12, border: '1px solid var(--theme-border)', borderRadius: 12, padding: '12px 16px' }}>
           <div className={styles.statItem}>
             <span className={styles.statLabel}>Total</span>

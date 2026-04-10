@@ -17,10 +17,21 @@ import {
 } from 'lucide-react';
 import styles from './TimeTable.module.css';
 import instance from '@/api/instance';
+import adminApi from '@/api/adminApi';
 import { useToast, ToastStack } from '@/components/common/useToast';
 
 const WEEK_DAY_OPTIONS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DEFAULT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DEFAULT_TIMEZONE = 'Asia/Kolkata';
+const DEFAULT_LOCALE = 'en-IN';
+const TIMEZONE_OPTIONS = [
+  { value: 'Asia/Kolkata', label: 'India (Asia/Kolkata)', locale: 'en-IN' },
+  { value: 'Asia/Dubai', label: 'UAE (Asia/Dubai)', locale: 'en-AE' },
+  { value: 'Europe/London', label: 'UK (Europe/London)', locale: 'en-GB' },
+  { value: 'America/New_York', label: 'US East (America/New_York)', locale: 'en-US' },
+  { value: 'America/Los_Angeles', label: 'US West (America/Los_Angeles)', locale: 'en-US' },
+  { value: 'Australia/Sydney', label: 'Australia (Australia/Sydney)', locale: 'en-AU' },
+];
 const DEFAULT_PERIODS = [
   { label: 'Period 1', time: '08:30 - 09:15', isBreak: false },
   { label: 'Period 2', time: '09:15 - 10:00', isBreak: false },
@@ -59,8 +70,28 @@ const normalizeSchedule = (rawSchedule, days, periods) => {
 };
 
 const getTodayDayName = () => ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+const parseRange = (range = '') => {
+  const [start = '', end = ''] = String(range).split('-').map((s) => s.trim());
+  return { start, end };
+};
+const to12Hour = (hhmm = '') => {
+  const [hStr, mStr] = String(hhmm).split(':');
+  const h = Number(hStr);
+  const m = Number(mStr);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${String(hour12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${suffix}`;
+};
+const formatRangeForDisplay = (range, format = '24h') => {
+  const { start, end } = parseRange(range);
+  if (!start || !end) return range || '';
+  if (format === '12h') return `${to12Hour(start)} - ${to12Hour(end)}`;
+  return `${start} - ${end}`;
+};
 
 const TimeTable = () => {
+  const [sectionRecords, setSectionRecords] = useState([]);
   const [sections, setSections] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -79,6 +110,11 @@ const TimeTable = () => {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [previewDraftId, setPreviewDraftId] = useState(null);
+  const [hasTimetableData, setHasTimetableData] = useState(false);
+  const [timeFormat, setTimeFormat] = useState('24h');
+  const [timeZone, setTimeZone] = useState(DEFAULT_TIMEZONE);
+  const [regionLocale, setRegionLocale] = useState(DEFAULT_LOCALE);
 
   const [slotModal, setSlotModal] = useState({ open: false, day: null, periodIdx: null });
   const [slotForm, setSlotForm] = useState({ subject: '', teacher: '', room: '', isEvent: false });
@@ -98,6 +134,10 @@ const TimeTable = () => {
 
   const activeSchedule = useMemo(() => schedulesByClass[activeClass] || buildEmptySchedule(days, periods), [schedulesByClass, activeClass, days, periods]);
   const selectedTeacher = useMemo(() => teachers.find((t) => t.id === Number(selectedTeacherId)) || { name: 'Select Teacher' }, [selectedTeacherId, teachers]);
+  const activeSection = useMemo(
+    () => sectionRecords.find((s) => `${s.class_name} - ${s.name}` === activeClass) || null,
+    [sectionRecords, activeClass]
+  );
   const todayDay = useMemo(() => {
     const today = getTodayDayName();
     return days.includes(today) ? today : days[0];
@@ -107,6 +147,7 @@ const TimeTable = () => {
     setSchedulesByClass((prev) => ({ ...prev, [activeClass]: nextSchedule }));
     setDirty(true);
   };
+  const displayRange = (range) => formatRangeForDisplay(range, timeFormat);
 
   const fetchMetadata = async () => {
     try {
@@ -115,7 +156,9 @@ const TimeTable = () => {
         instance.get('/staff/teachers/'),
         instance.get('/academics/subjects/'),
       ]);
-      const sectionList = sectionsRes.data.map(s => `${s.class_name} - ${s.name}`);
+      const sectionData = Array.isArray(sectionsRes.data) ? sectionsRes.data : [];
+      const sectionList = sectionData.map(s => `${s.class_name} - ${s.name}`);
+      setSectionRecords(sectionData);
       setSections(sectionList);
       setTeachers(teachersRes.data);
       setSubjects(subjectsRes.data);
@@ -164,12 +207,21 @@ const TimeTable = () => {
       ]);
       const serverDays = Array.isArray(settingsRes?.data?.working_days) ? settingsRes.data.working_days : DEFAULT_DAYS;
       const serverPeriods = Array.isArray(settingsRes?.data?.periods) ? settingsRes.data.periods : DEFAULT_PERIODS;
+      const serverTimeFormat = settingsRes?.data?.time_format;
+      const serverTimeZone = settingsRes?.data?.time_zone;
       setDays(serverDays);
       setPeriods(serverPeriods);
       setDraftDays(serverDays);
       setDraftPeriods(serverPeriods);
+      if (serverTimeFormat === '12h' || serverTimeFormat === '24h') setTimeFormat(serverTimeFormat);
+      if (serverTimeZone && typeof serverTimeZone === 'string') {
+        setTimeZone(serverTimeZone);
+        const region = TIMEZONE_OPTIONS.find((z) => z.value === serverTimeZone);
+        if (region?.locale) setRegionLocale(region.locale);
+      }
       
       const rawRecords = timetableRes?.data || [];
+      setHasTimetableData(Array.isArray(rawRecords) && rawRecords.length > 0);
       const normalized = buildEmptySchedule(serverDays, serverPeriods);
       
       rawRecords.forEach(tt => {
@@ -199,7 +251,25 @@ const TimeTable = () => {
     fetchMetadata();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = localStorage.getItem('tt_time_settings_v1');
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed?.time_format) setTimeFormat(parsed.time_format);
+      if (parsed?.time_zone) setTimeZone(parsed.time_zone);
+      if (parsed?.locale) setRegionLocale(parsed.locale);
+    } catch {
+      // ignore malformed local settings
+    }
+  }, []);
+
   const checkAbsence = async () => {
+    if (!activeClass || !hasTimetableData) {
+      setAbsence({ loading: false, isDetected: false, absentTeacher: '', affectedPeriodIndexes: [] });
+      return;
+    }
     try {
       setAbsence((prev) => ({ ...prev, loading: true }));
       const res = await instance.get('/timetables/absence-status/', { params: { class_name: activeClass, day: todayDay } });
@@ -220,10 +290,10 @@ const TimeTable = () => {
   }, [activeClass]);
 
   useEffect(() => {
-    if (!activeSchedule?.[todayDay]) return;
+    if (!activeClass || !hasTimetableData || !activeSchedule?.[todayDay]) return;
     checkAbsence();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClass, todayDay, schedulesByClass]);
+  }, [activeClass, todayDay, schedulesByClass, hasTimetableData]);
 
   const saveDraft = async ({ silent = false } = {}) => {
     try {
@@ -245,27 +315,133 @@ const TimeTable = () => {
 
   const generateTimetable = async () => {
     try {
+      if (!activeSection?.id) {
+        push('Please select a valid section first.', 'error');
+        return;
+      }
       setSaving(true);
-      const res = await instance.post('/timetables/generate/', { class_name: activeClass });
-      push(`Generation complete: ${res.data.note}`, 'success');
-      loadTimetable(); // Reload the generated grid
+      const workingDayCodes = days
+        .map((day) => WEEK_DAY_OPTIONS.indexOf(day) + 1)
+        .filter((dayCode) => dayCode > 0);
+      const breakPeriods = periods
+        .map((period, idx) => (period.isBreak ? idx + 1 : null))
+        .filter(Boolean);
+
+      const res = await instance.post('/ai-brain/timetable/generate/', {
+        section_id: activeSection.id,
+        working_days: workingDayCodes,
+        periods_per_day: periods.length,
+        break_periods: breakPeriods,
+        preferences: {
+          class_teacher_first_period: false,
+          min_teacher_free_periods_per_day: 1,
+          max_consecutive_periods_teacher: 4,
+          allow_same_subject_twice_day: false,
+        },
+        persist: false,
+      });
+
+      if (res?.data?.draft_id) {
+        setPreviewDraftId(res.data.draft_id);
+      }
+
+      const backendDraft = Array.isArray(res?.data?.draft) ? res.data.draft : [];
+      if (backendDraft.length) {
+        const nextSchedule = buildEmptySchedule(days, periods);
+        backendDraft.forEach((dayRow) => {
+          const dayName = WEEK_DAY_OPTIONS[(dayRow.day_of_week || 1) - 1];
+          if (!dayName || !nextSchedule[dayName]) return;
+          (dayRow.periods || []).forEach((slot) => {
+            const idx = (slot.period_number || 1) - 1;
+            if (!nextSchedule[dayName][idx]) nextSchedule[dayName][idx] = null;
+            if (slot.type === 'break') {
+              nextSchedule[dayName][idx] = { isBreak: true, label: periods[idx]?.label || 'BREAK' };
+            } else if (slot.type === 'class') {
+              nextSchedule[dayName][idx] = {
+                subject: slot.subject_name || '',
+                teacher: slot.teacher_name || '',
+                room: 'TBD',
+                isEvent: false,
+              };
+            } else {
+              nextSchedule[dayName][idx] = null;
+            }
+          });
+        });
+        setSchedulesByClass((prev) => ({ ...prev, [activeClass]: nextSchedule }));
+        setDirty(true);
+      }
+
+      const unplaced = res?.data?.meta?.unplaced?.length || 0;
+      if (unplaced > 0) {
+        push(`Preview generated with ${unplaced} unplaced subject slots. Review and publish.`, 'warning');
+      } else {
+        push('AI preview generated. Review and click Publish to apply.', 'success');
+      }
     } catch (e) {
-      push(e.response?.data?.error || 'Generation failed', 'error');
+      const details = e?.response?.data;
+      const errorMsg = details?.error || details?.detail || 'Generation failed';
+      push(errorMsg, 'error');
     } finally {
       setSaving(false);
     }
   };
 
+  const scheduleToManualOverridePayload = () => {
+    const teacherByName = {};
+    teachers.forEach((t) => {
+      const label = `${t.first_name} ${t.last_name}`.trim();
+      if (label) teacherByName[label] = t.id;
+      if (t.full_name) teacherByName[t.full_name] = t.id;
+      if (t.name) teacherByName[t.name] = t.id;
+    });
+    const subjectByName = {};
+    subjects.forEach((s) => {
+      if (s.name) subjectByName[s.name] = s.id;
+    });
+
+    const draft = days.map((day) => {
+      const dayCode = WEEK_DAY_OPTIONS.indexOf(day) + 1;
+      const row = activeSchedule?.[day] || [];
+      const periodsPayload = row.map((slot, idx) => {
+        const periodNumber = idx + 1;
+        if (periods[idx]?.isBreak || slot?.isBreak) {
+          return { period_number: periodNumber, type: 'break' };
+        }
+        if (!slot) {
+          return { period_number: periodNumber, type: 'free' };
+        }
+        return {
+          period_number: periodNumber,
+          type: 'class',
+          subject_id: subjectByName[slot.subject] || null,
+          teacher_id: teacherByName[slot.teacher] || null,
+        };
+      });
+      return { day_of_week: dayCode, periods: periodsPayload };
+    });
+
+    return {
+      draft,
+      periods_per_day: periods.length,
+      break_periods: periods.map((p, idx) => (p.isBreak ? idx + 1 : null)).filter(Boolean),
+    };
+  };
+
   const publishTimetable = async () => {
     try {
       setSaving(true);
-      // We'll call the draft save first to ensure latest is sent, 
-      // then publish (backend logic might need to be refined to publish all days for a section)
-      await instance.post('/timetables/draft/', { class_name: activeClass, periods, schedule: activeSchedule });
-      // For now, we assume a "Bulk Publish" endpoint or sequence
-      push('Timetable published for the section.', 'success');
+      if (!previewDraftId) {
+        push('Generate AI preview first, then publish.', 'warning');
+        return;
+      }
+      const manual_override_payload = scheduleToManualOverridePayload();
+      await adminApi.applyAiTimetableDraft(previewDraftId, { manual_override_payload });
+      push('Preview applied and timetable published for the section.', 'success');
+      setPreviewDraftId(null);
       setDirty(false);
       setLastSavedAt(new Date().toISOString());
+      loadTimetable();
     } catch {
       push('Publish failed. Please try again.', 'error');
     } finally {
@@ -344,7 +520,7 @@ const TimeTable = () => {
     if (cleanedPeriods.length === 0) return alert('Add at least one period.');
 
     const nextSchedules = {};
-    CLASSES.forEach((cls) => {
+    sections.forEach((cls) => {
       const oldSchedule = schedulesByClass[cls] || {};
       const rebuilt = buildEmptySchedule(draftDays, cleanedPeriods);
       draftDays.forEach((day) => {
@@ -364,8 +540,20 @@ const TimeTable = () => {
     setSchedulesByClass(nextSchedules);
     setShowSettingsModal(false);
     setDirty(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        'tt_time_settings_v1',
+        JSON.stringify({ time_format: timeFormat, time_zone: timeZone, locale: regionLocale })
+      );
+    }
     try {
-      await instance.post('/timetables/settings/', { days: draftDays, periods: cleanedPeriods });
+      await instance.post('/timetables/settings/', {
+        days: draftDays,
+        periods: cleanedPeriods,
+        time_format: timeFormat,
+        time_zone: timeZone,
+        locale: regionLocale,
+      });
     } catch {}
   };
 
@@ -501,7 +689,7 @@ const TimeTable = () => {
               <thead>
                 <tr>
                   <th className={styles.th}>Day</th>
-                  {periods.map((period, idx) => <th key={idx} className={styles.th} style={period.isBreak ? { width: '64px' } : { width: '180px' }}>{period.label}<span className={styles.timeLabel}>{period.time}</span></th>)}
+                  {periods.map((period, idx) => <th key={idx} className={styles.th} style={period.isBreak ? { width: '64px' } : { width: '180px' }}>{period.label}<span className={styles.timeLabel}>{displayRange(period.time)}</span></th>)}
                 </tr>
               </thead>
               <tbody>
@@ -561,7 +749,7 @@ const TimeTable = () => {
             <div className={styles.teacherCards}>
               {teacherTodaySlots.map(({ period, idx, slot }) => (
                 <div key={idx} className={styles.teacherCard}>
-                  <div><b>{period.label}</b><span className={styles.timeLabel}>{period.time}</span></div>
+                  <div><b>{period.label}</b><span className={styles.timeLabel}>{displayRange(period.time)}</span></div>
                   <div><div className={styles.subjectName}>{slot.subject}</div><div className={styles.roomTag}><MapPin size={10} /> {slot.room || 'TBD'}</div></div>
                 </div>
               ))}
@@ -573,7 +761,7 @@ const TimeTable = () => {
       {slotModal.open && (
         <div className={styles.modalOverlay} onClick={() => setSlotModal({ open: false, day: null, periodIdx: null })}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}><div className={styles.modalIcon}><Plus size={22} /></div><div><h3>Assign Period</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>{slotModal.day} - {periods[slotModal.periodIdx]?.label}</p></div></div>
+            <div className={styles.modalHeader}><div className={styles.modalIcon}><Plus size={22} /></div><div><h3>Assign Period</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>{slotModal.day} - {periods[slotModal.periodIdx]?.label} ({displayRange(periods[slotModal.periodIdx]?.time)})</p></div></div>
             <div className={styles.modalBody}>
               <div className={styles.formGroup}><label className={styles.formLabel}>Subject</label><select className={styles.input} value={slotForm.subject} onChange={(e) => setSlotForm((prev) => ({ ...prev, subject: e.target.value }))}><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.name}>{subject.name}</option>)}</select></div>
               <div className={styles.formGroup}><label className={styles.formLabel}>Teacher</label><select className={styles.input} value={slotForm.teacher} onChange={(e) => setSlotForm((prev) => ({ ...prev, teacher: e.target.value }))}><option value="">Select teacher</option>{teachers.map((teacher) => <option key={teacher.id} value={`${teacher.first_name} ${teacher.last_name}`}>{teacher.first_name} {teacher.last_name}</option>)}</select></div>
@@ -603,6 +791,30 @@ const TimeTable = () => {
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}><div className={styles.modalIcon}><Settings size={24} /></div><div><h3>Timetable Configuration</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>Configure working days, periods and break slots.</p></div></div>
             <div className={styles.modalBody}>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Time Settings</label>
+                <div className={styles.timeSettingsRow}>
+                  <select
+                    className={styles.input}
+                    value={timeZone}
+                    onChange={(e) => {
+                      const tz = e.target.value;
+                      setTimeZone(tz);
+                      const region = TIMEZONE_OPTIONS.find((x) => x.value === tz);
+                      if (region?.locale) setRegionLocale(region.locale);
+                    }}
+                  >
+                    {TIMEZONE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <select className={styles.input} value={timeFormat} onChange={(e) => setTimeFormat(e.target.value)}>
+                    <option value="24h">24-hour</option>
+                    <option value="12h">12-hour</option>
+                  </select>
+                </div>
+                <div className={styles.infoBox}>Display region: {timeZone} | Format: {timeFormat.toUpperCase()}</div>
+              </div>
               <div className={styles.formGroup}><label className={styles.formLabel}>Working days</label><div className={styles.daySelector}>{WEEK_DAY_OPTIONS.map((day) => <label key={day} className={styles.checkRow}><input type="checkbox" checked={draftDays.includes(day)} onChange={(e) => setDraftDays((prev) => e.target.checked ? [...prev, day] : prev.filter((d) => d !== day))} />{day}</label>)}</div></div>
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Periods & breaks</label>
@@ -610,7 +822,8 @@ const TimeTable = () => {
                   {draftPeriods.map((period, idx) => (
                     <div key={`${period.label}-${idx}`} className={styles.periodConfigRow}>
                       <input className={styles.input} value={period.label} onChange={(e) => setDraftPeriods((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))} placeholder="Label" />
-                      <input className={styles.input} value={period.time} onChange={(e) => setDraftPeriods((prev) => prev.map((x, i) => i === idx ? { ...x, time: e.target.value } : x))} placeholder="Time range" />
+                      <input className={styles.input} value={period.time} onChange={(e) => setDraftPeriods((prev) => prev.map((x, i) => i === idx ? { ...x, time: e.target.value } : x))} placeholder="Time range (HH:MM - HH:MM)" />
+                      <div className={styles.periodTimePreview}>{displayRange(period.time)}</div>
                       <label className={styles.checkRow}><input type="checkbox" checked={!!period.isBreak} onChange={(e) => setDraftPeriods((prev) => prev.map((x, i) => i === idx ? { ...x, isBreak: e.target.checked } : x))} />Break</label>
                       <button className={`${styles.btn} ${styles.outline}`} onClick={() => setDraftPeriods((prev) => prev.filter((_, i) => i !== idx))}><X size={14} /></button>
                     </div>

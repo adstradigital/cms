@@ -179,10 +179,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-surface-hover);
-  color: var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff !important;
   font-weight: 900;
   flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .small {
@@ -264,13 +265,14 @@
   width: 42px;
   height: 42px;
   border-radius: 16px;
-  background: var(--color-surface-hover);
-  color: var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff !important;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 900;
   flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .cardName {
@@ -598,14 +600,15 @@
   width: 66px;
   height: 66px;
   border-radius: 22px;
-  background: var(--color-surface-hover);
-  color: var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff !important;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 900;
   flex-shrink: 0;
   font-size: 22px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .profileName {

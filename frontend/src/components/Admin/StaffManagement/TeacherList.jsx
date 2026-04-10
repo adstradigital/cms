@@ -14,7 +14,17 @@ const normalizeList = (data) => {
 
 const TeacherList = () => {
   const router = useRouter();
-  const [view, setView] = useState('grid');
+  const [view, setView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('teacherViewMode') || 'grid';
+    }
+    return 'grid';
+  });
+
+  const handleSetView = (newView) => {
+    setView(newView);
+    localStorage.setItem('teacherViewMode', newView);
+  };
   const [teachers, setTeachers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -298,7 +308,7 @@ const TeacherList = () => {
         <div className={styles.viewToggle}>
           <button
             className={`${styles.viewBtn} ${view === 'grid' ? styles.viewBtnActive : ''}`}
-            onClick={() => setView('grid')}
+            onClick={() => handleSetView('grid')}
             type="button"
             aria-label="Grid view"
           >
@@ -306,7 +316,7 @@ const TeacherList = () => {
           </button>
           <button
             className={`${styles.viewBtn} ${view === 'list' ? styles.viewBtnActive : ''}`}
-            onClick={() => setView('list')}
+            onClick={() => handleSetView('list')}
             type="button"
             aria-label="List view"
           >

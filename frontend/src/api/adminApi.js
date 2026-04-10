@@ -17,6 +17,7 @@ const adminApi = {
   bulkMarkAttendance: (data) => instance.post('/attendance/attendance/bulk-mark/', data),
   getAttendanceOverview: (params) => instance.get('/attendance/admin/overview/', { params }),
   getStudentAttendanceDetail: (studentId, params) => instance.get(`/attendance/admin/student/${studentId}/`, { params }),
+  sendAttendanceWarning: (data) => instance.post('/attendance/admin/warning/', data),
   // Academics - Subjects & Syllabus
   getSubjects: (params) => instance.get('/academics/subjects/', { params }),
   createSubject: (data) => instance.post('/academics/subjects/', data),
@@ -92,6 +93,11 @@ const adminApi = {
   getExamResults: (params) => instance.get('/exams/results/', { params }),
   bulkSaveExamResults: (records) => instance.post('/exams/results/bulk/', { records }),
   getReportCards: (params) => instance.get('/exams/report-cards/', { params }),
+  generateAiReportCardsForSection: (data) => instance.post('/ai-brain/report-card/generate-class/', data),
+  generateAiReportCardForStudent: (data) => instance.post('/ai-brain/report-card/generate/', data),
+  generateAiTimetable: (data) => instance.post('/ai-brain/timetable/generate/', data),
+  validateAiTimetable: (data) => instance.post('/ai-brain/timetable/validate/', data),
+  applyAiTimetableDraft: (draftId, data) => instance.post(`/ai-brain/timetable/drafts/${draftId}/apply/`, data),
 
   // Notice Board / Events (Notifications)
   getNotifications: (params) => instance.get('/notifications/', { params }),

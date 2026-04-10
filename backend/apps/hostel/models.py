@@ -9,6 +9,7 @@ MEAL_TYPE_CHOICES = [
     ("lunch", "Lunch"),
     ("snacks", "Snacks"),
     ("dinner", "Dinner"),
+    ("juice", "Juice"),
 ]
 
 
@@ -467,6 +468,7 @@ class MessVendor(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    categories = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -491,6 +493,7 @@ class MessVendorSupply(models.Model):
     item_name = models.CharField(max_length=120)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     unit = models.CharField(max_length=20, default="kg")
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     supply_date = models.DateField(default=timezone.now)
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="pending")
@@ -531,7 +534,6 @@ class MessConsumptionLog(models.Model):
     meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES)
     item_name = models.CharField(max_length=120)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    student_count = models.PositiveIntegerField(default=0)
     notes = models.TextField(blank=True)
     recorded_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="mess_consumption_recorded"
@@ -544,3 +546,28 @@ class MessConsumptionLog(models.Model):
     class Meta:
         db_table = "mess_consumption_logs"
         ordering = ["-date", "-created_at"]
+
+
+class MessFoodOrder(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="mess_orders")
+    hostel = models.ForeignKey(Hostel, on_delete=models.CASCADE, related_name="mess_orders")
+    order_date = models.DateField(default=timezone.now)
+    meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES)
+    items = models.TextField()
+    is_veg = models.BooleanField(default=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.student} | {self.order_date} | {self.meal_type}"
+
+    class Meta:
+        db_table = "mess_food_orders"
+        ordering = ["-created_at"]

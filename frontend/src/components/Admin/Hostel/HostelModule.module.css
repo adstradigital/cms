@@ -91,6 +91,27 @@
   box-shadow: 0 0 0 4px rgba(30, 41, 59, 0.14);
 }
 
+.btnDanger {
+  color: #b91c1c;
+  background: #fff;
+  border-color: #fecaca;
+}
+
+.btnDanger:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.btnDanger:active {
+  background: #fee2e2;
+}
+
+.btnDanger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.16);
+}
+
 .btnPrimary:disabled,
 .btnSecondary:disabled {
   opacity: 0.6;
@@ -239,6 +260,56 @@ select.formControl {
 
 .modalActions button {
   flex: 1;
+}
+
+.formGroupHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.formGroupActions {
+  display: flex;
+  gap: 10px;
+}
+
+.formGroupActions button {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.checkboxGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+label.checkboxOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #334155;
+  cursor: pointer;
+}
+
+label.checkboxOption input {
+  width: 16px;
+  height: 16px;
+  accent-color: #334155;
+}
+
+label.checkboxOption span {
+  line-height: 1.2;
 }
 
 .tabNavigation {

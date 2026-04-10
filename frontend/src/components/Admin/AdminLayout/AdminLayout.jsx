@@ -70,7 +70,9 @@ const AdminLayout = ({ children }) => {
       {/* MAIN CONTENT WRAPPER */}
       <div className={styles.mainContentWrapper}>
         <AdminHeader />
-        {children}
+        <div className={styles.workspaceBody}>
+          {children}
+        </div>
       </div>
 
       {/* FLOATING WIDGET FABs — conditionally rendered */}

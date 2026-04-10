@@ -13,7 +13,7 @@ from .models import (
     NightAttendance, EntryExitLog, RuleViolation, VisitorLog, HostelFee,
     MessMenuPlan, MessMealAttendance, MessDietProfile, MessFeedback,
     MessInventoryItem, MessInventoryLog, MessVendor, MessVendorSupply,
-    MessWastageLog, MessConsumptionLog
+    MessWastageLog, MessConsumptionLog, MessFoodOrder
 )
 from .serializers import (
     HostelSerializer, FloorSerializer, RoomSerializer, RoomAllotmentSerializer,
@@ -21,7 +21,7 @@ from .serializers import (
     RuleViolationSerializer, VisitorLogSerializer, HostelFeeSerializer,
     MessMenuPlanSerializer, MessMealAttendanceSerializer, MessDietProfileSerializer, MessFeedbackSerializer,
     MessInventoryItemSerializer, MessInventoryLogSerializer, MessVendorSerializer, MessVendorSupplySerializer,
-    MessWastageLogSerializer, MessConsumptionLogSerializer
+    MessWastageLogSerializer, MessConsumptionLogSerializer, MessFoodOrderSerializer
 )
 from apps.students.models import Student
 
@@ -1060,12 +1060,12 @@ def mess_diet_profile_list_view(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["GET", "POST"])
+@api_view(["GET", "POST", "DELETE"])
 @permission_classes([IsAuthenticated])
 def mess_feedback_list_view(request):
     try:
-        if request.method == "GET":
-            qs = MessFeedback.objects.select_related("hostel", "student", "student__user").all()
+        if request.method in ("GET", "DELETE"):
+            qs = MessFeedback.objects.all()
             hostel_id = request.query_params.get("hostel")
             feedback_status = request.query_params.get("status")
             meal_type = request.query_params.get("meal_type")
@@ -1082,7 +1082,19 @@ def mess_feedback_list_view(request):
                 qs = qs.filter(date__gte=start_date)
             if end_date:
                 qs = qs.filter(date__lte=end_date)
-            return Response(MessFeedbackSerializer(qs, many=True).data)
+            if request.method == "GET":
+                qs = qs.select_related("hostel", "student", "student__user")
+                return Response(MessFeedbackSerializer(qs, many=True).data)
+
+            if not any([hostel_id, feedback_status, meal_type, start_date, end_date]):
+                return Response(
+                    {"error": "At least one filter is required to delete feedback."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            deleted_count = qs.count()
+            qs.delete()
+            return Response({"deleted": deleted_count}, status=status.HTTP_200_OK)
 
         payload = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
         if not payload.get("hostel") and payload.get("student"):
@@ -1101,7 +1113,7 @@ def mess_feedback_list_view(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["GET", "PATCH"])
+@api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
 def mess_feedback_detail_view(request, pk):
     try:
@@ -1112,6 +1124,10 @@ def mess_feedback_detail_view(request, pk):
 
         if request.method == "GET":
             return Response(MessFeedbackSerializer(feedback).data)
+
+        if request.method == "DELETE":
+            feedback.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
         serializer = MessFeedbackSerializer(feedback, data=request.data, partial=True)
         if not serializer.is_valid():
@@ -1233,6 +1249,29 @@ def mess_vendor_supply_list_view(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def mess_vendor_supply_detail_view(request, pk):
+    try:
+        try:
+            supply = MessVendorSupply.objects.get(pk=pk)
+        except MessVendorSupply.DoesNotExist:
+            return Response({"error": "Supply record not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(MessVendorSupplySerializer(supply).data)
+        if request.method == "PATCH":
+            serializer = MessVendorSupplySerializer(supply, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data)
+        supply.delete()
+        return Response({"message": "Supply record deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def mess_wastage_list_view(request):
@@ -1259,6 +1298,29 @@ def mess_wastage_list_view(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def mess_wastage_detail_view(request, pk):
+    try:
+        try:
+            log = MessWastageLog.objects.get(pk=pk)
+        except MessWastageLog.DoesNotExist:
+            return Response({"error": "Wastage log not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(MessWastageLogSerializer(log).data)
+        if request.method == "PATCH":
+            serializer = MessWastageLogSerializer(log, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data)
+        log.delete()
+        return Response({"message": "Wastage log deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def mess_consumption_list_view(request):
@@ -1281,6 +1343,29 @@ def mess_consumption_list_view(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         obj = serializer.save(recorded_by=request.user)
         return Response(MessConsumptionLogSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def mess_consumption_detail_view(request, pk):
+    try:
+        try:
+            log = MessConsumptionLog.objects.get(pk=pk)
+        except MessConsumptionLog.DoesNotExist:
+            return Response({"error": "Consumption log not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(MessConsumptionLogSerializer(log).data)
+        if request.method == "PATCH":
+            serializer = MessConsumptionLogSerializer(log, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data)
+        log.delete()
+        return Response({"message": "Consumption log deleted."}, status=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1445,5 +1530,54 @@ def mess_analytics_view(request):
                 "meal_consumption": meal_consumption,
             },
         })
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def mess_food_order_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = MessFoodOrder.objects.select_related("hostel", "student", "student__user").all()
+            hostel_id = request.query_params.get("hostel")
+            student_id = request.query_params.get("student")
+            order_status = request.query_params.get("status")
+            if hostel_id:
+                qs = qs.filter(hostel_id=hostel_id)
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            if order_status:
+                qs = qs.filter(status=order_status)
+            return Response(MessFoodOrderSerializer(qs, many=True).data)
+
+        serializer = MessFoodOrderSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        obj = serializer.save()
+        return Response(MessFoodOrderSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def mess_food_order_detail_view(request, pk):
+    try:
+        try:
+            order = MessFoodOrder.objects.get(pk=pk)
+        except MessFoodOrder.DoesNotExist:
+            return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(MessFoodOrderSerializer(order).data)
+        if request.method == "PATCH":
+            serializer = MessFoodOrderSerializer(order, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data)
+        order.delete()
+        return Response({"message": "Order deleted."}, status=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

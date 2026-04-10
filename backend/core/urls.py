@@ -44,6 +44,7 @@ urlpatterns = [
     path('api/elections/', include('apps.elections.urls')),
     path('api/events/', include('apps.events.urls')),
     path('api/timetables/', include('apps.academics.urls_timetable')),
+    path('api/canteen/', include('apps.canteen.urls')),
 ]
 
 # Serve media files in development

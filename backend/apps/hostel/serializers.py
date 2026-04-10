@@ -1,10 +1,27 @@
 from rest_framework import serializers
+
 from .models import (
-    Hostel, Floor, Room, RoomAllotment, RoomTransfer,
-    NightAttendance, EntryExitLog, RuleViolation, VisitorLog, HostelFee,
-    MessMenuPlan, MessMealAttendance, MessDietProfile, MessFeedback,
-    MessInventoryItem, MessInventoryLog, MessVendor, MessVendorSupply,
-    MessWastageLog, MessConsumptionLog
+    Hostel,
+    Floor,
+    Room,
+    RoomAllotment,
+    RoomTransfer,
+    NightAttendance,
+    EntryExitLog,
+    RuleViolation,
+    VisitorLog,
+    HostelFee,
+    MessMenuPlan,
+    MessMealAttendance,
+    MessDietProfile,
+    MessFeedback,
+    MessInventoryItem,
+    MessInventoryLog,
+    MessVendor,
+    MessVendorSupply,
+    MessWastageLog,
+    MessConsumptionLog,
+    MessFoodOrder,
 )
 
 
@@ -248,4 +265,14 @@ class MessConsumptionLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MessConsumptionLog
+        fields = "__all__"
+
+
+class MessFoodOrderSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
+    student_admission = serializers.CharField(source="student.admission_number", read_only=True)
+    hostel_name = serializers.CharField(source="hostel.name", read_only=True)
+
+    class Meta:
+        model = MessFoodOrder
         fields = "__all__"

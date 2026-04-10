@@ -18,7 +18,8 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
-  Bed
+  Bed,
+  Utensils
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import styles from './AdminSidebar.module.css';
@@ -183,7 +184,18 @@ const AdminSidebar = () => {
           </div>
         )}
 
+                {/* Canteen Section */}
+        <NavItem 
+          icon={<Utensils size={18} />} 
+          label="Canteen" 
+          collapsed={isCollapsed}
+          active={pathname?.startsWith('/admins/canteen')} 
+          href="/admins/canteen/overview"
+          onClick={() => setExpandedMenu(null)}
+        />
+
         {/* Hostel Section */}
+
         {isCollapsed ? (
           <NavItem 
             icon={<Bed size={18} />} 

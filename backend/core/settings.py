@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'apps.staff',
     'apps.elections',
     'apps.events',
+    'apps.canteen',
 ]
 
 MIDDLEWARE = [

@@ -53,8 +53,13 @@ urlpatterns = [
     path("mess/inventory/logs/", views.mess_inventory_log_list_view, name="mess-inventory-log-list"),
     path("mess/vendors/", views.mess_vendor_list_view, name="mess-vendor-list"),
     path("mess/vendor-supplies/", views.mess_vendor_supply_list_view, name="mess-vendor-supply-list"),
+    path("mess/vendor-supplies/<int:pk>/", views.mess_vendor_supply_detail_view, name="mess-vendor-supply-detail"),
     path("mess/wastage/", views.mess_wastage_list_view, name="mess-wastage-list"),
+    path("mess/wastage/<int:pk>/", views.mess_wastage_detail_view, name="mess-wastage-detail"),
     path("mess/consumption/", views.mess_consumption_list_view, name="mess-consumption-list"),
+    path("mess/consumption/<int:pk>/", views.mess_consumption_detail_view, name="mess-consumption-detail"),
+    path("mess/orders/", views.mess_food_order_list_view, name="mess-order-list"),
+    path("mess/orders/<int:pk>/", views.mess_food_order_detail_view, name="mess-order-detail"),
     path("mess/student-costs/", views.mess_student_cost_view, name="mess-student-cost"),
     path("mess/analytics/", views.mess_analytics_view, name="mess-analytics"),
 

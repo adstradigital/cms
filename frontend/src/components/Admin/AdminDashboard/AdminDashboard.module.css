@@ -22,4 +22,5 @@
   flex: 1;
   overflow-y: auto;
   background-color: var(--theme-bg);
+  padding-bottom: 120px;
 }

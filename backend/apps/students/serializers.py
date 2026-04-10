@@ -15,10 +15,12 @@ class ClassSerializer(serializers.ModelSerializer):
 
 class SectionSerializer(serializers.ModelSerializer):
     class_teacher_name = serializers.CharField(source="class_teacher.get_full_name", read_only=True)
+    class_name = serializers.CharField(source="school_class.name", read_only=True)
+    student_count = serializers.IntegerField(source="students.count", read_only=True)
 
     class Meta:
         model = Section
-        fields = "__all__"
+        fields = ["id", "school_class", "class_name", "name", "class_teacher", "class_teacher_name", "room_number", "capacity", "student_count"]
 
 
 class StudentDocumentSerializer(serializers.ModelSerializer):
@@ -114,6 +116,7 @@ class StudentRegistrationSerializer(serializers.Serializer):
     hostel_resident = serializers.BooleanField(default=False)
     transport_user = serializers.BooleanField(default=False)
     previous_school = serializers.CharField(required=False, allow_blank=True)
+    roll_number = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):
         if self.instance is None:
@@ -182,6 +185,7 @@ class StudentRegistrationSerializer(serializers.Serializer):
             hostel_resident=validated_data.pop('hostel_resident', False),
             transport_user=validated_data.pop('transport_user', False),
             previous_school=validated_data.pop('previous_school', ''),
+            roll_number=validated_data.pop('roll_number', ''),
         )
 
         return student
@@ -223,7 +227,7 @@ class StudentRegistrationSerializer(serializers.Serializer):
 
         student_fields = [
             "admission_number", "section", "academic_year", "admission_date",
-            "hostel_resident", "transport_user", "previous_school",
+            "hostel_resident", "transport_user", "previous_school", "roll_number",
         ]
         for field in student_fields:
             if field in validated_data:

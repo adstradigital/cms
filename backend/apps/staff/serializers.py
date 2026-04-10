@@ -33,7 +33,7 @@ class StaffCreateSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     # Staff fields
-    employee_id = serializers.CharField(max_length=50)
+    employee_id = serializers.CharField(max_length=50, required=False, allow_blank=True)
     designation = serializers.CharField(max_length=100)
     joining_date = serializers.DateField()
     status = serializers.ChoiceField(choices=Staff.STATUS_CHOICES, required=False)

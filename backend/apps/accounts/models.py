@@ -57,7 +57,6 @@ class User(AbstractUser):
     portal      = models.CharField(max_length=20, choices=PORTAL_CHOICES, default=PORTAL_ADMIN)
     school      = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name="users")
     role        = models.ForeignKey('permissions.Role', null=True, blank=True, on_delete=models.SET_NULL, related_name="users")
-    assigned_class = models.ForeignKey('students.Class', null=True, blank=True, on_delete=models.SET_NULL, related_name="assigned_teachers")
     individual_permissions = models.ManyToManyField(
         'permissions.Permission', blank=True,
         related_name='users_individual',
@@ -89,6 +88,37 @@ class User(AbstractUser):
         if self.assigned_class:
             return {'section__school_class': self.assigned_class}
         return {}
+
+    def get_allocated_section_ids(self):
+        """Returns IDs of sections where this user has a SubjectAllocation (i.e. teaches a subject)."""
+        from apps.academics.models import SubjectAllocation
+        return list(
+            SubjectAllocation.objects.filter(
+                teachers=self
+            ).values_list('section_id', flat=True).distinct()
+        )
+
+    def get_class_teacher_section_ids(self):
+        """Returns IDs of sections where this user is the assigned class teacher."""
+        return list(self.managed_sections.all().values_list('id', flat=True))
+
+    def is_class_teacher_of(self, section):
+        """Returns True if the user is the assigned class teacher of this section."""
+        if not section:
+            return False
+        # Handle both object and ID input
+        section_id = getattr(section, 'id', section)
+        return self.managed_sections.filter(id=section_id).exists()
+
+    def get_accessible_section_ids(self):
+        """
+        Union of sections this user can access:
+        - Sections in their assigned class (class teacher role)
+        - Sections where they have a subject allocation (subject teacher role)
+        """
+        ct_ids = set(self.get_class_teacher_section_ids())
+        alloc_ids = set(self.get_allocated_section_ids())
+        return list(ct_ids | alloc_ids)
 
     class Meta:
         db_table = "users"

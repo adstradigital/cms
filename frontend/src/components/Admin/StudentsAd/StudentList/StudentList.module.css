@@ -1,12 +1,12 @@
 .listContainer {
   flex: 1;
   background-color: var(--theme-surface);
-  border-radius: 16px; /* 2xl */
+  border-radius: 16px; 
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
-  border: 1px solid var(--theme-border); /* slate-100 */
+  border: 1px solid var(--theme-border);
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: visible; /* Ensure nothing clips here */
 }
 
 /* Header */
@@ -100,17 +100,15 @@
 
 /* Table Area */
 .tableScroll {
-  overflow-x: auto;
-  overflow-y: visible;
-  /* Use padding at the bottom of the table body/container as a safety fallback */
-  padding-bottom: 80px; 
-  margin-bottom: -80px; 
+  overflow: visible; /* Allow dropdowns to overflow */
+  padding-bottom: 20px;
 }
 
 .table {
   width: 100%;
   text-align: left;
   border-collapse: collapse;
+  margin-bottom: 120px; /* Force trailing space for last row dropdowns */
 }
 
 .table thead tr {

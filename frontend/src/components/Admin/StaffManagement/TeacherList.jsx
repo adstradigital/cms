@@ -28,7 +28,6 @@ const TeacherList = () => {
     last_name: '',
     email: '',
     phone: '',
-    employee_id: '',
     designation: 'Teacher',
     joining_date: new Date().toISOString().split('T')[0],
     is_teaching_staff: true,
@@ -76,11 +75,15 @@ const TeacherList = () => {
       String(t.email || '').toLowerCase().includes(term)
     );
   }, [teachers, searchQuery]);
+ 
+  const displayRoles = useMemo(() => {
+    return roles.filter(r => r.name !== 'Class Teacher');
+  }, [roles]);
 
   const handleCreateTeacher = async (e) => {
     e.preventDefault();
-    if (!addForm.first_name.trim() || !addForm.employee_id.trim() || !addForm.joining_date) {
-      alert('Please fill in all required fields (First Name, Employee ID, Joining Date)');
+    if (!addForm.first_name.trim() || !addForm.joining_date) {
+      alert('Please fill in all required fields (First Name, Joining Date)');
       return;
     }
 
@@ -90,7 +93,6 @@ const TeacherList = () => {
         ...addForm,
         first_name: addForm.first_name.trim(),
         last_name: addForm.last_name.trim(),
-        employee_id: addForm.employee_id.trim(),
         experience_years: Number(addForm.experience_years),
         password: addForm.password || 'TempPass123',
       };
@@ -99,7 +101,7 @@ const TeacherList = () => {
       await fetchTeachers();
       setAddOpen(false);
       setAddForm({
-        first_name: '', last_name: '', email: '', phone: '', employee_id: '',
+        first_name: '', last_name: '', email: '', phone: '',
         designation: 'Teacher', joining_date: new Date().toISOString().split('T')[0],
         is_teaching_staff: true, role: '', password: '', gender: 'other', dob: '',
         blood_group: '', qualification: '', experience_years: 0, address: '',
@@ -180,7 +182,7 @@ const TeacherList = () => {
                 onChange={(e) => assignTeacherRole(teacher.id, e.target.value)}
               >
                 <option value="">No role</option>
-                {roles.map((role) => (
+                {displayRoles.map((role) => (
                   <option key={role.id} value={role.id}>{role.name}</option>
                 ))}
               </select>
@@ -189,7 +191,7 @@ const TeacherList = () => {
 
           <div className={styles.cardFooter}>
             <button className={styles.btn} type="button" onClick={() => openUserOverrides(teacher)}>
-              <ExternalLink size={14} /> Overrides
+              <ExternalLink size={14} /> Special Access
             </button>
             <button className={`${styles.btn} ${styles.btnPrimary}`} type="button" onClick={() => openRolePermissions(teacher)}>
               <Shield size={14} /> Permissions
@@ -234,7 +236,7 @@ const TeacherList = () => {
                   onChange={(e) => assignTeacherRole(teacher.id, e.target.value)}
                 >
                   <option value="">No role</option>
-                  {roles.map((role) => (
+                  {displayRoles.map((role) => (
                     <option key={role.id} value={role.id}>{role.name}</option>
                   ))}
                 </select>
@@ -250,7 +252,7 @@ const TeacherList = () => {
                     <Shield size={14} /> Role
                   </button>
                   <button className={styles.btn} style={{ width: 'auto', padding: '6px 12px' }} type="button" onClick={() => openUserOverrides(teacher)}>
-                    <ExternalLink size={14} /> Overrides
+                    <ExternalLink size={14} /> Special Access
                   </button>
                 </div>
               </td>
@@ -265,8 +267,8 @@ const TeacherList = () => {
     <div className={styles.container} style={{ padding: 0 }}>
       <div className={styles.header}>
         <div className={styles.titleArea}>
-          <h2>Academic Staff (Teachers)</h2>
-          <p>Directory of all teaching personnel.</p>
+          <h2>Staff Directory</h2>
+          <p>Manage all your teachers and academic personnel here.</p>
         </div>
         <button
           className={`${styles.btn} ${styles.btnPrimary}`}
@@ -277,7 +279,7 @@ const TeacherList = () => {
             setAddOpen(true);
           }}
         >
-          <Plus size={18} /> Add Teacher
+          <Plus size={18} /> Register New Staff
         </button>
       </div>
 
@@ -323,12 +325,12 @@ const TeacherList = () => {
         view === 'grid' ? renderGridView() : renderListView()
       )}
 
-      {/* DETAILED TEACHER ONBOARDING MODAL */}
+      {/* STAFF REGISTRATION MODAL */}
       {addOpen && (
         <div className={styles.modalOverlay} onClick={() => setAddOpen(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3>Detailed Teacher Onboarding</h3>
+              <h3>Register New Staff Member</h3>
               <button className={styles.modalClose} onClick={() => setAddOpen(false)}>×</button>
             </div>
 
@@ -377,10 +379,6 @@ const TeacherList = () => {
               {addTab === 'professional' && (
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
-                    <label>Employee ID*</label>
-                    <input value={addForm.employee_id} onChange={(e) => setAddForm(p => ({ ...p, employee_id: e.target.value }))} placeholder="STF001" />
-                  </div>
-                  <div className={styles.formGroup}>
                     <label>Designation*</label>
                     <input value={addForm.designation} onChange={(e) => setAddForm(p => ({ ...p, designation: e.target.value }))} />
                   </div>
@@ -396,7 +394,7 @@ const TeacherList = () => {
                     <label>Role Badge</label>
                     <select value={addForm.role} onChange={(e) => setAddForm(p => ({ ...p, role: e.target.value }))}>
                       <option value="">Select role</option>
-                      {roles.map((role) => (
+                      {displayRoles.map((role) => (
                         <option key={role.id} value={role.id}>{role.name}</option>
                       ))}
                     </select>
@@ -437,7 +435,7 @@ const TeacherList = () => {
                 onClick={handleCreateTeacher}
                 disabled={loading}
               >
-                Complete Onboarding
+                Add Staff Member
               </button>
             </div>
           </div>

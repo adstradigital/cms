@@ -43,6 +43,13 @@
   margin-bottom: var(--space-8);
 }
 
+.setupGrid {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1.2fr;
+  gap: var(--space-4);
+  align-items: center;
+}
+
 .label {
   display: block;
   font-size: var(--text-sm);
@@ -63,6 +70,9 @@
   font-size: var(--text-base);
   outline: none;
   transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .input:focus, .select:focus {

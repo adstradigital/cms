@@ -22,9 +22,32 @@ import Events from './Events/Events';
 import Fees from './Fees/Fees';
 import ReportCards from './ReportCards/ReportCards';
 import adminApi from '@/api/adminApi';
+import { useAuth } from '@/context/AuthContext';
+
+const normalizeList = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
+  return [];
+};
 
 /* Main Component */
 const Class = () => {
+  const { user } = useAuth();
+  const isSuperuser = user?.is_superuser;
+  const isSchoolAdmin = user?.role_scope === 'school';
+  const hasFullAccess = isSuperuser || isSchoolAdmin;
+
+  const isClassTeacher = (section) => {
+    if (!section || !user) return false;
+    // Section-specific check: Is this user the assigned class teacher?
+    const teacherId = typeof section.class_teacher === 'object' ? section.class_teacher?.id : section.class_teacher;
+    return String(teacherId) === String(user.id);
+  };
+
+  const canManageSection = (section) => {
+    if (hasFullAccess) return true;
+    return isClassTeacher(section);
+  };
   const [activeView, setActiveView] = useState('dashboard'); // dashboard, students, promotion, election, ranking
   const [selectedSection, setSelectedSection] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,6 +78,8 @@ const Class = () => {
   const [performanceDrawerStudent, setPerformanceDrawerStudent] = useState(null);
   const [profileDrawerStudent, setProfileDrawerStudent] = useState(null);
   const [studentActionMenuId, setStudentActionMenuId] = useState(null);
+  const [editingRollNumber, setEditingRollNumber] = useState('');
+  const [isSavingRoll, setIsSavingRoll] = useState(false);
 
   const [isBulkTransferModalOpen, setIsBulkTransferModalOpen] = useState(false);
   const [isBulkNotifyModalOpen, setIsBulkNotifyModalOpen] = useState(false);
@@ -123,6 +148,27 @@ const Class = () => {
   const [leaderboardSubjects, setLeaderboardSubjects] = useState([]);
   const [leaderboardExams, setLeaderboardExams] = useState([]);
 
+  const handleUpdateRollNumber = async () => {
+    if (!profileDrawerStudent) return;
+    try {
+      setIsSavingRoll(true);
+      await adminApi.updateStudent(profileDrawerStudent.id, { roll_number: editingRollNumber });
+      setStudents(prev => prev.map(s => s.id === profileDrawerStudent.id ? { ...s, roll_number: editingRollNumber } : s));
+      setProfileDrawerStudent(prev => ({ ...prev, roll_number: editingRollNumber }));
+      setIsSavingRoll(false);
+    } catch (err) {
+      console.error('Failed to update roll number:', err);
+      alert('Could not update roll number');
+      setIsSavingRoll(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (profileDrawerStudent) {
+      setEditingRollNumber(profileDrawerStudent.roll_number || '');
+    }
+  }, [profileDrawerStudent]);
+
   // Fetch sections for dashboard
   const loadDashboard = async () => {
     try {
@@ -147,8 +193,8 @@ const Class = () => {
 
   const loadTeachers = async () => {
     try {
-      const res = await adminApi.getUsers({ portal: 'admin' }); // Show all admins/teachers for now
-      setTeachers(res.data);
+      const res = await adminApi.getTeachers(); // Load academic staff specifically
+      setTeachers(normalizeList(res.data));
     } catch (err) {
       console.error('Teachers load failed:', err);
     }
@@ -168,7 +214,7 @@ const Class = () => {
         await adminApi.deleteSection(id);
         loadDashboard();
       } catch (err) {
-        alert('Failed to delete section');
+        alert('We couldn’t delete this section. Please refresh and try again.');
       }
     }
   };
@@ -180,7 +226,7 @@ const Class = () => {
         loadDashboard();
         loadClasses();
       } catch (err) {
-        alert('Failed to delete class');
+        alert('We couldn’t delete this Class record. There might be students assigned to it.');
       }
     }
   };
@@ -355,12 +401,16 @@ const Class = () => {
   }, [filteredLeaderboard]);
 
   React.useEffect(() => {
-    const closeMenuOnOutsideClick = () => {
+    const handleOutsideInteraction = (e) => {
+      // If we clicked inside any menu or its trigger, do nothing
+      if (e.target.closest('[data-menu-wrap="true"]') || e.target.closest('[data-student-menu-wrap="true"]')) {
+        return;
+      }
       setOpenCardMenuId(null);
       setStudentActionMenuId(null);
     };
-    document.addEventListener('click', closeMenuOnOutsideClick);
-    return () => document.removeEventListener('click', closeMenuOnOutsideClick);
+    document.addEventListener('mousedown', handleOutsideInteraction);
+    return () => document.removeEventListener('mousedown', handleOutsideInteraction);
   }, []);
 
   React.useEffect(() => {
@@ -470,7 +520,7 @@ const Class = () => {
       setTransferSectionId('');
       setIsBulkTransferModalOpen(false);
     } catch (err) {
-      alert('Could not transfer selected students.');
+      alert('We had trouble moving those students. Please check your connection and try again.');
     }
   };
 
@@ -525,7 +575,7 @@ const Class = () => {
       } catch {}
       setPromotionStep(3);
     } catch (err) {
-      alert('Promotion execution failed. Please retry.');
+      alert('Something went wrong during the promotion process. No changes were made.');
     } finally {
       setPromotionExecuting(false);
     }
@@ -629,12 +679,16 @@ const Class = () => {
             </>
           )}
           <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-            <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => { setEditingClass(null); setIsNewClassModalOpen(true); }}>
-              <Plus size={16} /> New Class
-            </button>
-            <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => { setEditingSection(null); setIsNewSectionModalOpen(true); }}>
-              <Plus size={16} /> Create Your First Section
-            </button>
+            {hasFullAccess && (
+              <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => { setEditingClass(null); setIsNewClassModalOpen(true); }}>
+                <Plus size={16} /> New Class
+              </button>
+            )}
+            {hasFullAccess && (
+              <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => { setEditingSection(null); setIsNewSectionModalOpen(true); }}>
+                <Plus size={16} /> Create Your First Section
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -647,8 +701,8 @@ const Class = () => {
               <GraduationCap size={24} />
             </div>
             <div className={styles.cardInfo}>
-              <h3>Section {section.name}</h3>
-              <span className={styles.subtitle}>{section.class_name || 'Class'}</span>
+              <h3>{section.class_name} — {section.name}</h3>
+              <span className={styles.subtitle}>Academic Section</span>
             </div>
           </div>
           
@@ -672,52 +726,58 @@ const Class = () => {
           <div className={styles.cardFooter}>
             <div className={styles.teacherInfo}>
               <div className={styles.avatar}>{(section.class_teacher_name || 'T').split(' ').map(n=>n[0]).join('')}</div>
-              <span>{section.class_teacher_name || 'No Teacher'}</span>
+              <span>{section.class_teacher_name || 'Lead Teacher needed'}</span>
             </div>
             <div className={styles.cardActions}>
-              <div className={styles.cardMenuWrap} onClick={(e) => e.stopPropagation()}>
-                <button
-                  className={`${styles.btn} ${styles.btnOutline}`}
-                  style={{ padding: 8 }}
-                  onClick={() => setOpenCardMenuId((prev) => (prev === section.id ? null : section.id))}
-                >
-                  <MoreVertical size={16} />
-                </button>
-                {openCardMenuId === section.id && (
-                  <div className={styles.cardMenu}>
-                    <button
-                      className={styles.cardMenuItem}
-                      onClick={() => {
-                        setEditingSection(section);
-                        setIsNewSectionModalOpen(true);
-                        setOpenCardMenuId(null);
-                      }}
-                    >
-                      <Settings size={14} /> Edit Section
-                    </button>
-                    <button
-                      className={styles.cardMenuItem}
-                      onClick={() => {
-                        const parentClass = classes.find(c => c.id === section.school_class);
-                        setEditingClass(parentClass);
-                        setIsNewClassModalOpen(true);
-                        setOpenCardMenuId(null);
-                      }}
-                    >
-                      <GraduationCap size={14} /> Edit Class
-                    </button>
-                    <button
-                      className={`${styles.cardMenuItem} ${styles.cardMenuItemDanger}`}
-                      onClick={() => {
-                        handleDeleteSection(section.id);
-                        setOpenCardMenuId(null);
-                      }}
-                    >
-                      <Trash size={14} /> Delete Section
-                    </button>
-                  </div>
-                )}
-              </div>
+              {canManageSection(section) && (
+                <div className={styles.cardMenuWrap} data-menu-wrap="true">
+                  <button
+                    className={`${styles.btn} ${styles.btnOutline}`}
+                    style={{ padding: 8 }}
+                    onClick={() => setOpenCardMenuId((prev) => (prev === section.id ? null : section.id))}
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+                  {openCardMenuId === section.id && (
+                    <div className={styles.cardMenu}>
+                      <button
+                        className={styles.cardMenuItem}
+                        onClick={() => {
+                          setEditingSection(section);
+                          setIsNewSectionModalOpen(true);
+                          setOpenCardMenuId(null);
+                        }}
+                      >
+                        <Settings size={14} /> Edit Section
+                      </button>
+                      {hasFullAccess && (
+                        <button
+                          className={styles.cardMenuItem}
+                          onClick={() => {
+                            // Find parent class ID robustly
+                            const classId = typeof section.school_class === 'object' ? section.school_class.id : section.school_class;
+                            const parentClass = classes.find(c => String(c.id) === String(classId));
+                            setEditingClass(parentClass);
+                            setIsNewClassModalOpen(true);
+                            setOpenCardMenuId(null);
+                          }}
+                        >
+                          <GraduationCap size={14} /> Edit Class
+                        </button>
+                      )}
+                      <button
+                        className={`${styles.cardMenuItem} ${styles.cardMenuItemDanger}`}
+                        onClick={() => {
+                          handleDeleteSection(section.id);
+                          setOpenCardMenuId(null);
+                        }}
+                      >
+                        <Trash size={14} /> Delete Section
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               <button 
                 className={`${styles.btn} ${styles.btnPrimary}`}
                 onClick={() => {
@@ -731,16 +791,18 @@ const Class = () => {
           </div>
         </div>
       ))}
-      <div
-        className={`${styles.card} ${styles.cardAdd}`}
-        style={{ borderStyle: 'dashed', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-        onClick={() => { setEditingClass(null); setIsNewClassModalOpen(true); }}
-      >
-        <div style={{ textAlign: 'center', color: 'var(--theme-text-muted)' }}>
-          <Plus size={40} style={{ marginBottom: 8 }} />
-          <p>Create New Class</p>
+      {hasFullAccess && (
+        <div
+          className={`${styles.card} ${styles.cardAdd}`}
+          style={{ borderStyle: 'dashed', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          onClick={() => { setEditingClass(null); setIsNewClassModalOpen(true); }}
+        >
+          <div style={{ textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+            <Plus size={40} style={{ marginBottom: 8 }} />
+            <p>Create New Class</p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 
@@ -756,9 +818,19 @@ const Class = () => {
             <p>Managing students for Academic Year {academicYear}</p>
           </div>
           <div className={styles.headerActions}>
-            <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsBulkNotifyModalOpen(true)}><Send size={16} /> Notify</button>
-            <button className={`${styles.btn} ${styles.btnOutline}`} onClick={handleExportAllStudents}><Download size={18} /> Export List</button>
-            <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => setIsAddStudentModalOpen(true)}><UserPlus size={18} /> Add Student</button>
+            {canManageSection(selectedSection) && (
+              <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsBulkNotifyModalOpen(true)}>
+                <Send size={16} /> Notify
+              </button>
+            )}
+            <button className={`${styles.btn} ${styles.btnOutline}`} onClick={handleExportAllStudents}>
+              <Download size={18} /> Export List
+            </button>
+            {canManageSection(selectedSection) && (
+              <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => setIsAddStudentModalOpen(true)}>
+                <UserPlus size={18} /> Add Student
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -866,7 +938,15 @@ const Class = () => {
                 <td className={styles.td} colSpan={5 + (prefs.showAttendanceColumn ? 1 : 0) + (prefs.showFeeColumn ? 1 : 0) + 3} style={{ textAlign: 'center', color: 'var(--theme-text-muted)' }}>No students match your filters.</td>
               </tr>
             ) : filteredStudents.map(student => (
-              <tr key={student.id} onClick={() => setProfileDrawerStudent(student)} style={{ cursor: 'pointer' }}>
+              <tr 
+                key={student.id} 
+                onClick={() => setProfileDrawerStudent(student)} 
+                style={{ 
+                  cursor: 'pointer',
+                  position: 'relative',
+                  zIndex: studentActionMenuId === student.id ? 100 : 1
+                }}
+              >
                 <td className={styles.td}>
                   <input
                     type="checkbox"
@@ -914,28 +994,35 @@ const Class = () => {
                     >
                       <TrendingUp size={14} />
                     </button>
-                    <div className={styles.cardMenuWrap}>
+                    <div className={styles.cardMenuWrap} data-student-menu-wrap="true">
                       <button
                         className={`${styles.btn} ${styles.btnOutline}`}
                         style={{ padding: 6, borderRadius: 8 }}
-                        onClick={() => setStudentActionMenuId((prev) => (prev === student.id ? null : student.id))}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setStudentActionMenuId((prev) => (prev === student.id ? null : student.id));
+                        }}
                       >
                         <MoreVertical size={14} />
                       </button>
                       {studentActionMenuId === student.id && (
                         <div className={styles.cardMenu}>
                           <button className={styles.cardMenuItem} onClick={() => setProfileDrawerStudent(student)}>View Profile</button>
-                          <button className={styles.cardMenuItem} onClick={() => setIsBulkTransferModalOpen(true)}>Transfer Section</button>
-                          <button className={styles.cardMenuItem}>Edit Student</button>
-                          <button
-                            className={`${styles.cardMenuItem} ${styles.cardMenuItemDanger}`}
-                            onClick={async () => {
-                              await adminApi.updateStudent(student.id, { is_active: !student.is_active }).catch(() => null);
-                              setStudents((prev) => prev.map((s) => (s.id === student.id ? { ...s, is_active: !s.is_active } : s)));
-                            }}
-                          >
-                            {student.is_active ? 'Deactivate' : 'Activate'}
-                          </button>
+                          {canManageSection(selectedSection) && (
+                            <>
+                              <button className={styles.cardMenuItem} onClick={() => setIsBulkTransferModalOpen(true)}>Transfer Section</button>
+                              <button className={styles.cardMenuItem}>Edit Student</button>
+                              <button
+                                className={`${styles.cardMenuItem} ${styles.cardMenuItemDanger}`}
+                                onClick={async () => {
+                                  await adminApi.updateStudent(student.id, { is_active: !student.is_active }).catch(() => null);
+                                  setStudents((prev) => prev.map((s) => (s.id === student.id ? { ...s, is_active: !s.is_active } : s)));
+                                }}
+                              >
+                                {student.is_active ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1012,8 +1099,24 @@ const Class = () => {
                   <span className={styles.statValue}>{profileDrawerStudent.user?.first_name} {profileDrawerStudent.user?.last_name}</span>
                 </div>
                 <div className={styles.statItem}>
-                  <span className={styles.statLabel}>Roll</span>
-                  <span className={styles.statValue}>{profileDrawerStudent.roll_number || 'N/A'}</span>
+                  <span className={styles.statLabel}>Roll Number</span>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+                    <input 
+                      className={styles.studentSelect} 
+                      style={{ padding: '4px 8px', width: 80, fontSize: 13 }}
+                      value={editingRollNumber}
+                      onChange={(e) => setEditingRollNumber(e.target.value)}
+                      placeholder="N/A"
+                    />
+                    <button 
+                      className={styles.btnPrimary} 
+                      style={{ padding: '4px 8px', fontSize: 11, borderRadius: 4 }}
+                      onClick={handleUpdateRollNumber}
+                      disabled={isSavingRoll}
+                    >
+                      {isSavingRoll ? '...' : 'Save'}
+                    </button>
+                  </div>
                 </div>
                 <div className={styles.statItem}>
                   <span className={styles.statLabel}>Admission #</span>
@@ -1433,7 +1536,12 @@ const Class = () => {
                 <label>Class Teacher</label>
                 <select name="class_teacher" defaultValue={editingSection?.class_teacher}>
                   <option value="">Assign a Teacher</option>
-                  {teachers.map(t => <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>)}
+                  {teachers
+                    .filter(t => t.is_teaching_staff && t.employee_id) // Hard filter for academic staff
+                    .map(t => (
+                      <option key={t.id} value={t.user}>{t.full_name} ({t.employee_id})</option>
+                    ))
+                  }
                 </select>
               </div>
               <div className={styles.formGroup}>
@@ -1741,14 +1849,20 @@ const Class = () => {
         <div className={`${styles.tab} ${activeView === 'attendance' ? styles.tabActive : ''}`} onClick={() => setActiveView('attendance')}>Attendance</div>
         <div className={`${styles.tab} ${activeView === 'marks' ? styles.tabActive : ''}`} onClick={() => setActiveView('marks')}>Marks / Exams</div>
         <div className={`${styles.tab} ${activeView === 'notice' ? styles.tabActive : ''}`} onClick={() => setActiveView('notice')}>Notice Board</div>
-        <div className={`${styles.tab} ${activeView === 'promotion' ? styles.tabActive : ''}`} onClick={() => setActiveView('promotion')}>Promotion System</div>
+        {canManageSection(selectedSection) && (
+          <div className={`${styles.tab} ${activeView === 'promotion' ? styles.tabActive : ''}`} onClick={() => setActiveView('promotion')}>Promotion System</div>
+        )}
         <div className={`${styles.tab} ${activeView === 'election' ? styles.tabActive : ''}`} onClick={() => setActiveView('election')}>Elections</div>
         <div className={`${styles.tab} ${activeView === 'ranking' ? styles.tabActive : ''}`} onClick={() => setActiveView('ranking')}>Leaderboards</div>
         <div className={`${styles.tab} ${activeView === 'assignments' ? styles.tabActive : ''}`} onClick={() => setActiveView('assignments')}>Assignments & Projects</div>
         <div className={`${styles.tab} ${activeView === 'materials' ? styles.tabActive : ''}`} onClick={() => setActiveView('materials')}>Materials & Videos</div>
-        <div className={`${styles.tab} ${activeView === 'reportcards' ? styles.tabActive : ''}`} onClick={() => setActiveView('reportcards')}>Report Cards</div>
+        {canManageSection(selectedSection) && (
+          <div className={`${styles.tab} ${activeView === 'reportcards' ? styles.tabActive : ''}`} onClick={() => setActiveView('reportcards')}>Report Cards</div>
+        )}
         <div className={`${styles.tab} ${activeView === 'timetable' ? styles.tabActive : ''}`} onClick={() => setActiveView('timetable')}>Timetable</div>
-        <div className={`${styles.tab} ${activeView === 'fees' ? styles.tabActive : ''}`} onClick={() => setActiveView('fees')}>Fees Overview</div>
+        {hasFullAccess && (
+          <div className={`${styles.tab} ${activeView === 'fees' ? styles.tabActive : ''}`} onClick={() => setActiveView('fees')}>Fees Overview</div>
+        )}
         <div className={`${styles.tab} ${activeView === 'events' ? styles.tabActive : ''}`} onClick={() => setActiveView('events')}>Events / Calendar</div>
       </div>
 
@@ -1774,7 +1888,7 @@ const Class = () => {
         )}
         {activeView === 'students' && renderStudents()}
         {activeView === 'promotion' && renderPromotion()}
-        {activeView === 'election' && <Elections section={selectedSection} />}
+        {activeView === 'election' && <Elections section={selectedSection} sections={sections} />}
         {activeView === 'ranking' && renderRankings()}
         {activeView === 'assignments' && <Assignments section={selectedSection} />}
         {activeView === 'materials' && <Materials section={selectedSection} />}

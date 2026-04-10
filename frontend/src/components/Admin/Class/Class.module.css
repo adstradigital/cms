@@ -173,7 +173,6 @@
   padding: var(--space-5);
   transition: all var(--transition-base);
   position: relative;
-  overflow: hidden;
 }
 
 .cardSkeleton {
@@ -323,6 +322,7 @@
   justify-content: space-between;
   align-items: center;
   margin-top: var(--space-4);
+  overflow: visible;
 }
 
 .teacherInfo {
@@ -350,6 +350,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  overflow: visible;
 }
 
 .cardMenuWrap {
@@ -364,8 +365,8 @@
   background: var(--theme-surface);
   border: 1px solid var(--theme-border);
   border-radius: 10px;
-  box-shadow: var(--shadow-lg);
-  z-index: 40;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 1000; /* Higher z-index */
   padding: 6px;
 }
 
@@ -438,12 +439,13 @@
   background: var(--theme-surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--theme-border);
-  overflow: hidden;
+  overflow: visible; /* Changed from hidden to allow dropdowns */
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
+  margin-bottom: 150px; /* Space for action menus on last rows */
 }
 
 .th {

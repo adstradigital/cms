@@ -92,32 +92,30 @@ const SchoolSettings = () => {
           <p className={styles.subtitle}>Manage your institution's identity, branding, and academic cycles.</p>
         </div>
         <div className={styles.headerActions}>
-          {user && !user.school && (
-            <button 
-              className={styles.linkButton} 
-              onClick={handleLinkProfile} 
-              disabled={linking}
-              title="Click to link your account to this school"
-            >
-              {linking ? 'Linking...' : 'Link My Account to This School'}
-            </button>
-          )}
+          <button 
+            className={styles.linkButton} 
+            onClick={handleLinkProfile} 
+            disabled={linking}
+            title="Click to become the administrator of this school record"
+          >
+            {linking ? 'Updating...' : 'Become Administrator of This School'}
+          </button>
           <button className={styles.saveButton} onClick={handleSave} disabled={saving}>
             <Save size={18} />
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? 'Saving...' : 'Save All Changes'}
           </button>
         </div>
       </header>
 
-      <div className={styles.grid}>
-        {/* Left Column: General Info & Branding */}
-        <div className={styles.mainColumn}>
-          
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <Building2 size={20} className={styles.sectionIcon} />
-              <h2>General Information</h2>
-            </div>
+          <div className={styles.grid}>
+            {/* Left Column: General Info & Branding */}
+            <div className={styles.mainColumn}>
+              
+              <section className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <Building2 size={20} className={styles.sectionIcon} />
+                  <h2>School Profile</h2>
+                </div>
             
             <div className={styles.formGrid}>
               <div className={styles.formGroup}>

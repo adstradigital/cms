@@ -38,6 +38,9 @@ class UserSerializer(serializers.ModelSerializer):
     role_name = serializers.ReadOnlyField(source="role.name", default="")
     school_name = serializers.CharField(source="school.name", read_only=True)
     full_name = serializers.SerializerMethodField()
+    accessible_section_ids = serializers.SerializerMethodField()
+    role_scope = serializers.ReadOnlyField(source="role.scope", default="")
+    managed_sections = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -45,11 +48,22 @@ class UserSerializer(serializers.ModelSerializer):
             "id", "username", "email", "first_name", "last_name",
             "full_name", "phone", "is_verified", "is_active",
             "role", "role_name", "school", "school_name",
-            "profile", "date_joined",
+            "profile", "date_joined", "is_superuser",
+            "accessible_section_ids", "role_scope", "managed_sections"
         ]
 
     def get_full_name(self, obj):
         return obj.get_full_name()
+
+    def get_accessible_section_ids(self, obj):
+        result = obj.get_accessible_section_ids()
+        return list(result) if result else []
+
+    def get_managed_sections(self, obj):
+        return [
+            {"id": s.id, "name": f"{s.school_class.name} - {s.name}"} 
+            for s in obj.managed_sections.all()
+        ]
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

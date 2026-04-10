@@ -21,6 +21,24 @@ class Staff(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @classmethod
+    def generate_next_id(cls, prefix="STF"):
+        import re
+        # Find the last employee_id with the given prefix
+        last_staff = cls.objects.filter(employee_id__startswith=prefix).order_by('employee_id').last()
+        if not last_staff:
+            return f"{prefix}001"
+        
+        # Extract the numeric part of the ID using regex
+        match = re.search(r'\d+', last_staff.employee_id)
+        if match:
+            last_num = int(match.group())
+            new_num = last_num + 1
+            # Maintain at least 3 digits (e.g., STF001, STF010, STF100)
+            return f"{prefix}{str(new_num).zfill(3)}"
+        
+        return f"{prefix}001"
+
     def __str__(self):
         return f"{self.user.get_full_name()} ({self.employee_id})"
 

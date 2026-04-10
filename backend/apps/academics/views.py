@@ -1,3 +1,5 @@
+from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -29,6 +31,10 @@ def subject_list_view(request):
     try:
         if request.method == "GET":
             qs = Subject.objects.prefetch_related("units__chapters").all()
+            # Scope subjects by school for non-superusers
+            user = request.user
+            if not user.is_superuser and user.school:
+                qs = qs.filter(school=user.school)
             return Response(SubjectSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         serializer = SubjectSerializer(data=request.data)
@@ -147,15 +153,27 @@ def timetable_detail_view(request, pk):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def timetable_publish_view(request, pk):
+def timetable_publish_view(request, pk=None):
+    """
+    Publishes a single day or a bulk set of timetables.
+    """
     try:
-        try:
-            timetable = Timetable.objects.get(pk=pk)
-        except Timetable.DoesNotExist:
-            return Response({"error": "Timetable not found."}, status=status.HTTP_404_NOT_FOUND)
-        timetable.is_published = True
-        timetable.save()
-        return Response({"message": "Timetable published."}, status=status.HTTP_200_OK)
+        if pk:
+            Timetable.objects.filter(pk=pk).update(is_published=True)
+            return Response({"message": "Timetable published."}, status=status.HTTP_200_OK)
+        
+        # Bulk Publish
+        section_id = request.data.get("section")
+        class_id = request.data.get("class")
+        
+        qs = Timetable.objects.all()
+        if section_id:
+            qs = qs.filter(section_id=section_id)
+        if class_id:
+            qs = qs.filter(section__school_class_id=class_id)
+            
+        count = qs.update(is_published=True)
+        return Response({"message": f"Published {count} timetable records."}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -225,6 +243,7 @@ def period_detail_view(request, pk):
 @permission_classes([IsAuthenticated])
 def homework_list_view(request):
     try:
+        user = request.user
         if request.method == "GET":
             section_id = request.query_params.get("section")
             subject_id = request.query_params.get("subject")
@@ -234,6 +253,14 @@ def homework_list_view(request):
                 "subject", "section", "section__school_class", "assigned_by"
             ).all()
 
+            # Contextual scoping: non-admin teachers only see their accessible sections
+            if not user.is_superuser and not (user.role and user.role.scope == 'school'):
+                accessible = user.get_accessible_section_ids()
+                if accessible:
+                    qs = qs.filter(section_id__in=accessible)
+                else:
+                    qs = qs.none()
+
             if section_id:
                 qs = qs.filter(section_id=section_id)
             if subject_id:
@@ -242,6 +269,13 @@ def homework_list_view(request):
                 qs = qs.filter(due_date=due_date)
 
             return Response(HomeworkSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+        # Write Guard: Ensure user has access to the section
+        section_id = request.data.get('section')
+        if not user.is_superuser and not (user.role and user.role.scope == 'school'):
+            accessible = user.get_accessible_section_ids()
+            if not section_id or int(section_id) not in accessible:
+                return Response({"error": "You do not have permission to create homework for this section."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = HomeworkSerializer(data=request.data)
         if not serializer.is_valid():
@@ -404,23 +438,40 @@ def available_substitutes_view(request):
 @permission_classes([IsAuthenticated])
 def assignment_list_view(request):
     try:
+        user = request.user
         if request.method == "GET":
             subject_id = request.query_params.get("subject")
             section_id = request.query_params.get("section")
             is_project = request.query_params.get("is_project")
 
             qs = Assignment.objects.select_related("subject", "section", "teacher").all()
+
+            # Contextual scoping
+            if not user.is_superuser and not (user.role and user.role.scope == 'school'):
+                accessible = user.get_accessible_section_ids()
+                if accessible:
+                    qs = qs.filter(section_id__in=accessible)
+                else:
+                    qs = qs.none()
+
             if subject_id: qs = qs.filter(subject_id=subject_id)
             if section_id: qs = qs.filter(section_id=section_id)
             if is_project is not None: qs = qs.filter(is_project=is_project.lower() == "true")
 
             return Response(AssignmentSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
+        # Write Guard
+        section_id = request.data.get('section')
+        if not user.is_superuser and not (user.role and user.role.scope == 'school'):
+            accessible = user.get_accessible_section_ids()
+            if not section_id or int(section_id) not in accessible:
+                return Response({"error": "You do not have permission to create assignments for this section."}, status=status.HTTP_403_FORBIDDEN)
+
         serializer = AssignmentSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        serializer.save(teacher=request.user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        assignment = serializer.save(teacher=request.user)
+        return Response(AssignmentSerializer(assignment).data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -458,23 +509,40 @@ def assignment_detail_view(request, pk):
 @permission_classes([IsAuthenticated])
 def material_list_view(request):
     try:
+        user = request.user
         if request.method == "GET":
             subject_id = request.query_params.get("subject")
             section_id = request.query_params.get("section")
             type = request.query_params.get("type")
 
             qs = Material.objects.select_related("subject", "section", "teacher").all()
+
+            # Contextual scoping
+            if not user.is_superuser and not (user.role and user.role.scope == 'school'):
+                accessible = user.get_accessible_section_ids()
+                if accessible:
+                    qs = qs.filter(section_id__in=accessible)
+                else:
+                    qs = qs.none()
+
             if subject_id: qs = qs.filter(subject_id=subject_id)
             if section_id: qs = qs.filter(section_id=section_id)
             if type: qs = qs.filter(material_type=type)
 
             return Response(MaterialSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
+        # Write Guard
+        section_id = request.data.get('section')
+        if not user.is_superuser and not (user.role and user.role.scope == 'school'):
+            accessible = user.get_accessible_section_ids()
+            if not section_id or int(section_id) not in accessible:
+                return Response({"error": "You do not have permission to create materials for this section."}, status=status.HTTP_403_FORBIDDEN)
+
         serializer = MaterialSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        serializer.save(teacher=request.user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        material = serializer.save(teacher=request.user)
+        return Response(MaterialSerializer(material).data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -723,15 +791,38 @@ def absence_status_view(request):
     if not class_name_input or not day_name:
         return Response({"error": "class_name and day are required."}, status=400)
     
+    def clean_name(n):
+        return n.replace("Class", "").replace("Section", "").replace("Grade", "").replace("Level", "").replace("-", " ").strip()
+
     try:
-        parts = class_name_input.split(" - ")
-        if len(parts) == 2:
-            c_name, s_name = parts
-            section = Section.objects.get(school_class__name=c_name, name=s_name)
-        else:
-            section = Section.objects.get(name=class_name_input)
-    except (IndexError, Section.DoesNotExist):
-        return Response({"error": f"Section '{class_name_input}' not found."}, status=404)
+        # 1. Try exact match on section name (e.g. "A" or "10A")
+        section = Section.objects.filter(name__iexact=class_name_input.strip()).first()
+        
+        # 2. Try cleaning and searching
+        if not section:
+            clean_input = clean_name(class_name_input)
+            parts = clean_input.split() # Splits on spaces
+            
+            if len(parts) >= 2:
+                # Most common: Class=parts[0], Section=parts[-1]
+                c_part, s_part = parts[0], parts[-1]
+                section = Section.objects.filter(
+                    models.Q(school_class__name__icontains=c_part) & 
+                    models.Q(name__iexact=s_part)
+                ).first()
+            
+            # 3. Final fallback: Contains search on full string
+            if not section:
+                section = Section.objects.filter(
+                    models.Q(school_class__name__icontains=clean_input) |
+                    models.Q(name__icontains=clean_input)
+                ).first()
+        
+        if not section:
+            return Response({"error": f"Section '{class_name_input}' not found."}, status=404)
+            
+    except Exception as e:
+        return Response({"error": f"Search failed: {str(e)}"}, status=500)
 
     day_map = {name: code for code, name in Timetable.DAY_CHOICES}
     day_code = day_map.get(day_name)

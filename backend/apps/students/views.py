@@ -14,24 +14,14 @@ from apps.permissions.mixins import RolePermissionMixin
 
 class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
     """
-    Handles Student CRUD with RBAC and RLS.
+    Handles Student CRUD with RBAC and contextual RLS.
+    - Admins / Superusers: see all students in their school.
+    - Class Teachers: see all students in their assigned class's sections.
+    - Subject Teachers: see students only in sections where they have allocations.
     """
     required_permission = 'students.view'
     serializer_class = StudentSerializer
     
-    def get_queryset(self):
-        # Base queryset with necessary joins
-        qs = Student.objects.select_related(
-            "user", "user__profile", "section",
-            "section__school_class", "academic_year"
-        ).prefetch_related("documents").all()
-        
-        # Apply RLS via Mixin (scopes to teacher's class if applicable)
-        qs = super().get_queryset() 
-        # Wait, super().get_queryset() will return the plain queryset from the model if not overridden.
-        # I should make sure super().get_queryset() uses the base queryset.
-        return qs
-
     def get_serializer_class(self):
         if self.action in ['create', 'partial_update', 'update']:
             return StudentRegistrationSerializer
@@ -42,9 +32,9 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
         qs = Student.objects.select_related(
             "user", "user__profile", "section",
             "section__school_class", "academic_year"
-        ).prefetch_related("documents")
+        ).prefetch_related("documents").order_by("-admission_number")
 
-        # Porting filters from function views
+        # ── Query param filters ──
         section_id = self.request.query_params.get("section")
         class_id = self.request.query_params.get("class")
         academic_year_id = self.request.query_params.get("academic_year")
@@ -59,11 +49,45 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
         if is_active.lower() == "true":
             qs = qs.filter(is_active=True)
 
-        # Apply Row Level Security (RLS) from Mixin
-        if user.assigned_class and not user.is_superuser:
-            qs = qs.filter(**user.get_class_filter())
-            
+        # ── Contextual Row-Level Security ──
+        if user.is_superuser or (user.role and user.role.scope == 'school'):
+            return qs
+
+        # Build a union of accessible section IDs
+        accessible = user.get_accessible_section_ids()
+        if accessible:
+            qs = qs.filter(section_id__in=accessible)
+        else:
+            qs = qs.none()
+
         return qs
+
+    def perform_create(self, serializer):
+        """Restrict student creation to class-teacher sections or admin."""
+        user = self.request.user
+        section = serializer.validated_data.get('section')
+
+        if not (user.is_superuser or (user.role and user.role.scope == 'school')):
+            if section and not user.is_class_teacher_of(section):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied(
+                    'You can only add students to your own class.'
+                )
+        serializer.save()
+
+    def perform_update(self, serializer):
+        """Restrict student updates to class-teacher sections or admin."""
+        user = self.request.user
+        student = self.get_object()
+        section = student.section
+
+        if not (user.is_superuser or (user.role and user.role.scope == 'school')):
+            if section and not user.is_class_teacher_of(section):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied(
+                    'You can only edit students in your own class.'
+                )
+        serializer.save()
 
     @action(detail=False, methods=['GET'])
     def leaderboard(self, request):

@@ -21,6 +21,7 @@ import NoticeBoard from './NoticeBoard/NoticeBoard';
 import Events from './Events/Events';
 import Fees from './Fees/Fees';
 import ReportCards from './ReportCards/ReportCards';
+import SubjectCenter from './Subjects/SubjectCenter';
 import adminApi from '@/api/adminApi';
 import { useAuth } from '@/context/AuthContext';
 
@@ -711,7 +712,10 @@ const Class = () => {
       )}
 
       {!loading && filteredSections.map(section => (
-        <div key={section.id} className={styles.card}>
+        <div 
+          key={section.id} 
+          className={`${styles.card} ${openCardMenuId === section.id ? styles.cardActive : ''}`}
+        >
           {hasSectionRank(section) && <div className={styles.cardRank}>Rank #{section.rank}</div>}
           <div className={styles.cardHeader}>
             <div className={styles.iconBox}>
@@ -831,8 +835,11 @@ const Class = () => {
         </button>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h2>Section {selectedSection?.name} Students</h2>
-            <p>Managing students for Academic Year {academicYear}</p>
+            <h2>{selectedSection?.class_name} — Section {selectedSection?.name} Students</h2>
+            <p>
+              Class Teacher: <strong>{selectedSection?.class_teacher_name || 'Not assigned'}</strong> • 
+              Academic Year {academicYear}
+            </p>
           </div>
           <div className={styles.headerActions}>
             <button
@@ -1173,8 +1180,8 @@ const Class = () => {
   const renderPromotion = () => (
     <div className={styles.wizard}>
       <div className={styles.viewHeader}>
-        <h2>Promotion System (Automation)</h2>
-        <p>Current Cycle: {academicYear} to Next Academic Year</p>
+        <h2>{selectedSection?.class_name} — Section {selectedSection?.name} Promotion</h2>
+        <p>Class Teacher: <strong>{selectedSection?.class_teacher_name || 'Not assigned'}</strong> • Current Cycle: {academicYear} to Next Academic Year</p>
       </div>
 
       <div className={styles.studentFilters} style={{ marginTop: 16 }}>
@@ -1887,6 +1894,17 @@ const Class = () => {
         <div className={`${styles.tab} ${activeView === 'assignments' ? styles.tabActive : ''}`} onClick={() => setActiveView('assignments')}>Assignments & Projects</div>
         <div className={`${styles.tab} ${activeView === 'materials' ? styles.tabActive : ''}`} onClick={() => setActiveView('materials')}>Materials & Videos</div>
         {canManageSection(selectedSection) && (
+          <div
+            className={`${styles.tab} ${activeView === 'subjects' ? styles.tabActive : ''}`}
+            onClick={() => {
+              if (!selectedSection && sections.length > 0) setSelectedSection(sections[0]);
+              setActiveView('subjects');
+            }}
+          >
+            Subjects
+          </div>
+        )}
+        {canManageSection(selectedSection) && (
           <div className={`${styles.tab} ${activeView === 'reportcards' ? styles.tabActive : ''}`} onClick={() => setActiveView('reportcards')}>Report Cards</div>
         )}
         <div className={`${styles.tab} ${activeView === 'timetable' ? styles.tabActive : ''}`} onClick={() => setActiveView('timetable')}>Timetable</div>
@@ -1922,6 +1940,7 @@ const Class = () => {
         {activeView === 'ranking' && renderRankings()}
         {activeView === 'assignments' && <Assignments section={selectedSection} />}
         {activeView === 'materials' && <Materials section={selectedSection} />}
+        {activeView === 'subjects' && selectedSection && <SubjectCenter section={selectedSection} />}
         {activeView === 'attendance' && <Attendance section={selectedSection} />}
         {activeView === 'marks' && <Marks section={selectedSection} />}
         {activeView === 'notice' && <NoticeBoard section={selectedSection} />}

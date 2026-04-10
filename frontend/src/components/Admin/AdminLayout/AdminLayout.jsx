@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import styles from '../AdminDashboard/AdminDashboard.module.css';
 
 import AdminSidebar from '../AdminDashboard/AdminSidebar/AdminSidebar';
@@ -11,7 +11,7 @@ import StickyNoteFab from '../AdminDashboard/Widget/StickyNoteFab';
 import CalendarDateFab from '../AdminDashboard/Widget/CalendarDateFab';
 import RightSidebar from '../AdminDashboard/RightSidebar/RightSidebar';
 
-/* ─── Default widget configuration ──────────────────────────────── */
+/* Default widget configuration */
 const DEFAULT_WIDGETS = {
   quickAction: true,
   analogClock: false,
@@ -44,7 +44,7 @@ export default function AdminLayout({ children }) {
       if (savedWidgets) setActiveWidgets(JSON.parse(savedWidgets));
       if (savedSizes) setWidgetSizes(JSON.parse(savedSizes));
     } catch (error) {
-      console.warn("Storage access failed, defaulting widget state.");
+      console.warn('Storage access failed, defaulting widget state.');
     }
     // Flag hydration complete to allow UI rendering
     setIsMounted(true);
@@ -76,24 +76,18 @@ export default function AdminLayout({ children }) {
 
   return (
     <div className={styles.dashboardContainer}>
-      {/* ─── LEFT SIDEBAR ─── */}
+      {/* LEFT SIDEBAR */}
       <AdminSidebar />
 
-      {/* ─── MAIN CONTENT ─── */}
+      {/* MAIN CONTENT */}
       <div className={styles.mainContentWrapper}>
         <AdminHeader />
-<<<<<<< HEAD
         <div className={styles.workspaceBody}>
           {children}
         </div>
-=======
-        <main style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
-          {children}
-        </main>
->>>>>>> 82a6a5ab50965374437b19bbd7229656544e0c87
       </div>
 
-      {/* ─── FLOATING WIDGETS ─── */}
+      {/* FLOATING WIDGETS */}
       {activeWidgets.quickAction && (
         <QuickActionFab scale={SIZE_SCALE[widgetSizes.quickAction]} onAction={(id) => console.log('Action:', id)} />
       )}
@@ -101,7 +95,7 @@ export default function AdminLayout({ children }) {
       {activeWidgets.calendarDate && <CalendarDateFab scale={SIZE_SCALE[widgetSizes.calendarDate]} />}
       {activeWidgets.stickyNote && <StickyNoteFab scale={SIZE_SCALE[widgetSizes.stickyNote]} />}
 
-      {/* ─── RIGHT SIDEBAR ─── */}
+      {/* RIGHT SIDEBAR */}
       <RightSidebar
         activeWidgets={activeWidgets}
         onToggleWidget={handleToggleWidget}

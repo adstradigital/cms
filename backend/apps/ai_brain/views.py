@@ -59,6 +59,7 @@ def generate_timetable_view(request):
         "working_days": request.data.get("working_days"),
         "periods_per_day": request.data.get("periods_per_day"),
         "break_periods": request.data.get("break_periods"),
+        "initial_draft": request.data.get("initial_draft"),
         "preferences": merge_constraint_preferences(request.data.get("preferences", {})),
     }
     result = engine.run_timetable_generation(

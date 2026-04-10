@@ -255,9 +255,13 @@ const AttendanceView = ({ section }) => {
     <div className={styles.container}>
       <div className={styles.header}>
         <div>
-          <h2 style={{ margin: 0 }}>Attendance</h2>
+          <h2 style={{ margin: 0 }}>
+            {section ? `${section.class_name} — Section ${section.name} Attendance` : 'Attendance'}
+          </h2>
           <p className={styles.subtitle} style={{ marginTop: 6 }}>
-            {section ? `${section.class_name || 'Class'} - Section ${section.name}` : 'Select a section'}
+            {section 
+              ? `Class Teacher: ${section.class_teacher_name || 'Not assigned'} • Manage daily attendance records` 
+              : 'Select a section from Dashboard first'}
           </p>
         </div>
         <div className={styles.actions}>

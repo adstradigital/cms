@@ -126,12 +126,14 @@ class Period(models.Model):
         ("break", "Break"),
         ("lunch", "Lunch"),
         ("free", "Free"),
+        ("custom", "Custom"),
     ]
     timetable = models.ForeignKey(Timetable, on_delete=models.CASCADE, related_name="periods")
     period_number = models.PositiveSmallIntegerField()
     period_type = models.CharField(max_length=10, choices=PERIOD_TYPE_CHOICES, default="class")
     subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name="periods")
     teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="periods")
+    custom_title = models.CharField(max_length=100, blank=True, null=True, help_text="Custom name for event periods (e.g. CCA, Assembly)")
     start_time = models.TimeField()
     end_time = models.TimeField()
 

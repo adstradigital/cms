@@ -1,18 +1,29 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Activity,
+  AlertCircle,
   AlertTriangle,
   Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   Clock,
+  Copy,
   Download,
   MapPin,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   RefreshCw,
   Settings,
   Share2,
   UserCheck,
   X,
+  XCircle,
   Zap,
 } from 'lucide-react';
 import styles from './TimeTable.module.css';
@@ -21,7 +32,7 @@ import adminApi from '@/api/adminApi';
 import { useToast, ToastStack } from '@/components/common/useToast';
 
 const WEEK_DAY_OPTIONS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const DEFAULT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DEFAULT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DEFAULT_TIMEZONE = 'Asia/Kolkata';
 const DEFAULT_LOCALE = 'en-IN';
 const TIMEZONE_OPTIONS = [
@@ -95,6 +106,8 @@ const TimeTable = () => {
   const [sections, setSections] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [subjectAllocations, setSubjectAllocations] = useState([]);
+  const [subjectAllocationsLoading, setSubjectAllocationsLoading] = useState(false);
   
   const { push, toasts, dismiss } = useToast();
   
@@ -117,7 +130,7 @@ const TimeTable = () => {
   const [regionLocale, setRegionLocale] = useState(DEFAULT_LOCALE);
 
   const [slotModal, setSlotModal] = useState({ open: false, day: null, periodIdx: null });
-  const [slotForm, setSlotForm] = useState({ subject: '', teacher: '', room: '', isEvent: false });
+  const [slotForm, setSlotForm] = useState({ subject: '', teacher: '', room: '', isEvent: false, customTitle: '' });
   const [dragSource, setDragSource] = useState(null);
 
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -127,10 +140,20 @@ const TimeTable = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [draftDays, setDraftDays] = useState(DEFAULT_DAYS);
   const [draftPeriods, setDraftPeriods] = useState(DEFAULT_PERIODS);
+  const [classTeacherFirstPeriod, setClassTeacherFirstPeriod] = useState(true);
+  const [allowSameSubjectTwiceDay, setAllowSameSubjectTwiceDay] = useState(false);
 
   const [showSubstituteModal, setShowSubstituteModal] = useState(false);
   const [absence, setAbsence] = useState({ loading: false, isDetected: false, absentTeacher: '', affectedPeriodIndexes: [] });
   const [selectedSubTeacherId, setSelectedSubTeacherId] = useState(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [isSchoolWide, setIsSchoolWide] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({ subjects: true, teachers: true });
+  const [pendingSlotWarnings, setPendingSlotWarnings] = useState([]);
+
+  const [showCloneModal, setShowCloneModal] = useState(false);
+  const [cloneSourceClass, setCloneSourceClass] = useState('');
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   const activeSchedule = useMemo(() => schedulesByClass[activeClass] || buildEmptySchedule(days, periods), [schedulesByClass, activeClass, days, periods]);
   const selectedTeacher = useMemo(() => teachers.find((t) => t.id === Number(selectedTeacherId)) || { name: 'Select Teacher' }, [selectedTeacherId, teachers]);
@@ -138,35 +161,52 @@ const TimeTable = () => {
     () => sectionRecords.find((s) => `${s.class_name} - ${s.name}` === activeClass) || null,
     [sectionRecords, activeClass]
   );
+  const teacherOptionsForSlot = useMemo(() => {
+    if (!slotForm.subject) return teachers;
+    const selectedSubject = subjects.find((s) => s.name === slotForm.subject);
+    const filteredAllocations = subjectAllocations.filter((a) => {
+      if (selectedSubject?.id && Number(a.subject) === Number(selectedSubject.id)) return true;
+      return a.subject_name === slotForm.subject;
+    });
+    const allowedTeacherIdsFromAllocations = new Set(
+      filteredAllocations
+        .flatMap((a) => (Array.isArray(a.teachers) ? a.teachers : []))
+        .map((id) => Number(id))
+    );
+    const allowedTeacherIdsFromProfile = new Set(
+      teachers
+        .filter((teacher) =>
+          Array.isArray(teacher.teaching_subject_ids)
+            ? teacher.teaching_subject_ids.map(Number).includes(Number(selectedSubject?.id))
+            : false
+        )
+        .map((teacher) => Number(teacher.id))
+    );
+    const allowedTeacherIds = new Set([...allowedTeacherIdsFromAllocations, ...allowedTeacherIdsFromProfile]);
+    if (allowedTeacherIds.size === 0) return [];
+    return teachers.filter((t) => allowedTeacherIds.has(Number(t.id)));
+  }, [slotForm.subject, teachers, subjects, subjectAllocations]);
   const todayDay = useMemo(() => {
     const today = getTodayDayName();
     return days.includes(today) ? today : days[0];
   }, [days]);
 
-  const upsertActiveSchedule = (nextSchedule) => {
-    setSchedulesByClass((prev) => ({ ...prev, [activeClass]: nextSchedule }));
-    setDirty(true);
-  };
-  const displayRange = (range) => formatRangeForDisplay(range, timeFormat);
+  const globalSchedules = useMemo(() => {
+    const global = {};
+    Object.entries(schedulesByClass).forEach(([sectionLabel, schedule]) => {
+      Object.entries(schedule).forEach(([day, slots]) => {
+        slots.forEach((slot, idx) => {
+          if (!slot?.teacher) return;
+          if (!global[slot.teacher]) global[slot.teacher] = {};
+          if (!global[slot.teacher][day]) global[slot.teacher][day] = {};
+          global[slot.teacher][day][idx] = sectionLabel;
+        });
+      });
+    });
+    return global;
+  }, [schedulesByClass]);
 
-  const fetchMetadata = async () => {
-    try {
-      const [sectionsRes, teachersRes, subjectsRes] = await Promise.all([
-        instance.get('/students/sections/'),
-        instance.get('/staff/teachers/'),
-        instance.get('/academics/subjects/'),
-      ]);
-      const sectionData = Array.isArray(sectionsRes.data) ? sectionsRes.data : [];
-      const sectionList = sectionData.map(s => `${s.class_name} - ${s.name}`);
-      setSectionRecords(sectionData);
-      setSections(sectionList);
-      setTeachers(teachersRes.data);
-      setSubjects(subjectsRes.data);
-      if (sectionList.length > 0) setActiveClass(sectionList[0]);
-    } catch (e) {
-      console.error("Failed to fetch metadata", e);
-    }
-  };
+
 
   const workload = useMemo(() => {
     const counts = {};
@@ -196,6 +236,173 @@ const TimeTable = () => {
       target: s.weekly_periods
     }));
   }, [activeSchedule, subjects]);
+
+  const unmappedSubjects = useMemo(() => {
+    return subjectCompletion.filter((subjectRow) => {
+      const subjectObj = subjects.find((s) => Number(s.id) === Number(subjectRow.id));
+      const hasAllocationTeacher = subjectAllocations.some((allocation) => {
+        const sameSubject = Number(allocation.subject) === Number(subjectRow.id)
+          || allocation.subject_name === subjectRow.name
+          || (subjectObj && allocation.subject_name === subjectObj.name);
+        const hasTeachers = Array.isArray(allocation.teachers) && allocation.teachers.length > 0;
+        return sameSubject && hasTeachers;
+      });
+      if (hasAllocationTeacher) return false;
+      const hasProfileTeacher = teachers.some((teacher) =>
+        Array.isArray(teacher.teaching_subject_ids)
+          ? teacher.teaching_subject_ids.map(Number).includes(Number(subjectRow.id))
+          : false
+      );
+      return !hasProfileTeacher;
+    });
+  }, [subjectCompletion, subjectAllocations, subjects, teachers]);
+
+  const getTeacherClash = useCallback((teacherName, day, periodIdx) => {
+    if (!teacherName || !globalSchedules[teacherName]) return null;
+    const busyInSection = globalSchedules[teacherName]?.[day]?.[periodIdx];
+    if (busyInSection && busyInSection !== activeClass) return busyInSection;
+    return null;
+  }, [globalSchedules, activeClass]);
+
+  const validateSlot = useCallback((form, day, pIdx) => {
+    const warnings = [];
+    if (!form.subject && !form.teacher) return warnings;
+
+    // 1. Teacher Clash
+    const clash = getTeacherClash(form.teacher, day, pIdx);
+    if (clash) warnings.push({ type: 'error', msg: `Teacher busy in ${clash}` });
+
+    // 2. Same subject same day
+    const daySlots = activeSchedule[day] || [];
+    const hasSameSub = daySlots.some((s, idx) => s && s.subject === form.subject && idx !== pIdx);
+    if (hasSameSub) warnings.push({ type: 'warning', msg: `Subject already placed on ${day}` });
+
+    // 3. Subject over-quota
+    const subData = subjects.find(s => s.name === form.subject);
+    if (subData) {
+      const currentCount = subjectCompletion.find(sc => sc.name === form.subject)?.current || 0;
+      // If we are ADDING a new slot (was null before) and already at quota
+      if (!activeSchedule[day][pIdx] && currentCount >= subData.weekly_periods) {
+        warnings.push({ type: 'warning', msg: `Quota exceeded (${currentCount}/${subData.weekly_periods})` });
+      }
+    }
+
+    // 4. Class Teacher First Period Rule
+    if (classTeacherFirstPeriod && pIdx === 0 && form.teacher) {
+      if (activeSection?.class_teacher_name && form.teacher !== activeSection.class_teacher_name) {
+        warnings.push({ type: 'warning', msg: `Period 1 should ideally be assigned to class teacher (${activeSection.class_teacher_name})` });
+      }
+    }
+
+    return warnings;
+  }, [getTeacherClash, activeSchedule, subjects, subjectCompletion, classTeacherFirstPeriod, activeSection]);
+
+  const globalWorkload = useMemo(() => {
+    const counts = {};
+    Object.values(schedulesByClass).forEach(classSchedule => {
+      Object.values(classSchedule).forEach(daySlots => {
+        daySlots.forEach(slot => {
+          if (slot && slot.teacher) {
+            counts[slot.teacher] = (counts[slot.teacher] || 0) + 1;
+          }
+        });
+      });
+    });
+    return counts;
+  }, [schedulesByClass]);
+
+  const conflictMap = useMemo(() => {
+    const map = {}; // { [day]: { [pIdx]: conflictLabel } }
+    if (!activeSchedule) return map;
+
+    Object.entries(activeSchedule).forEach(([day, slots]) => {
+      slots.forEach((slot, idx) => {
+        if (!slot || !slot.teacher) return;
+        const clash = getTeacherClash(slot.teacher, day, idx);
+        if (clash) {
+          if (!map[day]) map[day] = {};
+          map[day][idx] = `Teacher busy in ${clash}`;
+        }
+
+        // Rule: Class Teacher First Period
+        if (classTeacherFirstPeriod && idx === 0 && slot.teacher && activeSection?.class_teacher_name) {
+          if (slot.teacher !== activeSection.class_teacher_name) {
+            if (!map[day]) map[day] = {};
+            // Don't overwrite teacher clash if it exists
+            if (!map[day][idx]) {
+              map[day][idx] = `Period 1 rule: Assigned to ${slot.teacher} instead of class teacher ${activeSection.class_teacher_name}`;
+            }
+          }
+        }
+      });
+    });
+    return map;
+  }, [activeSchedule, globalSchedules, activeClass, getTeacherClash, classTeacherFirstPeriod, activeSection]);
+
+  const upsertActiveSchedule = (nextSchedule) => {
+    setSchedulesByClass((prev) => ({ ...prev, [activeClass]: nextSchedule }));
+    setDirty(true);
+  };
+  const displayRange = (range) => formatRangeForDisplay(range, timeFormat);
+
+  const fetchMetadata = async () => {
+    try {
+      const [sectionsRes, teachersRes, subjectsRes, allTimetablesRes] = await Promise.all([
+        instance.get('/students/sections/'),
+        instance.get('/staff/teachers/'),
+        instance.get('/academics/subjects/'),
+        instance.get('/timetables/'),
+      ]);
+      const sectionData = Array.isArray(sectionsRes.data) ? sectionsRes.data : [];
+      const sectionList = sectionData.map(s => `${s.class_name} - ${s.name}`);
+      setSectionRecords(sectionData);
+      setSections(sectionList);
+      setTeachers(teachersRes.data);
+      setSubjects(subjectsRes.data);
+      
+      const serverDays = DEFAULT_DAYS; // We'll assume a standard for pre-fill
+      const serverPeriods = DEFAULT_PERIODS;
+
+      // Build Global Schedules for ALL classes
+      const allSchedules = {};
+      
+      // Initialize empty schedules for all sections
+      sectionList.forEach(name => {
+        allSchedules[name] = buildEmptySchedule(serverDays, serverPeriods);
+      });
+
+      const allTT = allTimetablesRes.data || [];
+      allTT.forEach(tt => {
+        const dayName = WEEK_DAY_OPTIONS[tt.day_of_week - 1];
+        const sectionLabel = `${tt.section?.school_class?.name} - ${tt.section?.name}`;
+        
+        if (allSchedules[sectionLabel] && allSchedules[sectionLabel][dayName]) {
+          tt.periods.forEach(p => {
+            const idx = p.period_number - 1;
+            const tName = p.teacher_name || (p.teacher ? `${p.teacher.first_name} ${p.teacher.last_name}` : '');
+            
+            allSchedules[sectionLabel][dayName][idx] = {
+              subject: p.subject_name || (p.subject?.name) || '',
+              teacher: tName,
+              room: p.room || 'TBD',
+              isEvent: p.period_type === 'event'
+            };
+
+
+          });
+        }
+      });
+
+      setSchedulesByClass(allSchedules);
+      if (sectionList.length > 0) setActiveClass(sectionList[0]);
+    } catch (e) {
+      console.error("Failed to fetch metadata", e);
+    }
+  };
+
+
+
+
 
   const loadTimetable = async () => {
     if (!activeClass) return;
@@ -260,6 +467,12 @@ const TimeTable = () => {
       if (parsed?.time_format) setTimeFormat(parsed.time_format);
       if (parsed?.time_zone) setTimeZone(parsed.time_zone);
       if (parsed?.locale) setRegionLocale(parsed.locale);
+      if (typeof parsed?.class_teacher_first_period === 'boolean') {
+        setClassTeacherFirstPeriod(parsed.class_teacher_first_period);
+      }
+      if (typeof parsed?.allow_same_subject_twice_day === 'boolean') {
+        setAllowSameSubjectTwiceDay(parsed.allow_same_subject_twice_day);
+      }
     } catch {
       // ignore malformed local settings
     }
@@ -285,9 +498,39 @@ const TimeTable = () => {
   };
 
   useEffect(() => {
+    if (schedulesByClass[activeClass] && hasTimetableData && !loading) return;
     loadTimetable();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClass]);
+
+  useEffect(() => {
+    const loadSubjectAllocations = async () => {
+      if (!activeSection?.id) {
+        setSubjectAllocations([]);
+        return;
+      }
+      try {
+        setSubjectAllocationsLoading(true);
+        const res = await adminApi.getAllocations({ section: activeSection.id });
+        setSubjectAllocations(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        setSubjectAllocations([]);
+      } finally {
+        setSubjectAllocationsLoading(false);
+      }
+    };
+    loadSubjectAllocations();
+  }, [activeSection?.id]);
+
+  useEffect(() => {
+    if (subjectAllocationsLoading || !slotForm.subject || !slotForm.teacher) return;
+    const selectedTeacherStillAllowed = teacherOptionsForSlot.some(
+      (teacher) => `${teacher.first_name} ${teacher.last_name}` === slotForm.teacher
+    );
+    if (!selectedTeacherStillAllowed) {
+      setSlotForm((prev) => ({ ...prev, teacher: '' }));
+    }
+  }, [slotForm.subject, slotForm.teacher, teacherOptionsForSlot, subjectAllocationsLoading]);
 
   useEffect(() => {
     if (!activeClass || !hasTimetableData || !activeSchedule?.[todayDay]) return;
@@ -327,16 +570,19 @@ const TimeTable = () => {
         .map((period, idx) => (period.isBreak ? idx + 1 : null))
         .filter(Boolean);
 
+      const schedulePayload = scheduleToManualOverridePayload();
+
       const res = await instance.post('/ai-brain/timetable/generate/', {
         section_id: activeSection.id,
         working_days: workingDayCodes,
         periods_per_day: periods.length,
         break_periods: breakPeriods,
+        initial_draft: schedulePayload.draft,
         preferences: {
-          class_teacher_first_period: false,
-          min_teacher_free_periods_per_day: 1,
+          class_teacher_first_period: classTeacherFirstPeriod,
+          min_teacher_free_periods_per_day: 0,
           max_consecutive_periods_teacher: 4,
-          allow_same_subject_twice_day: false,
+          allow_same_subject_twice_day: allowSameSubjectTwiceDay,
         },
         persist: false,
       });
@@ -413,9 +659,12 @@ const TimeTable = () => {
         }
         return {
           period_number: periodNumber,
-          type: 'class',
-          subject_id: subjectByName[slot.subject] || null,
+          type: slot.isEvent ? 'event' : 'class',
+          subject_id: slot.isEvent ? null : (subjectByName[slot.subject] || null),
+          subject_name: slot.isEvent ? null : slot.subject,
+          custom_title: slot.isEvent ? (slot.customTitle || slot.subject) : null,
           teacher_id: teacherByName[slot.teacher] || null,
+          teacher_name: slot.teacher || '',
         };
       });
       return { day_of_week: dayCode, periods: periodsPayload };
@@ -428,8 +677,26 @@ const TimeTable = () => {
     };
   };
 
-  const publishTimetable = async () => {
+  const cloneSchedule = () => {
+    if (!cloneSourceClass || cloneSourceClass === activeClass) return;
+    const sourceData = schedulesByClass[cloneSourceClass];
+    if (!sourceData) return;
+    
+    // Deep clone the structure
+    const cloned = JSON.parse(JSON.stringify(sourceData));
+    setSchedulesByClass(prev => ({ ...prev, [activeClass]: cloned }));
+    setDirty(true);
+    setShowCloneModal(false);
+    push(`Structure copied from ${cloneSourceClass}`, 'success');
+  };
+
+  const publishTimetable = () => {
+    setShowPublishModal(true);
+  };
+
+  const finalizePublish = async () => {
     try {
+      setShowPublishModal(false);
       setSaving(true);
       if (!previewDraftId) {
         push('Generate AI preview first, then publish.', 'warning');
@@ -437,13 +704,13 @@ const TimeTable = () => {
       }
       const manual_override_payload = scheduleToManualOverridePayload();
       await adminApi.applyAiTimetableDraft(previewDraftId, { manual_override_payload });
-      push('Preview applied and timetable published for the section.', 'success');
+      push('Timetable published successfully.', 'success');
       setPreviewDraftId(null);
       setDirty(false);
       setLastSavedAt(new Date().toISOString());
       loadTimetable();
     } catch {
-      push('Publish failed. Please try again.', 'error');
+      push('Publish failed.', 'error');
     } finally {
       setSaving(false);
     }
@@ -458,22 +725,58 @@ const TimeTable = () => {
 
   const openSlotModal = (day, periodIdx) => {
     const slot = activeSchedule?.[day]?.[periodIdx];
-    setSlotForm({ subject: slot?.subject || '', teacher: slot?.teacher || '', room: slot?.room || '', isEvent: !!slot?.isEvent });
+    setSlotForm({ 
+      subject: slot?.subject || '', 
+      teacher: slot?.teacher || '', 
+      room: slot?.room || '', 
+      isEvent: !!slot?.isEvent,
+      customTitle: slot?.customTitle || ''
+    });
+    setPendingSlotWarnings([]);
     setSlotModal({ open: true, day, periodIdx });
   };
 
-  const saveSlot = () => {
+  const saveSlot = (forceOverride = false) => {
     if (!slotModal.open || !slotModal.day) return;
-    if (!slotForm.subject || !slotForm.teacher) {
-      alert('Please select both subject and teacher.');
+    
+    const warnings = validateSlot(slotForm, slotModal.day, slotModal.periodIdx);
+    
+    if (warnings.length > 0 && !forceOverride) {
+      setPendingSlotWarnings(warnings);
       return;
     }
+
+    if (!slotForm.teacher) {
+      push('Please select a teacher.', 'error');
+      return;
+    }
+    if (slotForm.isEvent) {
+      if (!slotForm.customTitle) {
+        push('Please enter an event title.', 'error');
+        return;
+      }
+    } else {
+      if (!slotForm.subject) {
+        push('Please select a subject.', 'error');
+        return;
+      }
+    }
+
     const nextSchedule = { ...activeSchedule };
     const daySlots = [...nextSchedule[slotModal.day]];
-    daySlots[slotModal.periodIdx] = { subject: slotForm.subject, teacher: slotForm.teacher, room: slotForm.room || 'TBD', isEvent: slotForm.isEvent };
+    daySlots[slotModal.periodIdx] = { 
+      subject: slotForm.isEvent ? (slotForm.customTitle || 'Special Event') : slotForm.subject, 
+      teacher: slotForm.teacher, 
+      room: slotForm.room || 'TBD', 
+      isEvent: slotForm.isEvent,
+      customTitle: slotForm.isEvent ? slotForm.customTitle : ''
+    };
     nextSchedule[slotModal.day] = daySlots;
+
     upsertActiveSchedule(nextSchedule);
     setSlotModal({ open: false, day: null, periodIdx: null });
+    setPendingSlotWarnings([]);
+    if (!forceOverride && warnings.length > 0) push('Slot saved with warnings.', 'warning');
   };
 
   const clearSlot = () => {
@@ -543,7 +846,13 @@ const TimeTable = () => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(
         'tt_time_settings_v1',
-        JSON.stringify({ time_format: timeFormat, time_zone: timeZone, locale: regionLocale })
+        JSON.stringify({ 
+          time_format: timeFormat, 
+          time_zone: timeZone, 
+          locale: regionLocale,
+          class_teacher_first_period: classTeacherFirstPeriod,
+          allow_same_subject_twice_day: allowSameSubjectTwiceDay 
+        })
       );
     }
     try {
@@ -572,6 +881,13 @@ const TimeTable = () => {
     try {
       await instance.post('/timetables/assign-substitute/', { class_name: activeClass, day: todayDay, teacher: teacher.name, periods: absence.affectedPeriodIndexes });
     } catch {}
+  };
+
+  const handleExportPDF = () => {
+    if (!activeClass) return push('Select a class first', 'warning');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+    const url = `${baseUrl}/timetables/export-pdf/?class_name=${encodeURIComponent(activeClass)}`;
+    window.open(url, '_blank');
   };
 
   const availableSubstituteTeachers = useMemo(() => {
@@ -609,12 +925,24 @@ const TimeTable = () => {
     if (period.isBreak) {
       return <td key={`${day}-${periodIdx}`} className={`${styles.slotCell} ${styles.breakCell}`}><div className={styles.breakLabel}>{period.label}</div></td>;
     }
+
+    const conflict = conflictMap[day]?.[periodIdx];
+
     if (data) {
       return (
         <td key={`${day}-${periodIdx}`} className={styles.slotCell} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropSlot(day, periodIdx)}>
-          <div className={styles.periodCard} draggable onDragStart={() => onDragStartSlot(day, periodIdx)} onClick={() => openSlotModal(day, periodIdx)} style={data.isEvent ? { borderLeft: '4px solid #f97316', background: '#fff7ed' } : {}}>
+          <div 
+            className={`${styles.periodCard} ${conflict ? styles.hasClash : ''}`} 
+            draggable 
+            onDragStart={() => onDragStartSlot(day, periodIdx)} 
+            onClick={() => openSlotModal(day, periodIdx)} 
+            style={data.isEvent ? { borderLeft: '4px solid #f97316', background: '#fff7ed' } : {}}
+          >
             <div>
-              <div className={styles.subjectName}>{data.subject || 'Untiled'}</div>
+              <div className={styles.subjectName}>
+                {data.isEvent ? (data.customTitle || data.subject) : data.subject || 'Untitled'}
+                {conflict && <AlertTriangle size={12} className={styles.clashIcon} title={conflict} />}
+              </div>
               <div className={styles.teacherName}>{data.teacher || 'No Teacher'}</div>
             </div>
             <div className={styles.roomTag}><MapPin size={10} style={{ marginRight: 4 }} />{data.room || 'TBD'}</div>
@@ -630,12 +958,18 @@ const TimeTable = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.titleArea}>
-          <h2>Timetable Builder</h2>
-          <p>Click empty slots to assign. Drag filled slots to swap periods across the week.</p>
+          <h2>
+            {activeSection ? `${activeSection.class_name} — Section ${activeSection.name} Timetable` : 'Timetable Builder'}
+          </h2>
+          <p>
+            {activeSection 
+              ? `Class Teacher: ${activeSection.class_teacher_name || 'Not assigned'} • Configure and optimize class schedule` 
+              : 'Select a section from Dashboard to build a timetable'}
+          </p>
         </div>
         <div className={styles.actionRow}>
+          <button className={`${styles.btn} ${styles.outline}`} onClick={handleExportPDF} title="Download Timetable as PDF"><Download size={18} /> Export PDF</button>
           <button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowSettingsModal(true)}><Settings size={18} /> Settings</button>
-          <button className={`${styles.btn} ${styles.success}`}><Download size={18} /> Export PDF</button>
         </div>
       </div>
 
@@ -672,7 +1006,11 @@ const TimeTable = () => {
           <button className={`${styles.btn} ${styles.warning}`} onClick={generateTimetable} disabled={saving}>
             <Zap size={14} className={saving ? styles.spin : ''} /> {saving ? 'Generating...' : 'AI Generate'}
           </button>
+          <button className={`${styles.btn} ${styles.secondary}`} onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} title={isSidebarCollapsed ? 'Show Analysis' : 'Hide Analysis'}>
+            {isSidebarCollapsed ? <Activity size={18} /> : <PanelRightClose size={18} />}
+          </button>
           <button className={`${styles.btn} ${styles.secondary}`} onClick={() => saveDraft()} disabled={saving || loading}>{saving ? <><RefreshCw size={14} className={styles.spin} /> Saving...</> : <>Save Draft</>}</button>
+          <button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowCloneModal(true)} title="Copy structure from another class"><Copy size={16} /> Copy</button>
           <button className={`${styles.btn} ${styles.primary}`} onClick={publishTimetable} disabled={saving || loading}><Share2 size={14} /> Publish</button>
         </div>
       </div>
@@ -688,8 +1026,8 @@ const TimeTable = () => {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th className={styles.th}>Day</th>
-                  {periods.map((period, idx) => <th key={idx} className={styles.th} style={period.isBreak ? { width: '64px' } : { width: '180px' }}>{period.label}<span className={styles.timeLabel}>{displayRange(period.time)}</span></th>)}
+                  <th className={styles.th} style={{ width: '80px' }}>Day</th>
+                  {periods.map((period, idx) => <th key={idx} className={styles.th} style={period.isBreak ? { width: '64px' } : { width: '125px' }}>{period.label}<span className={styles.timeLabel}>{displayRange(period.time)}</span></th>)}
                 </tr>
               </thead>
               <tbody>
@@ -700,39 +1038,92 @@ const TimeTable = () => {
         )}
 
         {viewMode === 'admin' && (
-          <div className={styles.sidebar}>
+          <div className={`${styles.sidebar} ${isSidebarCollapsed ? styles.collapsed : ''}`}>
             <div className={styles.sidebarSection}>
-              <h4>Subject Load Analysis</h4>
-              <div className={styles.statsList}>
-                {subjectCompletion.map(sc => (
-                  <div key={sc.id} className={styles.statItem}>
-                    <div className={styles.statHead}>
-                      <span>{sc.name}</span>
-                      <span>{sc.current} / {sc.target}</span>
+              <h4 onClick={() => setExpandedSections(prev => ({ ...prev, subjects: !prev.subjects }))} className={styles.sectionHeader}>
+                <span>Subject Load Analysis</span>
+                {expandedSections.subjects ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </h4>
+              {expandedSections.subjects && (
+                <div className={styles.statsList}>
+                  {subjectCompletion.map(sc => (
+                    <div key={sc.id} className={styles.statItem}>
+                      <div className={styles.statHead}>
+                        <span>{sc.name}</span>
+                        <span>{sc.current} / {sc.target}</span>
+                      </div>
+                      <div className={styles.progressBar}>
+                        <div 
+                          className={styles.progressFill} 
+                          style={{ 
+                            width: `${Math.min(100, (sc.current/sc.target)*100)}%`,
+                            background: sc.current > sc.target ? 'var(--color-danger)' : sc.current === sc.target ? 'var(--color-success)' : 'var(--color-primary)'
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className={styles.progressBar}>
-                      <div 
-                        className={styles.progressFill} 
-                        style={{ 
-                          width: `${Math.min(100, (sc.current/sc.target)*100)}%`,
-                          background: sc.current > sc.target ? 'var(--color-danger)' : sc.current === sc.target ? 'var(--color-success)' : 'var(--color-primary)'
-                        }}
-                      />
+                  ))}
+                  {unmappedSubjects.length > 0 && (
+                    <div className={styles.conflictItem} style={{ marginTop: 8 }}>
+                      <b>Missing Teacher Mapping:</b> {unmappedSubjects.map((s) => s.name).join(', ')}
                     </div>
-                  </div>
-                ))}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className={styles.sidebarSection}>
-              <h4>Teacher Loading</h4>
-              <div className={styles.statsList}>
-                {Object.entries(workload).map(([name, count]) => (
-                  <div key={name} className={styles.teacherStat}>
-                    <span>{name}</span>
-                    <b>{count} periods</b>
-                  </div>
-                ))}
+              <h4 onClick={() => setExpandedSections(prev => ({ ...prev, teachers: !prev.teachers }))} className={styles.sectionHeader}>
+                <span>Teacher Loading</span>
+                <div className={styles.toggleRow} onClick={(e) => e.stopPropagation()}>
+                  <label className={styles.toggleLabel}>School-wide</label>
+                  <input type="checkbox" checked={isSchoolWide} onChange={(e) => setIsSchoolWide(e.target.checked)} />
+                </div>
+                {expandedSections.teachers ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </h4>
+              {expandedSections.teachers && (
+                <div className={styles.statsList}>
+                  {Object.entries(isSchoolWide ? globalWorkload : workload).map(([name, count]) => (
+                    <div key={name} className={styles.teacherStat}>
+                      <span>{name}</span>
+                      <b style={{ color: count > 30 ? 'var(--color-danger)' : count > 20 ? 'var(--color-warning)' : 'var(--color-primary)' }}>
+                        {count} periods
+                      </b>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.sidebarSection}>
+              <h4 className={styles.sectionHeader} style={{ cursor: 'default' }}>
+                <span>Conflict Warnings</span>
+                <AlertTriangle size={16} style={{ color: 'var(--color-warning)' }} />
+              </h4>
+              <div className={styles.conflictSummary}>
+                {Object.entries(activeSchedule).flatMap(([day, daySlots]) => 
+                  daySlots.map((slot, idx) => {
+                    const clash = slot?.teacher ? getTeacherClash(slot.teacher, day, idx) : null;
+                    if (clash) return (
+                      <div key={`${day}-${idx}`} className={styles.conflictItem}>
+                        <b>{day} P{idx+1}</b>: {slot.teacher} busy in {clash}
+                      </div>
+                    );
+                    return null;
+                  })
+                ).filter(Boolean).length === 0 ? <div className={styles.emptyText}>No conflicts detected in current view.</div> : 
+                  Object.entries(activeSchedule).flatMap(([day, daySlots]) => 
+                    daySlots.map((slot, idx) => {
+                      const clash = slot?.teacher ? getTeacherClash(slot.teacher, day, idx) : null;
+                      if (clash) return (
+                        <div key={`${day}-${idx}`} className={styles.conflictItem}>
+                          <b>{day} P{idx+1}</b>: {slot.teacher} busy in {clash}
+                        </div>
+                      );
+                      return null;
+                    })
+                  ).filter(Boolean)
+                }
               </div>
             </div>
           </div>
@@ -763,11 +1154,88 @@ const TimeTable = () => {
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}><div className={styles.modalIcon}><Plus size={22} /></div><div><h3>Assign Period</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>{slotModal.day} - {periods[slotModal.periodIdx]?.label} ({displayRange(periods[slotModal.periodIdx]?.time)})</p></div></div>
             <div className={styles.modalBody}>
-              <div className={styles.formGroup}><label className={styles.formLabel}>Subject</label><select className={styles.input} value={slotForm.subject} onChange={(e) => setSlotForm((prev) => ({ ...prev, subject: e.target.value }))}><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.name}>{subject.name}</option>)}</select></div>
-              <div className={styles.formGroup}><label className={styles.formLabel}>Teacher</label><select className={styles.input} value={slotForm.teacher} onChange={(e) => setSlotForm((prev) => ({ ...prev, teacher: e.target.value }))}><option value="">Select teacher</option>{teachers.map((teacher) => <option key={teacher.id} value={`${teacher.first_name} ${teacher.last_name}`}>{teacher.first_name} {teacher.last_name}</option>)}</select></div>
+              {(pendingSlotWarnings.length > 0 || (slotForm.subject && validateSlot(slotForm, slotModal.day, slotModal.periodIdx).length > 0)) && (
+                <div className={styles.clashAlert}>
+                  <AlertTriangle size={18} />
+                  <div className={styles.warningList}>
+                    {(pendingSlotWarnings.length > 0 ? pendingSlotWarnings : validateSlot(slotForm, slotModal.day, slotModal.periodIdx)).map((w, i) => (
+                      <div key={i} className={styles.warningItem}>
+                        <b>{w.type === 'error' ? 'Conflict:' : 'Note:'}</b> {w.msg}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {slotForm.isEvent ? (
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Event Title (e.g. CCA, Assembly)</label>
+                  <input 
+                    type="text"
+                    className={styles.input}
+                    value={slotForm.customTitle}
+                    onChange={(e) => setSlotForm((prev) => ({ ...prev, customTitle: e.target.value }))}
+                    placeholder="Type event name..."
+                  />
+                </div>
+              ) : (
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Subject</label>
+                  <select className={styles.input} value={slotForm.subject} onChange={(e) => setSlotForm((prev) => ({ ...prev, subject: e.target.value }))}>
+                    <option value="">Select subject</option>
+                    {subjectCompletion.map((sc) => (
+                      <option key={sc.id} value={sc.name}>
+                        {sc.name} ({sc.current}/{sc.target})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Teacher</label>
+                <select className={styles.input} value={slotForm.teacher} onChange={(e) => setSlotForm((prev) => ({ ...prev, teacher: e.target.value }))}>
+                  <option value="">Select teacher</option>
+                  {teacherOptionsForSlot.map((teacher) => (
+                    <option key={teacher.id} value={`${teacher.first_name} ${teacher.last_name}`}>
+                      {teacher.first_name} {teacher.last_name}
+                    </option>
+                  ))}
+                </select>
+                {slotForm.subject && !subjectAllocationsLoading && teacherOptionsForSlot.length === 0 && (
+                  <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#b45309' }}>
+                    No teachers are assigned to this subject for this class section.
+                  </div>
+                )}
+                
+                {slotForm.teacher && (
+                  <div className={styles.availabilityTimeline}>
+                    <div className={styles.timelineLabel}>{slotForm.teacher.split(' ')[0]}'s {slotModal.day} Schedule:</div>
+                    <div className={styles.timelineTrack}>
+                      {periods.map((p, idx) => {
+                        const busy = globalSchedules[slotForm.teacher]?.[slotModal.day]?.[idx];
+                        return (
+                          <div key={idx} className={`${styles.timelineSlot} ${idx === slotModal.periodIdx ? styles.current : ''} ${busy ? styles.busy : styles.free}`} title={p.label}>
+                            {idx + 1}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               <div className={styles.formGroup}><label className={styles.formLabel}>Room</label><input className={styles.input} value={slotForm.room} onChange={(e) => setSlotForm((prev) => ({ ...prev, room: e.target.value }))} placeholder="e.g. Room 204" /></div>
               <label className={styles.checkRow}><input type="checkbox" checked={slotForm.isEvent} onChange={(e) => setSlotForm((prev) => ({ ...prev, isEvent: e.target.checked }))} />Mark as special event period</label>
-              <div className={styles.modalActions}><button className={`${styles.btn} ${styles.outline}`} onClick={() => setSlotModal({ open: false, day: null, periodIdx: null })}>Cancel</button><button className={`${styles.btn} ${styles.warning}`} onClick={clearSlot}>Clear</button><button className={`${styles.btn} ${styles.primary}`} onClick={saveSlot}><Check size={14} /> Save</button></div>
+              <div className={styles.modalActions}>
+                <button className={`${styles.btn} ${styles.outline}`} onClick={() => { setSlotModal({ open: false, day: null, periodIdx: null }); setPendingSlotWarnings([]); }}>Cancel</button>
+                <button className={`${styles.btn} ${styles.warning}`} onClick={clearSlot}>Clear</button>
+                {pendingSlotWarnings.length > 0 ? (
+                  <button className={`${styles.btn} ${styles.warning}`} onClick={() => saveSlot(true)}>Save Anyway</button>
+                ) : (
+                  <button className={`${styles.btn} ${styles.primary}`} onClick={() => saveSlot(false)}><Check size={14} /> Save</button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -813,6 +1281,27 @@ const TimeTable = () => {
                     <option value="12h">12-hour</option>
                   </select>
                 </div>
+                <div style={{ marginTop: 12 }}>
+                  <label className={styles.checkRow} style={{ fontWeight: 600 }}>
+                    <input 
+                      type="checkbox" 
+                      checked={classTeacherFirstPeriod} 
+                      onChange={(e) => setClassTeacherFirstPeriod(e.target.checked)} 
+                    />
+                    Assign Class Teacher to Period 1 (Attendance Rule)
+                  </label>
+                  <label className={styles.checkRow} style={{ fontWeight: 600 }}>
+                    <input 
+                      type="checkbox" 
+                      checked={allowSameSubjectTwiceDay}
+                      onChange={(e) => setAllowSameSubjectTwiceDay(e.target.checked)}
+                    />
+                    Allow same subject twice a day
+                  </label>
+                  <p style={{ margin: '4px 0 0 24px', fontSize: '0.8rem', opacity: 0.7 }}>
+                    If enabled, Period 1 will prioritize the class teacher during generation and warnings.
+                  </p>
+                </div>
                 <div className={styles.infoBox}>Display region: {timeZone} | Format: {timeFormat.toUpperCase()}</div>
               </div>
               <div className={styles.formGroup}><label className={styles.formLabel}>Working days</label><div className={styles.daySelector}>{WEEK_DAY_OPTIONS.map((day) => <label key={day} className={styles.checkRow}><input type="checkbox" checked={draftDays.includes(day)} onChange={(e) => setDraftDays((prev) => e.target.checked ? [...prev, day] : prev.filter((d) => d !== day))} />{day}</label>)}</div></div>
@@ -837,14 +1326,90 @@ const TimeTable = () => {
         </div>
       )}
 
-      {showSubstituteModal && (
-        <div className={styles.modalOverlay} onClick={() => setShowSubstituteModal(false)}>
+      {showCloneModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowCloneModal(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}><div className={styles.modalIcon}><UserCheck size={24} /></div><div><h3>Assign Substitute</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>{absence.absentTeacher} is absent for selected periods.</p></div></div>
+            <div className={styles.modalHeader}><div className={styles.modalIcon}><Copy size={24} /></div><div><h3>Copy Class Structure</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>Clone subjects and structure from another section.</p></div></div>
             <div className={styles.modalBody}>
-              <div className={styles.formGroup}><label className={styles.formLabel}>Affected periods today ({todayDay})</label><div className={styles.infoBox}>{absence.affectedPeriodIndexes.map((idx) => periods[idx]?.label || `#${idx + 1}`).join(', ') || 'None'}</div></div>
-              <div className={styles.formGroup}><label className={styles.formLabel}>Available teachers</label><select className={styles.input} value={selectedSubTeacherId} onChange={(e) => setSelectedSubTeacherId(Number(e.target.value))}>{availableSubstituteTeachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.full_name} ({teacher.is_teaching_staff ? 'Teaching' : 'Staff'})</option>)}</select></div>
-              <div className={styles.modalActions}><button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowSubstituteModal(false)}>Cancel</button><button className={`${styles.btn} ${styles.primary}`} onClick={assignSubstitute}>Assign</button></div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Select Source Section</label>
+                <select className={styles.input} value={cloneSourceClass} onChange={(e) => setCloneSourceClass(e.target.value)}>
+                  <option value="">Select a section</option>
+                  {sections.filter(s => s !== activeClass).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className={styles.infoBox}>⚠️ This will overwrite the current structure for <b>{activeClass}</b>.</div>
+              <div className={styles.modalActions}><button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowCloneModal(false)}>Cancel</button><button className={`${styles.btn} ${styles.primary}`} onClick={cloneSchedule} disabled={!cloneSourceClass}>Copy Structure</button></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPublishModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowPublishModal(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}><div className={styles.modalIcon}><Share2 size={24} /></div><div><h3>Pre-Publish Summary</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>Review all warnings before going live.</p></div></div>
+            <div className={styles.modalBody}>
+              <div className={styles.publishSummary}>
+                {/* 1. Hard Conflicts */}
+                <div className={styles.summarySection}>
+                  <div className={styles.summaryRow}>
+                    {Object.values(conflictMap).some(day => day && Object.keys(day).length > 0) ? (
+                      <XCircle size={18} color="var(--color-danger)" />
+                    ) : (
+                      <CheckCircle2 size={18} color="var(--color-success)" />
+                    )}
+                    <span>Teacher Conflicts</span>
+                  </div>
+                  {Object.entries(conflictMap).map(([day, dayConflicts]) => 
+                    Object.entries(dayConflicts).map(([idx, msg]) => (
+                      <div key={`${day}-${idx}`} className={styles.summarySubItem}>✗ {day} P{Number(idx)+1}: {msg}</div>
+                    ))
+                  )}
+                </div>
+
+                {/* 2. Quotas */}
+                <div className={styles.summarySection}>
+                  <div className={styles.summaryRow}>
+                    {subjectCompletion.some(sc => sc.current < sc.target) ? (
+                      <AlertCircle size={18} color="var(--color-warning)" />
+                    ) : (
+                      <CheckCircle2 size={18} color="var(--color-success)" />
+                    )}
+                    <span>Subject Quotas</span>
+                  </div>
+                  {subjectCompletion.filter(sc => sc.current < sc.target).map(sc => (
+                    <div key={sc.id} className={styles.summarySubItem}>⚠ {sc.name}: {sc.current}/{sc.target} periods filled</div>
+                  ))}
+                </div>
+
+                {/* 3. Empty Slots */}
+                <div className={styles.summarySection}>
+                  <div className={styles.summaryRow}>
+                    {Object.values(activeSchedule).some(day => day.some((s, i) => !s && !periods[i]?.isBreak)) ? (
+                      <AlertCircle size={18} color="var(--color-warning)" />
+                    ) : (
+                      <CheckCircle2 size={18} color="var(--color-success)" />
+                    )}
+                    <span>Completion Status</span>
+                  </div>
+                  {Object.entries(activeSchedule).map(([day, daySlots]) => {
+                    const emptyCount = daySlots.filter((s, i) => !s && !periods[i]?.isBreak).length;
+                    return emptyCount > 0 ? <div key={day} className={styles.summarySubItem}>⚠ {day}: {emptyCount} empty slots</div> : null;
+                  })}
+                </div>
+              </div>
+
+              <div className={styles.modalActions}>
+                <button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowPublishModal(false)}>Cancel</button>
+                <button 
+                  className={`${styles.btn} ${styles.primary}`} 
+                  onClick={finalizePublish}
+                  disabled={Object.values(conflictMap).some(day => day && Object.keys(day).length > 0)}
+                >
+                  Confirm & Publish
+                </button>
+              </div>
             </div>
           </div>
         </div>

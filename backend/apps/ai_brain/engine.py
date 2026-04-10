@@ -5,7 +5,12 @@ from typing import Dict, Optional
 from apps.accounts.models import AcademicYear
 from apps.students.models import Section
 
-from .access.classes import ensure_subject_allocations, get_school_active_academic_year, get_section
+from .access.classes import (
+    ensure_class_teacher_first_period_support,
+    ensure_subject_allocations,
+    get_school_active_academic_year,
+    get_section,
+)
 from .actions import apply_timetable_preview, create_ai_brain_draft, save_timetable_draft
 from .automation.at_risk_detector import AtRiskDetector
 from .automation.report_card_builder import ReportCardBuilder
@@ -64,6 +69,16 @@ class AIBrainEngine:
         if not allocation_sync.get("success"):
             return allocation_sync
 
+        preferences = config.get("preferences") or {}
+        class_teacher_sync = None
+        if preferences.get("class_teacher_first_period"):
+            class_teacher_sync = ensure_class_teacher_first_period_support(
+                section=section,
+                academic_year=academic_year,
+            )
+            if not class_teacher_sync.get("success"):
+                return class_teacher_sync
+
         generator = TimetableDraftGenerator(section=section, academic_year=academic_year, config=config)
         result = generator.generate()
         has_draft_rows = bool(result.get("draft"))
@@ -73,6 +88,8 @@ class AIBrainEngine:
             result["is_partial"] = True
             result["success"] = True
         result["allocation_sync"] = allocation_sync
+        if class_teacher_sync is not None:
+            result["class_teacher_sync"] = class_teacher_sync
 
         draft = create_ai_brain_draft(
             draft_type="timetable",

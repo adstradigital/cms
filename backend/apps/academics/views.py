@@ -32,14 +32,24 @@ from apps.students.models import Section
 def subject_list_view(request):
     try:
         if request.method == "GET":
+            school_class_id = request.query_params.get("school_class")
             qs = Subject.objects.prefetch_related("units__chapters").all()
             # Scope subjects by school for non-superusers
             user = request.user
             if not user.is_superuser and user.school:
                 qs = qs.filter(school=user.school)
+            if school_class_id:
+                qs = qs.filter(school_class_id=school_class_id)
             return Response(SubjectSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
-        serializer = SubjectSerializer(data=request.data)
+        data = request.data.copy()
+        user = request.user
+        if not data.get("school_class"):
+            return Response({"error": "school_class is required for subject configuration."}, status=status.HTTP_400_BAD_REQUEST)
+        if not user.is_superuser and user.school and not data.get("school"):
+            data["school"] = user.school_id
+
+        serializer = SubjectSerializer(data=data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()

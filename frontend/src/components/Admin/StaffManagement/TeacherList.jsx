@@ -27,6 +27,7 @@ const TeacherList = () => {
   };
   const [teachers, setTeachers] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -52,21 +53,25 @@ const TeacherList = () => {
     address: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
+    teaching_subject_ids: [],
   });
 
   const fetchTeachers = async () => {
     try {
       setLoading(true);
-      const [teachersRes, rolesRes] = await Promise.all([
+      const [teachersRes, rolesRes, subjectsRes] = await Promise.all([
         adminApi.getTeachers(),
         adminApi.getRolesV2().catch(() => null),
+        adminApi.getSubjects().catch(() => ({ data: [] })),
       ]);
       setTeachers(normalizeList(teachersRes.data));
       setRoles(normalizeList(rolesRes?.data));
+      setSubjects(normalizeList(subjectsRes.data));
     } catch (err) {
       console.error('Failed to fetch teachers:', err);
       setTeachers([]);
       setRoles([]);
+      setSubjects([]);
     } finally {
       setLoading(false);
     }
@@ -96,6 +101,10 @@ const TeacherList = () => {
       alert('Please fill in all required fields (First Name, Joining Date)');
       return;
     }
+    if (addForm.is_teaching_staff && (!addForm.teaching_subject_ids || addForm.teaching_subject_ids.length === 0)) {
+      alert('Please select at least one teaching subject.');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -105,6 +114,7 @@ const TeacherList = () => {
         last_name: addForm.last_name.trim(),
         experience_years: Number(addForm.experience_years),
         password: addForm.password || 'TempPass123',
+        teaching_subject_ids: (addForm.teaching_subject_ids || []).map(Number),
       };
 
       await adminApi.createStaff(payload);
@@ -115,7 +125,7 @@ const TeacherList = () => {
         designation: 'Teacher', joining_date: new Date().toISOString().split('T')[0],
         is_teaching_staff: true, role: '', password: '', gender: 'other', dob: '',
         blood_group: '', qualification: '', experience_years: 0, address: '',
-        emergency_contact_name: '', emergency_contact_phone: ''
+        emergency_contact_name: '', emergency_contact_phone: '', teaching_subject_ids: []
       });
     } catch (err) {
       console.error('Failed to create teacher:', err);
@@ -412,6 +422,27 @@ const TeacherList = () => {
                   <div className={styles.formGroup}>
                     <label>Total Experience (Years)</label>
                     <input type="number" value={addForm.experience_years} onChange={(e) => setAddForm(p => ({ ...p, experience_years: e.target.value }))} />
+                  </div>
+                  <div className={`${styles.formGroup} ${styles.fullRow}`}>
+                    <label>Teaching Subjects*</label>
+                    <select
+                      multiple
+                      size={8}
+                      value={addForm.teaching_subject_ids}
+                      onChange={(e) => {
+                        const values = Array.from(e.target.selectedOptions).map((o) => o.value);
+                        setAddForm((p) => ({ ...p, teaching_subject_ids: values }));
+                      }}
+                    >
+                      {subjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name} ({subject.code})
+                        </option>
+                      ))}
+                    </select>
+                    <small style={{ color: 'var(--theme-text-muted)' }}>
+                      Hold Ctrl/Cmd to select multiple subjects.
+                    </small>
                   </div>
                 </div>
               )}

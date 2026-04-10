@@ -379,7 +379,15 @@ const TimeTable = () => {
         if (allSchedules[sectionLabel] && allSchedules[sectionLabel][dayName]) {
           tt.periods.forEach(p => {
             const idx = p.period_number - 1;
-            const tName = p.teacher_name || (p.teacher ? `${p.teacher.first_name} ${p.teacher.last_name}` : '');
+            let tName = p.teacher_name || '';
+            if (!tName && p.teacher) {
+              if (typeof p.teacher === 'object') {
+                tName = `${p.teacher.first_name} ${p.teacher.last_name}`.trim();
+              } else {
+                const found = teachersRes.data.find((t) => t.id === p.teacher);
+                if (found) tName = `${found.first_name} ${found.last_name}`.trim();
+              }
+            }
             
             allSchedules[sectionLabel][dayName][idx] = {
               subject: p.subject_name || (p.subject?.name) || '',
@@ -437,9 +445,19 @@ const TimeTable = () => {
           tt.periods.forEach(p => {
             const idx = p.period_number - 1;
             if (normalized[dayName][idx] === undefined) return;
+            let tName = p.teacher_name || '';
+            if (!tName && p.teacher) {
+              if (typeof p.teacher === 'object') {
+                tName = `${p.teacher.first_name} ${p.teacher.last_name}`.trim();
+              } else {
+                const found = teachers.find((t) => t.id === p.teacher);
+                if (found) tName = `${found.first_name} ${found.last_name}`.trim();
+              }
+            }
+
             normalized[dayName][idx] = {
               subject: p.subject_name || (p.subject?.name) || '',
-              teacher: p.teacher_name || (p.teacher ? `${p.teacher.first_name} ${p.teacher.last_name}` : ''),
+              teacher: tName || 'No Teacher',
               room: p.room || 'TBD',
               isEvent: p.period_type === 'event'
             };

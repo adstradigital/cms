@@ -15,10 +15,15 @@ class ClassSerializer(serializers.ModelSerializer):
 
 class SectionSerializer(serializers.ModelSerializer):
     class_teacher_name = serializers.CharField(source="class_teacher.get_full_name", read_only=True)
+    class_name = serializers.CharField(source="school_class.name", read_only=True)
+    student_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Section
-        fields = "__all__"
+        fields = [
+            "id", "school_class", "class_name", "name", "class_teacher", 
+            "class_teacher_name", "student_count"
+        ]
 
 
 class StudentDocumentSerializer(serializers.ModelSerializer):

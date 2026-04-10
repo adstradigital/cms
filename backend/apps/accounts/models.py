@@ -73,7 +73,7 @@ class User(AbstractUser):
         return f"{self.get_full_name()} ({self.username})"
 
     def has_perm_code(self, codename):
-        """Check role permissions + individual overrides."""
+        """Check role permissions + individual overrides + special Class Teacher logic."""
         if self.is_superuser:
             return True
         # Check individual user-level permissions first
@@ -82,6 +82,14 @@ class User(AbstractUser):
         # Then check role permissions
         if self.role and self.role.permissions.filter(codename=codename).exists():
             return True
+            
+        # Special "Class Teacher" logic: If assigned as a class teacher, grant Class Teacher role perms
+        if hasattr(self, 'managed_sections') and self.managed_sections.exists():
+            from apps.permissions.models import Role
+            ct_role = Role.objects.filter(name='Class Teacher').first()
+            if ct_role and ct_role.permissions.filter(codename=codename).exists():
+                return True
+                
         return False
 
     def get_class_filter(self):

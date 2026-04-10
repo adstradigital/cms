@@ -36,8 +36,10 @@ const Class = () => {
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [academicYearsList, setAcademicYearsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [studentsLoading, setStudentsLoading] = useState(false);
+  const [showSummaryStats, setShowSummaryStats] = useState(true);
 
   // New States for CRUD modals
   const [isNewSectionModalOpen, setIsNewSectionModalOpen] = useState(false);
@@ -154,11 +156,26 @@ const Class = () => {
     }
   };
 
+  const loadAcademicYears = async () => {
+    try {
+      const res = await adminApi.getAcademicYears();
+      const years = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+      setAcademicYearsList(years);
+      if (academicYear === '2026-27' && years.length > 0) {
+        const active = years.find(y => y.is_active);
+        if (active) setAcademicYear(active.name);
+      }
+    } catch (err) {
+      console.error('Academic years load failed:', err);
+    }
+  };
+
   React.useEffect(() => {
     if (activeView === 'dashboard') {
       loadDashboard();
       loadClasses();
       loadTeachers();
+      loadAcademicYears();
     }
   }, [activeView]);
 
@@ -756,6 +773,14 @@ const Class = () => {
             <p>Managing students for Academic Year {academicYear}</p>
           </div>
           <div className={styles.headerActions}>
+            <button 
+              className={`${styles.btn} ${styles.btnOutline}`} 
+              onClick={() => setShowSummaryStats(prev => !prev)}
+              title={showSummaryStats ? "Hide Headcount Stats" : "Show Headcount Stats"}
+            >
+              {showSummaryStats ? <UserCheck size={18} /> : <Users size={18} />}
+              {showSummaryStats ? "Hide Stats" : "Show Stats"}
+            </button>
             <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsBulkNotifyModalOpen(true)}><Send size={16} /> Notify</button>
             <button className={`${styles.btn} ${styles.btnOutline}`} onClick={handleExportAllStudents}><Download size={18} /> Export List</button>
             <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => setIsAddStudentModalOpen(true)}><UserPlus size={18} /> Add Student</button>
@@ -763,24 +788,26 @@ const Class = () => {
         </div>
       </div>
 
-      <div className={styles.statsRow} style={{ marginTop: 12, border: '1px solid var(--theme-border)', borderRadius: 12, padding: '12px 16px' }}>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Total</span>
-          <span className={styles.statValue}>{studentSummary.total}</span>
+      {showSummaryStats && (
+        <div className={styles.statsRow} style={{ marginTop: 12, border: '1px solid var(--theme-border)', borderRadius: 12, padding: '12px 16px' }}>
+          <div className={styles.statItem}>
+            <span className={styles.statLabel}>Total</span>
+            <span className={styles.statValue}>{studentSummary.total}</span>
+          </div>
+          <div className={styles.statItem}>
+            <span className={styles.statLabel}>Active</span>
+            <span className={styles.statValue}>{studentSummary.active}</span>
+          </div>
+          <div className={styles.statItem}>
+            <span className={styles.statLabel}>Present Today</span>
+            <span className={styles.statValue}>{studentSummary.present}</span>
+          </div>
+          <div className={styles.statItem}>
+            <span className={styles.statLabel}>Fee Due</span>
+            <span className={styles.statValue}>{studentSummary.feeDue}</span>
+          </div>
         </div>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Active</span>
-          <span className={styles.statValue}>{studentSummary.active}</span>
-        </div>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Present Today</span>
-          <span className={styles.statValue}>{studentSummary.present}</span>
-        </div>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Fee Due</span>
-          <span className={styles.statValue}>{studentSummary.feeDue}</span>
-        </div>
-      </div>
+      )}
 
       <div className={styles.studentFilters}>
         <div style={{ position: 'relative', flex: 1 }}>
@@ -1382,9 +1409,13 @@ const Class = () => {
             value={academicYear}
             onChange={(e) => setAcademicYear(e.target.value)}
           >
-            <option>2025-26</option>
-            <option>2024-25</option>
-            <option>2023-24</option>
+            {academicYearsList.length === 0 ? (
+              <option value="2026-27">2026-27</option>
+            ) : (
+              academicYearsList.map(y => (
+                <option key={y.id} value={y.name}>{y.name}</option>
+              ))
+            )}
           </select>
           <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsPreferencesModalOpen(true)}><Settings size={18} /> Preferences</button>
           <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => { setEditingClass(null); setIsNewClassModalOpen(true); }}><Plus size={18} /> New Class</button>

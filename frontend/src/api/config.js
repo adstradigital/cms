@@ -23,8 +23,8 @@ export const ENDPOINTS = {
     YEAR_DETAIL: (id) => `/accounts/academic-years/${id}/`,
   },
   STUDENTS: {
-    LIST: '/students/',
-    DETAIL: (id) => `/students/${id}/`,
+    LIST: '/students/students/',
+    DETAIL: (id) => `/students/students/${id}/`,
   },
   ACADEMICS: {
     CLASSES: '/academics/classes/',

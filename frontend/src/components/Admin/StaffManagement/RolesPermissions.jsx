@@ -233,8 +233,9 @@ const RolesPermissionsView = () => {
 
   // Filtered computed values for Roles view
   const filteredRoles = useMemo(() => {
-    if (!roleSearch) return roles;
-    return roles.filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()));
+    const baseRoles = roles;
+    if (!roleSearch) return baseRoles;
+    return baseRoles.filter(r => r.name.toLowerCase().includes(roleSearch.toLowerCase()));
   }, [roles, roleSearch]);
 
   const groupedFilteredPerms = useMemo(() => {
@@ -333,7 +334,8 @@ const RolesPermissionsView = () => {
             >
               <div className={styles.roleCardHeader}>
                 <div className={styles.roleName}>{r.name}</div>
-                {!r.is_custom && <div className={styles.systemBadge}>System</div>}
+                {r.is_system && <div className={styles.systemBadge}>Auto-Assigned</div>}
+                {!r.is_system && !r.is_custom && <div className={styles.systemBadge}>System</div>}
                 {r.is_custom && <div className={styles.customBadge}>Custom</div>}
               </div>
               <div className={styles.roleMeta}>

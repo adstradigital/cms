@@ -13,6 +13,8 @@ class Subject(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, unique=True)
     description = models.TextField(blank=True)
+    weekly_periods = models.PositiveSmallIntegerField(default=5, help_text="Number of periods per week for this subject.")
+    color_code = models.CharField(max_length=20, default="#3b82f6", help_text="Hex color for timetable display.")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

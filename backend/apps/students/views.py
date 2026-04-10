@@ -1,3 +1,4 @@
+from django.db.models import Count
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated
@@ -14,24 +15,15 @@ from apps.permissions.mixins import RolePermissionMixin
 
 class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
     """
-    Handles Student CRUD with RBAC and RLS.
+    Handles Student CRUD with RBAC and contextual RLS.
+    - Admins / Superusers: see all students in their school.
+    - Class Teachers: see all students in their assigned class's sections.
+    - Subject Teachers: see students only in sections where they have allocations.
     """
     required_permission = 'students.view'
     serializer_class = StudentSerializer
     
-    def get_queryset(self):
-        # Base queryset with necessary joins
-        qs = Student.objects.select_related(
-            "user", "user__profile", "section",
-            "section__school_class", "academic_year"
-        ).prefetch_related("documents").all()
-        
-        # Apply RLS via Mixin (scopes to teacher's class if applicable)
-        qs = super().get_queryset() 
-        # Wait, super().get_queryset() will return the plain queryset from the model if not overridden.
-        # I should make sure super().get_queryset() uses the base queryset.
-        return qs
-
+    
     def get_serializer_class(self):
         if self.action in ['create', 'partial_update', 'update']:
             return StudentRegistrationSerializer
@@ -39,31 +31,83 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        # Base queryset with necessary joins
         qs = Student.objects.select_related(
             "user", "user__profile", "section",
             "section__school_class", "academic_year"
-        ).prefetch_related("documents")
+        ).prefetch_related("documents").order_by("-admission_number")
 
-        # Porting filters from function views
+        # ── Query param filters ──
+        # Filter by school
+        if not user.is_superuser and user.school:
+            qs = qs.filter(user__school=user.school)
+
+        # Query Parameters Filtering
         section_id = self.request.query_params.get("section")
         class_id = self.request.query_params.get("class")
-        academic_year_id = self.request.query_params.get("academic_year")
+        academic_year_ref = self.request.query_params.get("academic_year")
         is_active = self.request.query_params.get("is_active", "true")
 
         if section_id:
             qs = qs.filter(section_id=section_id)
         if class_id:
             qs = qs.filter(section__school_class_id=class_id)
-        if academic_year_id:
-            qs = qs.filter(academic_year_id=academic_year_id)
+        
+        if academic_year_ref:
+            if academic_year_ref.isdigit():
+                qs = qs.filter(academic_year_id=academic_year_ref)
+            else:
+                qs = qs.filter(academic_year__name=academic_year_ref)
+        
         if is_active.lower() == "true":
             qs = qs.filter(is_active=True)
+        elif is_active.lower() == "false":
+            qs = qs.filter(is_active=False)
 
-        # Apply Row Level Security (RLS) from Mixin
-        if user.assigned_class and not user.is_superuser:
+        # ── Contextual Row-Level Security ──
+        if user.is_superuser or (user.role and user.role.scope == 'school'):
+            return qs
+
+        # Build a union of accessible section IDs
+        accessible = user.get_accessible_section_ids()
+        if accessible:
+            qs = qs.filter(section_id__in=accessible)
+        else:
+            qs = qs.none()
+
+        # Apply Row Level Security (RLS) from Mixin if applicable
+        # (Though super().get_queryset() would do this, we've already manually applied it here to be safe)
+        if hasattr(user, 'assigned_class') and user.assigned_class and not user.is_superuser:
             qs = qs.filter(**user.get_class_filter())
             
         return qs
+
+    def perform_create(self, serializer):
+        """Restrict student creation to class-teacher sections or admin."""
+        user = self.request.user
+        section = serializer.validated_data.get('section')
+
+        if not (user.is_superuser or (user.role and user.role.scope == 'school')):
+            if section and not user.is_class_teacher_of(section):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied(
+                    'You can only add students to your own class.'
+                )
+        serializer.save()
+
+    def perform_update(self, serializer):
+        """Restrict student updates to class-teacher sections or admin."""
+        user = self.request.user
+        student = self.get_object()
+        section = student.section
+
+        if not (user.is_superuser or (user.role and user.role.scope == 'school')):
+            if section and not user.is_class_teacher_of(section):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied(
+                    'You can only edit students in your own class.'
+                )
+        serializer.save()
 
     @action(detail=False, methods=['GET'])
     def leaderboard(self, request):
@@ -282,7 +326,9 @@ def section_list_view(request):
     try:
         if request.method == "GET":
             class_id = request.query_params.get("class")
-            qs = Section.objects.select_related("school_class", "class_teacher").all()
+            qs = Section.objects.select_related("school_class", "class_teacher").annotate(
+                student_count=Count('students')
+            ).all()
             
             # Filter by school if possible
             if not request.user.is_superuser and request.user.school:
@@ -307,7 +353,9 @@ def section_list_view(request):
 def section_detail_view(request, pk):
     try:
         try:
-            section = Section.objects.select_related("school_class", "class_teacher").get(pk=pk)
+            section = Section.objects.select_related("school_class", "class_teacher").annotate(
+                student_count=Count('students')
+            ).get(pk=pk)
         except Section.DoesNotExist:
             return Response({"error": "Section not found."}, status=status.HTTP_404_NOT_FOUND)
 

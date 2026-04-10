@@ -72,9 +72,14 @@ def staff_list_view(request):
         user.set_password(data["password"])
         user.save()
 
+        # Handle auto-generation of employee_id if not provided
+        emp_id = data.get("employee_id")
+        if not emp_id:
+            emp_id = Staff.generate_next_id()
+
         staff = Staff.objects.create(
             user=user,
-            employee_id=data["employee_id"],
+            employee_id=emp_id,
             designation=data["designation"],
             joining_date=data["joining_date"],
             status=data.get("status") or "active",

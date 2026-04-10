@@ -107,17 +107,20 @@ PERMISSIONS = [
 ROLES = {
     'Admin': {
         'is_custom': False,
+        'is_system': False,
         'scope': 'school',
         'perms': '__ALL__',
     },
     'Principal': {
         'is_custom': False,
+        'is_system': False,
         'scope': 'school',
         'perms': '__ALL_EXCEPT__',
         'except': ['billing.manage'],
     },
     'Class Teacher': {
         'is_custom': False,
+        'is_system': True,
         'scope': 'class',
         'perms': [
             'students.view', 'students.edit', 'students.profile',
@@ -135,6 +138,7 @@ ROLES = {
     },
     'Subject Teacher': {
         'is_custom': False,
+        'is_system': False,
         'scope': 'subject',
         'perms': [
             'marks.view', 'marks.enter',
@@ -147,6 +151,7 @@ ROLES = {
     },
     'Accountant': {
         'is_custom': False,
+        'is_system': False,
         'scope': 'school',
         'perms': [
             'fees.view', 'fees.collect', 'fees.structure', 'fees.reports', 'fees.defaulters',
@@ -156,8 +161,28 @@ ROLES = {
     },
     'Support Staff': {
         'is_custom': False,
+        'is_system': False,
         'scope': 'self',
         'perms': [
+            'self.attendance', 'self.timetable',
+        ],
+    },
+    'Driver': {
+        'is_custom': False,
+        'is_system': False,
+        'scope': 'self',
+        'perms': [
+            'transport.view',
+            'self.attendance', 'self.timetable',
+        ],
+    },
+    'Warden': {
+        'is_custom': False,
+        'is_system': False,
+        'scope': 'school',
+        'perms': [
+            'hostel.view', 'hostel.manage',
+            'students.view',
             'self.attendance', 'self.timetable',
         ],
     },
@@ -187,7 +212,7 @@ def seed():
     for name, cfg in ROLES.items():
         role, created = Role.objects.update_or_create(
             name=name,
-            defaults={'is_custom': cfg['is_custom'], 'scope': cfg['scope']}
+            defaults={'is_custom': cfg['is_custom'], 'scope': cfg['scope'], 'is_system': cfg.get('is_system', False)}
         )
         if cfg['perms'] == '__ALL__':
             role.permissions.set(all_perm_objs)

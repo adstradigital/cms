@@ -15,7 +15,7 @@ class RoleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Role
-        fields = ["id", "name", "is_custom", "scope", "permissions"]
+        fields = ["id", "name", "is_custom", "is_system", "scope", "permissions"]
 
 
 class PermissionChangeLogSerializer(serializers.ModelSerializer):

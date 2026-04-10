@@ -25,6 +25,7 @@ class Permission(models.Model):
 class Role(models.Model):
     name = models.CharField(max_length=100, unique=True)       # "Admin", "Class Teacher", "Accountant"
     is_custom = models.BooleanField(default=False)  # custom roles created by admin
+    is_system = models.BooleanField(default=False, help_text="True if dynamically assigned by system, do not show in manual dropdowns")
     permissions = models.ManyToManyField(Permission, blank=True, related_name="roles")
     scope = models.CharField(
         max_length=30, default='school',

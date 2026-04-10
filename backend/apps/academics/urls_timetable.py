@@ -5,5 +5,7 @@ urlpatterns = [
     path("", views.timetable_list_view, name="timetable-list-v2"),
     path("settings/", views.timetable_settings_view, name="timetable-settings"),
     path("absence-status/", views.absence_status_view, name="timetable-absence-status"),
+    path("publish/", views.timetable_publish_view, name="timetable-publish-bulk"),
     path("<int:pk>/", views.timetable_detail_view, name="timetable-detail-v2"),
+    path("<int:pk>/publish/", views.timetable_publish_view, name="timetable-publish-single"),
 ]

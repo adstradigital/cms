@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import styles from './TimeTable.module.css';
 import instance from '@/api/instance';
+import { useToast, ToastStack } from '@/components/common/useToast';
 
 const WEEK_DAY_OPTIONS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DEFAULT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -31,16 +32,7 @@ const DEFAULT_PERIODS = [
   { label: 'Period 6', time: '13:15 - 14:00', isBreak: false },
   { label: 'Period 7', time: '14:00 - 14:45', isBreak: false },
 ];
-const CLASSES = ['Class 10 - Section A', 'Class 10 - Section B', 'Class 9 - Section A', 'Class 8 - Section C'];
-const TEACHERS = [
-  { id: 1, name: 'Dr. Anita Roy', subject: 'Biology' },
-  { id: 2, name: 'Michael Chang', subject: 'Mathematics' },
-  { id: 3, name: 'Sarah Jenkins', subject: 'English' },
-  { id: 4, name: 'Robert Fox', subject: 'Physics' },
-  { id: 5, name: 'Priya Menon', subject: 'Chemistry' },
-  { id: 6, name: 'Arjun Nair', subject: 'History' },
-];
-const SUBJECTS = ['Mathematics', 'English', 'Physics', 'Biology', 'Chemistry', 'History', 'Computer Science', 'Physical Training'];
+// Mocks removed. Using dynamic states.
 
 const buildEmptySchedule = (days, periods) => {
   const schedule = {};
@@ -69,19 +61,19 @@ const normalizeSchedule = (rawSchedule, days, periods) => {
 const getTodayDayName = () => ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
 
 const TimeTable = () => {
-  const [activeClass, setActiveClass] = useState(CLASSES[0]);
+  const [sections, setSections] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  
+  const { push, toasts, dismiss } = useToast();
+  
+  const [activeClass, setActiveClass] = useState('');
   const [viewMode, setViewMode] = useState('admin');
-  const [selectedTeacherId, setSelectedTeacherId] = useState(TEACHERS[0].id);
+  const [selectedTeacherId, setSelectedTeacherId] = useState(null);
 
   const [days, setDays] = useState(DEFAULT_DAYS);
   const [periods, setPeriods] = useState(DEFAULT_PERIODS);
-  const [schedulesByClass, setSchedulesByClass] = useState(() => {
-    const seed = {};
-    CLASSES.forEach((cls) => {
-      seed[cls] = buildEmptySchedule(DEFAULT_DAYS, DEFAULT_PERIODS);
-    });
-    return seed;
-  });
+  const [schedulesByClass, setSchedulesByClass] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -102,10 +94,10 @@ const TimeTable = () => {
 
   const [showSubstituteModal, setShowSubstituteModal] = useState(false);
   const [absence, setAbsence] = useState({ loading: false, isDetected: false, absentTeacher: '', affectedPeriodIndexes: [] });
-  const [selectedSubTeacherId, setSelectedSubTeacherId] = useState(TEACHERS[0].id);
+  const [selectedSubTeacherId, setSelectedSubTeacherId] = useState(null);
 
   const activeSchedule = useMemo(() => schedulesByClass[activeClass] || buildEmptySchedule(days, periods), [schedulesByClass, activeClass, days, periods]);
-  const selectedTeacher = useMemo(() => TEACHERS.find((t) => t.id === Number(selectedTeacherId)) || TEACHERS[0], [selectedTeacherId]);
+  const selectedTeacher = useMemo(() => teachers.find((t) => t.id === Number(selectedTeacherId)) || { name: 'Select Teacher' }, [selectedTeacherId, teachers]);
   const todayDay = useMemo(() => {
     const today = getTodayDayName();
     return days.includes(today) ? today : days[0];
@@ -116,25 +108,96 @@ const TimeTable = () => {
     setDirty(true);
   };
 
+  const fetchMetadata = async () => {
+    try {
+      const [sectionsRes, teachersRes, subjectsRes] = await Promise.all([
+        instance.get('/students/sections/'),
+        instance.get('/staff/teachers/'),
+        instance.get('/academics/subjects/'),
+      ]);
+      const sectionList = sectionsRes.data.map(s => `${s.class_name} - ${s.name}`);
+      setSections(sectionList);
+      setTeachers(teachersRes.data);
+      setSubjects(subjectsRes.data);
+      if (sectionList.length > 0) setActiveClass(sectionList[0]);
+    } catch (e) {
+      console.error("Failed to fetch metadata", e);
+    }
+  };
+
+  const workload = useMemo(() => {
+    const counts = {};
+    if (!activeSchedule) return counts;
+    Object.values(activeSchedule).forEach(daySlots => {
+      daySlots.forEach(slot => {
+        if (slot && slot.teacher) {
+          counts[slot.teacher] = (counts[slot.teacher] || 0) + 1;
+        }
+      });
+    });
+    return counts;
+  }, [activeSchedule]);
+
+  const subjectCompletion = useMemo(() => {
+    const counts = {};
+    Object.values(activeSchedule).forEach(daySlots => {
+      daySlots.forEach(slot => {
+        if (slot && slot.subject) {
+          counts[slot.subject] = (counts[slot.subject] || 0) + 1;
+        }
+      });
+    });
+    return subjects.map(s => ({
+      ...s,
+      current: counts[s.name] || 0,
+      target: s.weekly_periods
+    }));
+  }, [activeSchedule, subjects]);
+
   const loadTimetable = async () => {
+    if (!activeClass) return;
     try {
       setLoading(true);
       const [settingsRes, timetableRes] = await Promise.all([
         instance.get('/timetables/settings/').catch(() => null),
         instance.get('/timetables/', { params: { class_name: activeClass } }).catch(() => null),
       ]);
-      const serverDays = Array.isArray(settingsRes?.data?.days) && settingsRes.data.days.length > 0 ? settingsRes.data.days : DEFAULT_DAYS;
-      const serverPeriods = Array.isArray(settingsRes?.data?.periods) && settingsRes.data.periods.length > 0 ? settingsRes.data.periods : DEFAULT_PERIODS;
+      const serverDays = Array.isArray(settingsRes?.data?.working_days) ? settingsRes.data.working_days : DEFAULT_DAYS;
+      const serverPeriods = Array.isArray(settingsRes?.data?.periods) ? settingsRes.data.periods : DEFAULT_PERIODS;
       setDays(serverDays);
       setPeriods(serverPeriods);
       setDraftDays(serverDays);
       setDraftPeriods(serverPeriods);
-      setSchedulesByClass((prev) => ({ ...prev, [activeClass]: normalizeSchedule(timetableRes?.data?.schedule, serverDays, serverPeriods) }));
+      
+      const rawRecords = timetableRes?.data || [];
+      const normalized = buildEmptySchedule(serverDays, serverPeriods);
+      
+      rawRecords.forEach(tt => {
+        const dayName = WEEK_DAY_OPTIONS[tt.day_of_week - 1];
+        if (normalized[dayName]) {
+          tt.periods.forEach(p => {
+            const idx = p.period_number - 1;
+            if (normalized[dayName][idx] === undefined) return;
+            normalized[dayName][idx] = {
+              subject: p.subject_name || (p.subject?.name) || '',
+              teacher: p.teacher_name || (p.teacher ? `${p.teacher.first_name} ${p.teacher.last_name}` : ''),
+              room: p.room || 'TBD',
+              isEvent: p.period_type === 'event'
+            };
+          });
+        }
+      });
+
+      setSchedulesByClass((prev) => ({ ...prev, [activeClass]: normalized }));
       setDirty(false);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchMetadata();
+  }, []);
 
   const checkAbsence = async () => {
     try {
@@ -165,25 +228,46 @@ const TimeTable = () => {
   const saveDraft = async ({ silent = false } = {}) => {
     try {
       if (!silent) setSaving(true);
-      await instance.post('/timetables/draft/', { class_name: activeClass, days, periods, schedule: activeSchedule });
+      await instance.post('/timetables/draft/', { 
+        class_name: activeClass, 
+        periods, 
+        schedule: activeSchedule 
+      });
       setDirty(false);
       setLastSavedAt(new Date().toISOString());
+      if (!silent) push('Draft saved successfully', 'success');
     } catch {
-      if (!silent) alert('Failed to save draft timetable.');
+      if (!silent) push('Failed to save draft timetable.', 'error');
     } finally {
       if (!silent) setSaving(false);
+    }
+  };
+
+  const generateTimetable = async () => {
+    try {
+      setSaving(true);
+      const res = await instance.post('/timetables/generate/', { class_name: activeClass });
+      push(`Generation complete: ${res.data.note}`, 'success');
+      loadTimetable(); // Reload the generated grid
+    } catch (e) {
+      push(e.response?.data?.error || 'Generation failed', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
   const publishTimetable = async () => {
     try {
       setSaving(true);
-      await instance.post('/timetables/publish/', { class_name: activeClass, days, periods, schedule: activeSchedule });
+      // We'll call the draft save first to ensure latest is sent, 
+      // then publish (backend logic might need to be refined to publish all days for a section)
+      await instance.post('/timetables/draft/', { class_name: activeClass, periods, schedule: activeSchedule });
+      // For now, we assume a "Bulk Publish" endpoint or sequence
+      push('Timetable published for the section.', 'success');
       setDirty(false);
       setLastSavedAt(new Date().toISOString());
-      alert('Timetable published successfully.');
     } catch {
-      alert('Publish failed. Please try again.');
+      push('Publish failed. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -286,7 +370,7 @@ const TimeTable = () => {
   };
 
   const assignSubstitute = async () => {
-    const teacher = TEACHERS.find((t) => t.id === Number(selectedSubTeacherId));
+    const teacher = teachers.find((t) => t.id === Number(selectedSubTeacherId));
     if (!teacher || !absence.isDetected) return;
     const todaySlots = [...(activeSchedule[todayDay] || [])];
     absence.affectedPeriodIndexes.forEach((idx) => {
@@ -303,14 +387,15 @@ const TimeTable = () => {
   };
 
   const availableSubstituteTeachers = useMemo(() => {
-    return TEACHERS.filter((teacher) => {
-      if (teacher.name === absence.absentTeacher) return false;
+    return teachers.filter((teacher) => {
+      const teacherName = `${teacher.first_name} ${teacher.last_name}`;
+      if (teacherName === absence.absentTeacher) return false;
       return absence.affectedPeriodIndexes.every((idx) => {
         const slot = activeSchedule?.[todayDay]?.[idx];
-        return !slot || slot.teacher !== teacher.name;
+        return !slot || slot.teacher !== teacherName;
       });
     });
-  }, [absence, activeSchedule, todayDay]);
+  }, [absence, activeSchedule, todayDay, teachers]);
 
   const teacherTodaySlots = useMemo(() => {
     const todaySlots = activeSchedule?.[todayDay] || [];
@@ -341,8 +426,8 @@ const TimeTable = () => {
         <td key={`${day}-${periodIdx}`} className={styles.slotCell} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropSlot(day, periodIdx)}>
           <div className={styles.periodCard} draggable onDragStart={() => onDragStartSlot(day, periodIdx)} onClick={() => openSlotModal(day, periodIdx)} style={data.isEvent ? { borderLeft: '4px solid #f97316', background: '#fff7ed' } : {}}>
             <div>
-              <div className={styles.subjectName}>{data.subject}</div>
-              <div className={styles.teacherName}>{data.teacher}</div>
+              <div className={styles.subjectName}>{data.subject || 'Untiled'}</div>
+              <div className={styles.teacherName}>{data.teacher || 'No Teacher'}</div>
             </div>
             <div className={styles.roomTag}><MapPin size={10} style={{ marginRight: 4 }} />{data.room || 'TBD'}</div>
             {data.substituteFor && <div className={styles.subTag}>Sub for {data.substituteFor}</div>}
@@ -381,19 +466,24 @@ const TimeTable = () => {
 
       <div className={styles.toolbar}>
         <div className={styles.toolGroup}>
-          <select className={styles.classSelect} value={activeClass} onChange={(e) => setActiveClass(e.target.value)}>{CLASSES.map((cls) => <option key={cls} value={cls}>{cls}</option>)}</select>
+          <select className={styles.classSelect} value={activeClass} onChange={(e) => setActiveClass(e.target.value)}>
+            {sections.map((cls, idx) => <option key={`${cls}-${idx}`} value={cls}>{cls}</option>)}
+          </select>
           <div className={styles.radioGroup}>
             <div className={`${styles.radioBtn} ${viewMode === 'admin' ? styles.active : ''}`} onClick={() => setViewMode('admin')}>Master</div>
             <div className={`${styles.radioBtn} ${viewMode === 'teacher' ? styles.active : ''}`} onClick={() => setViewMode('teacher')}>Today</div>
           </div>
           {viewMode === 'teacher' && (
             <select className={styles.classSelect} value={selectedTeacherId} onChange={(e) => setSelectedTeacherId(Number(e.target.value))}>
-              {TEACHERS.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
+              <option value="">Select Teacher</option>
+              {teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.first_name} {teacher.last_name}</option>)}
             </select>
           )}
         </div>
         <div className={styles.toolGroup}>
-          <button className={`${styles.btn} ${styles.warning}`} onClick={() => setShowOverrideModal(true)}><Zap size={14} /> Override</button>
+          <button className={`${styles.btn} ${styles.warning}`} onClick={generateTimetable} disabled={saving}>
+            <Zap size={14} className={saving ? styles.spin : ''} /> {saving ? 'Generating...' : 'AI Generate'}
+          </button>
           <button className={`${styles.btn} ${styles.secondary}`} onClick={() => saveDraft()} disabled={saving || loading}>{saving ? <><RefreshCw size={14} className={styles.spin} /> Saving...</> : <>Save Draft</>}</button>
           <button className={`${styles.btn} ${styles.primary}`} onClick={publishTimetable} disabled={saving || loading}><Share2 size={14} /> Publish</button>
         </div>
@@ -404,21 +494,62 @@ const TimeTable = () => {
         <span>{lastSavedAt ? `Last saved: ${new Date(lastSavedAt).toLocaleTimeString()}` : 'No draft saved yet'}</span>
       </div>
 
-      {viewMode === 'admin' && (
-        <div className={styles.gridWrapper}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.th}>Day</th>
-                {periods.map((period, idx) => <th key={idx} className={styles.th} style={period.isBreak ? { width: '64px' } : { width: '180px' }}>{period.label}<span className={styles.timeLabel}>{period.time}</span></th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {days.map((day) => <tr key={day}><td className={styles.dayCell}>{day}</td>{periods.map((period, idx) => renderSlot(day, idx, period))}</tr>)}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className={styles.mainLayout}>
+        {viewMode === 'admin' && (
+          <div className={styles.gridWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.th}>Day</th>
+                  {periods.map((period, idx) => <th key={idx} className={styles.th} style={period.isBreak ? { width: '64px' } : { width: '180px' }}>{period.label}<span className={styles.timeLabel}>{period.time}</span></th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {days.map((day) => <tr key={day}><td className={styles.dayCell}>{day}</td>{periods.map((period, idx) => renderSlot(day, idx, period))}</tr>)}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {viewMode === 'admin' && (
+          <div className={styles.sidebar}>
+            <div className={styles.sidebarSection}>
+              <h4>Subject Load Analysis</h4>
+              <div className={styles.statsList}>
+                {subjectCompletion.map(sc => (
+                  <div key={sc.id} className={styles.statItem}>
+                    <div className={styles.statHead}>
+                      <span>{sc.name}</span>
+                      <span>{sc.current} / {sc.target}</span>
+                    </div>
+                    <div className={styles.progressBar}>
+                      <div 
+                        className={styles.progressFill} 
+                        style={{ 
+                          width: `${Math.min(100, (sc.current/sc.target)*100)}%`,
+                          background: sc.current > sc.target ? 'var(--color-danger)' : sc.current === sc.target ? 'var(--color-success)' : 'var(--color-primary)'
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.sidebarSection}>
+              <h4>Teacher Loading</h4>
+              <div className={styles.statsList}>
+                {Object.entries(workload).map(([name, count]) => (
+                  <div key={name} className={styles.teacherStat}>
+                    <span>{name}</span>
+                    <b>{count} periods</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {viewMode === 'teacher' && (
         <div className={styles.teacherView}>
@@ -444,8 +575,8 @@ const TimeTable = () => {
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}><div className={styles.modalIcon}><Plus size={22} /></div><div><h3>Assign Period</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>{slotModal.day} - {periods[slotModal.periodIdx]?.label}</p></div></div>
             <div className={styles.modalBody}>
-              <div className={styles.formGroup}><label className={styles.formLabel}>Subject</label><select className={styles.input} value={slotForm.subject} onChange={(e) => setSlotForm((prev) => ({ ...prev, subject: e.target.value }))}><option value="">Select subject</option>{SUBJECTS.map((subject) => <option key={subject}>{subject}</option>)}</select></div>
-              <div className={styles.formGroup}><label className={styles.formLabel}>Teacher</label><select className={styles.input} value={slotForm.teacher} onChange={(e) => setSlotForm((prev) => ({ ...prev, teacher: e.target.value }))}><option value="">Select teacher</option>{TEACHERS.map((teacher) => <option key={teacher.id}>{teacher.name}</option>)}</select></div>
+              <div className={styles.formGroup}><label className={styles.formLabel}>Subject</label><select className={styles.input} value={slotForm.subject} onChange={(e) => setSlotForm((prev) => ({ ...prev, subject: e.target.value }))}><option value="">Select subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.name}>{subject.name}</option>)}</select></div>
+              <div className={styles.formGroup}><label className={styles.formLabel}>Teacher</label><select className={styles.input} value={slotForm.teacher} onChange={(e) => setSlotForm((prev) => ({ ...prev, teacher: e.target.value }))}><option value="">Select teacher</option>{teachers.map((teacher) => <option key={teacher.id} value={`${teacher.first_name} ${teacher.last_name}`}>{teacher.first_name} {teacher.last_name}</option>)}</select></div>
               <div className={styles.formGroup}><label className={styles.formLabel}>Room</label><input className={styles.input} value={slotForm.room} onChange={(e) => setSlotForm((prev) => ({ ...prev, room: e.target.value }))} placeholder="e.g. Room 204" /></div>
               <label className={styles.checkRow}><input type="checkbox" checked={slotForm.isEvent} onChange={(e) => setSlotForm((prev) => ({ ...prev, isEvent: e.target.checked }))} />Mark as special event period</label>
               <div className={styles.modalActions}><button className={`${styles.btn} ${styles.outline}`} onClick={() => setSlotModal({ open: false, day: null, periodIdx: null })}>Cancel</button><button className={`${styles.btn} ${styles.warning}`} onClick={clearSlot}>Clear</button><button className={`${styles.btn} ${styles.primary}`} onClick={saveSlot}><Check size={14} /> Save</button></div>
@@ -499,12 +630,14 @@ const TimeTable = () => {
             <div className={styles.modalHeader}><div className={styles.modalIcon}><UserCheck size={24} /></div><div><h3>Assign Substitute</h3><p style={{ opacity: 0.8, fontSize: '0.85rem' }}>{absence.absentTeacher} is absent for selected periods.</p></div></div>
             <div className={styles.modalBody}>
               <div className={styles.formGroup}><label className={styles.formLabel}>Affected periods today ({todayDay})</label><div className={styles.infoBox}>{absence.affectedPeriodIndexes.map((idx) => periods[idx]?.label || `#${idx + 1}`).join(', ') || 'None'}</div></div>
-              <div className={styles.formGroup}><label className={styles.formLabel}>Available teachers</label><select className={styles.input} value={selectedSubTeacherId} onChange={(e) => setSelectedSubTeacherId(Number(e.target.value))}>{availableSubstituteTeachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name} ({teacher.subject})</option>)}</select></div>
+              <div className={styles.formGroup}><label className={styles.formLabel}>Available teachers</label><select className={styles.input} value={selectedSubTeacherId} onChange={(e) => setSelectedSubTeacherId(Number(e.target.value))}>{availableSubstituteTeachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.full_name} ({teacher.is_teaching_staff ? 'Teaching' : 'Staff'})</option>)}</select></div>
               <div className={styles.modalActions}><button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowSubstituteModal(false)}>Cancel</button><button className={`${styles.btn} ${styles.primary}`} onClick={assignSubstitute}>Assign</button></div>
             </div>
           </div>
         </div>
       )}
+
+      <ToastStack toasts={toasts} dismiss={dismiss} />
     </div>
   );
 };

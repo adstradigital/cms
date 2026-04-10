@@ -1,9 +1,10 @@
-﻿'use client';
+'use client';
 
 import React, { useMemo, useState } from 'react';
 import { Award, Fingerprint, Layout, Plus, RefreshCw, StopCircle, UserCheck, X, ArrowRight, BarChart2 } from 'lucide-react';
 import styles from './Elections.module.css';
 import instance from '@/api/instance';
+import adminApi from '@/api/adminApi';
 import KioskTerminal from './KioskTerminal';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -11,10 +12,11 @@ import { ToastStack, useToast } from '@/components/common/useToast';
 
 let electionsCache = null;
 
-const ElectionsView = ({ section = null }) => {
+const ElectionsView = ({ section = null, sections = [] }) => {
   const [view, setView] = useState('setup');
   const [status, setStatus] = useState('draft');
   const [electionId, setElectionId] = useState(null);
+  const [internalSectionId, setInternalSectionId] = useState(section?.id || '');
   const [election, setElection] = useState({
     title: '',
     className: section ? `${section.class_name || 'Class'}-${section.name}` : 'Grade 10-A',
@@ -26,7 +28,31 @@ const ElectionsView = ({ section = null }) => {
   const [candidateImage, setCandidateImage] = useState(null);
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [votedRolls, setVotedRolls] = useState(new Set());
+  const [localSections, setLocalSections] = useState(sections || []);
   const { toasts, push, dismiss } = useToast();
+
+  // Fail-safe: Fetch sections if they aren't provided by parent
+  React.useEffect(() => {
+    const refreshSections = async () => {
+      if (localSections.length === 0) {
+        try {
+          const res = await adminApi.getSections();
+          const list = Array.isArray(res?.data) ? res.data : (res?.data?.results || []);
+          setLocalSections(list);
+        } catch (err) {
+          console.error("Election Console: Failed to load local sections", err);
+        }
+      }
+    };
+    refreshSections();
+  }, []);
+
+  // Sync with parent sections if they change
+  React.useEffect(() => {
+    if (sections && sections.length > 0) {
+      setLocalSections(sections);
+    }
+  }, [sections]);
 
   React.useEffect(() => {
     if (!electionsCache) return;
@@ -37,8 +63,10 @@ const ElectionsView = ({ section = null }) => {
   }, []);
 
   React.useEffect(() => {
-    if (!section) return;
-    setElection((prev) => ({ ...prev, className: `${section.class_name || 'Class'}-${section.name}` }));
+    if (section?.id) {
+      setInternalSectionId(section.id);
+      setElection((prev) => ({ ...prev, className: `${section.class_name || 'Class'}-${section.name}` }));
+    }
   }, [section]);
 
   React.useEffect(() => {
@@ -65,13 +93,16 @@ const ElectionsView = ({ section = null }) => {
 
   const startElection = async () => {
     if (!election.title || election.candidates.length < 2) return;
-    if (!section?.id) {
-      push('Select a section first (from the class view)', 'error');
+    
+    const isSchoolWide = ['School Leader', 'Head Boy', 'Head Girl', 'President'].includes(election.role);
+    
+    if (!internalSectionId && !isSchoolWide) {
+      push('Please select a class/section for this election.', 'error');
       return;
     }
     try {
       const res = await instance.post('/elections/', {
-        section: section.id,
+        section: isSchoolWide ? null : internalSectionId,
         title: election.title,
         role: election.role,
         candidates: election.candidates.map((c) => ({ name: c.name, image: c.image || null })),
@@ -153,10 +184,32 @@ const ElectionsView = ({ section = null }) => {
 
       <div className={styles.formGroup}>
         <label className={styles.label}>Mandate Details</label>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 20 }}>
+        <div className={styles.setupGrid}>
           <input className={styles.input} placeholder="Official Election Title" value={election.title} onChange={(e) => setElection((prev) => ({ ...prev, title: e.target.value }))} />
-          <select className={styles.select} value={election.className} onChange={(e) => setElection((prev) => ({ ...prev, className: e.target.value }))}><option>Grade 10-A</option><option>Grade 10-B</option><option>Grade 11-A</option></select>
-          <select className={styles.select} value={election.role} onChange={(e) => setElection((prev) => ({ ...prev, role: e.target.value }))}><option>Class Leader</option><option>Assistant Leader</option><option>Sports Prefect</option></select>
+          <select 
+            className={styles.select} 
+            value={internalSectionId} 
+            onChange={(e) => setInternalSectionId(e.target.value)}
+            disabled={['School Leader', 'Head Boy', 'Head Girl', 'President'].includes(election.role)}
+          >
+            <option value="">{['School Leader', 'Head Boy', 'Head Girl', 'President'].includes(election.role) ? 'School-Wide' : 'Select Class'}</option>
+            {localSections.map(s => (
+              <option key={s.id} value={s.id}>{s.class_name || 'Class'} - {s.name}</option>
+            ))}
+          </select>
+          <select 
+            className={styles.select} 
+            value={election.role} 
+            onChange={(e) => setElection((prev) => ({ ...prev, role: e.target.value }))}
+          >
+            <option>Class Leader</option>
+            <option>Assistant Leader</option>
+            <option>Sports Prefect</option>
+            <option>School Leader</option>
+            <option>Head Boy</option>
+            <option>Head Girl</option>
+            <option>President</option>
+          </select>
         </div>
       </div>
 
@@ -287,9 +340,9 @@ const ElectionsView = ({ section = null }) => {
   );
 };
 
-const Elections = ({ section }) => (
+const Elections = ({ section, sections }) => (
   <ErrorBoundary>
-    <ElectionsView section={section} />
+    <ElectionsView section={section} sections={sections} />
   </ErrorBoundary>
 );
 

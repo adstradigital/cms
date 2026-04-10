@@ -13,13 +13,16 @@ class StaffSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='user.role.name', read_only=True)
     user_role_id = serializers.IntegerField(source='user.role_id', read_only=True)
     is_active = serializers.BooleanField(source='user.is_active', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
 
     class Meta:
         model = Staff
         fields = [
             'id', 'user', 'full_name', 'email', 'phone', 'employee_id',
-            'designation', 'joining_date', 'status', 'is_teaching_staff', 'role_name',
-            'user_role_id', 'is_active', 'experience_years', 'qualification'
+            'joining_date', 'status', 'is_teaching_staff', 'role_name',
+            'user_role_id', 'is_active', 'experience_years', 'qualification',
+            'first_name', 'last_name'
         ]
 
 
@@ -33,7 +36,7 @@ class StaffCreateSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     # Staff fields
-    employee_id = serializers.CharField(max_length=50)
+    employee_id = serializers.CharField(max_length=50, required=False, allow_blank=True)
     designation = serializers.CharField(max_length=100)
     joining_date = serializers.DateField()
     status = serializers.ChoiceField(choices=Staff.STATUS_CHOICES, required=False)

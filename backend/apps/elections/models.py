@@ -8,7 +8,7 @@ class Election(models.Model):
         ("ongoing", "Ongoing"),
         ("ended", "Ended"),
     ]
-    section = models.ForeignKey("students.Section", on_delete=models.CASCADE, related_name="elections")
+    section = models.ForeignKey("students.Section", on_delete=models.CASCADE, related_name="elections", null=True, blank=True)
     title = models.CharField(max_length=255)
     role = models.CharField(max_length=120, default="Class Leader")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")

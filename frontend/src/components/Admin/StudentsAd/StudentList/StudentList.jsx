@@ -38,7 +38,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
             <Search size={16} className={styles.searchIcon} />
             <input 
               type="text" 
-              placeholder="Search by name or ID..." 
+              placeholder="Find a student by name, roll number, or parent..." 
               className={styles.searchInput} 
             />
           </div>
@@ -46,7 +46,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
             <Filter size={16} /> Filter
           </button>
           <button className={styles.addBtn} onClick={onAddClick}>
-            <Plus size={16} /> Add Student
+            <Plus size={16} /> Register Student
           </button>
         </div>
       </div>
@@ -57,7 +57,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
           <thead>
             <tr>
               <th>Student Name</th>
-              <th>ID / Roll</th>
+              <th>Roll / ID</th>
               <th>Class & Section</th>
               <th>Primary Contact</th>
               <th>Status</th>
@@ -68,7 +68,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
             {loading ? (
               <tr><td colSpan="6" style={{textAlign: 'center', padding: '40px'}}>Loading students...</td></tr>
             ) : (!Array.isArray(students) || students.length === 0) ? (
-              <tr><td colSpan="6" style={{textAlign: 'center', padding: '40px'}}>No students found.</td></tr>
+              <tr><td colSpan="6" style={{textAlign: 'center', padding: '40px'}}>No students registered yet. Click "Register Student" to start.</td></tr>
             ) : students.map((student, idx) => {
               const fullName = `${student.user?.first_name || ''} ${student.user?.last_name || ''}`;
               const photoPath = student.user?.profile?.photo;
@@ -81,6 +81,10 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
                   key={student.id} 
                   className={`${styles.tableRow} ${activeDropdown === student.id ? styles.tableRowActiveDropdown : ''}`}
                   onClick={() => onViewProfile(student.id)}
+                  style={{ 
+                    position: 'relative', 
+                    zIndex: activeDropdown === student.id ? 100 : 1 
+                  }}
                 >
                   <td>
                     <div className={styles.studentNameCol}>
@@ -128,13 +132,13 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
                           className={styles.dropdownItem} 
                           onClick={() => { setActiveDropdown(null); onEditProfile(student.id); }}
                         >
-                          <Edit3 size={14} /> Edit student
+                          <Edit3 size={14} /> Edit student data
                         </button>
                         <button 
                           className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`}
-                          onClick={() => { setActiveDropdown(null); alert('Delete action triggered for ' + fullName); }}
+                          onClick={() => { setActiveDropdown(null); if(confirm('Are you sure you want to remove this student?')) alert('Delete action triggered for ' + fullName); }}
                         >
-                          <Trash2 size={14} /> Delete
+                          <Trash2 size={14} /> Remove Student
                         </button>
                       </div>
                     )}

@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { 
-  Users, GraduationCap, Plus, Search, 
+import {
+  Users, GraduationCap, Plus, Search,
   Trophy, TrendingUp, Filter, MoreVertical,
   ChevronRight, ArrowRight, UserPlus, Trash2,
   Settings, Award, Vote, BarChart2,
-  Calendar, MapPin, UserCheck, RefreshCw, 
+  Calendar, MapPin, UserCheck, RefreshCw,
   CheckCircle, AlertCircle, Info, Download, Trash, ShieldCheck,
   ChevronDown, Mail, Phone, Send, X
 } from 'lucide-react';
@@ -53,14 +53,16 @@ const Class = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [promotionStep, setPromotionStep] = useState(1);
   const [academicYear, setAcademicYear] = useState('2025-26');
-  
+
   const [sections, setSections] = useState([]);
   const [classes, setClasses] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [academicYearsList, setAcademicYearsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [studentsLoading, setStudentsLoading] = useState(false);
+  const [showSummaryStats, setShowSummaryStats] = useState(true);
 
   // New States for CRUD modals
   const [isNewSectionModalOpen, setIsNewSectionModalOpen] = useState(false);
@@ -108,13 +110,13 @@ const Class = () => {
       if (!raw) return;
       const parsed = JSON.parse(raw);
       setPrefs((prev) => ({ ...prev, ...(parsed || {}) }));
-    } catch {}
+    } catch { }
   }, []);
 
   React.useEffect(() => {
     try {
       localStorage.setItem('class-preferences-v1', JSON.stringify(prefs));
-    } catch {}
+    } catch { }
   }, [prefs]);
 
   React.useEffect(() => {
@@ -122,7 +124,7 @@ const Class = () => {
     try {
       const key = `class-last-tab-${selectedSection.id}`;
       localStorage.setItem(key, activeView);
-    } catch {}
+    } catch { }
   }, [activeView, prefs.rememberLastTab, selectedSection?.id]);
 
   React.useEffect(() => {
@@ -131,7 +133,7 @@ const Class = () => {
       const key = `class-last-tab-${selectedSection.id}`;
       const last = localStorage.getItem(key);
       if (last && typeof last === 'string') setActiveView(last);
-    } catch {}
+    } catch { }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSection?.id]);
   const [promotionRules, setPromotionRules] = useState({ passPct: 40, attendancePct: 75 });
@@ -200,11 +202,26 @@ const Class = () => {
     }
   };
 
+  const loadAcademicYears = async () => {
+    try {
+      const res = await adminApi.getAcademicYears();
+      const years = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+      setAcademicYearsList(years);
+      if (academicYear === '2026-27' && years.length > 0) {
+        const active = years.find(y => y.is_active);
+        if (active) setAcademicYear(active.name);
+      }
+    } catch (err) {
+      console.error('Academic years load failed:', err);
+    }
+  };
+
   React.useEffect(() => {
     if (activeView === 'dashboard') {
       loadDashboard();
       loadClasses();
       loadTeachers();
+      loadAcademicYears();
     }
   }, [activeView]);
 
@@ -293,14 +310,14 @@ const Class = () => {
         ]);
         setLeaderboardSubjects(Array.isArray(subjRes?.data) ? subjRes.data : []);
         setLeaderboardExams(Array.isArray(examsRes?.data) ? examsRes.data : []);
-      } catch {}
+      } catch { }
     };
     loadRankingFilters();
   }, [activeView, selectedSection?.school_class]);
 
   const filteredSections = useMemo(() => {
-    return sections.filter(s => 
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    return sections.filter(s =>
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.class_teacher_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [sections, searchTerm]);
@@ -337,14 +354,14 @@ const Class = () => {
 
       const matchesStatus =
         studentStatusFilter === 'active' ? !!student.is_active :
-        studentStatusFilter === 'inactive' ? !student.is_active :
-        true;
+          studentStatusFilter === 'inactive' ? !student.is_active :
+            true;
       const matchesGender =
         studentGenderFilter === 'all' ? true :
-        gender === studentGenderFilter;
+          gender === studentGenderFilter;
       const matchesFee =
         studentFeeFilter === 'all' ? true :
-        feeStatus.toLowerCase() === studentFeeFilter;
+          feeStatus.toLowerCase() === studentFeeFilter;
       return matchesSearch && matchesStatus && matchesGender && matchesFee;
     });
   }, [studentsList, studentSearchTerm, studentStatusFilter, studentGenderFilter, studentFeeFilter]);
@@ -572,7 +589,7 @@ const Class = () => {
       setPromotionHistory(nextHistory);
       try {
         localStorage.setItem(`promotion-history-${selectedSection.id}`, JSON.stringify(nextHistory));
-      } catch {}
+      } catch { }
       setPromotionStep(3);
     } catch (err) {
       alert('Something went wrong during the promotion process. No changes were made.');
@@ -666,7 +683,7 @@ const Class = () => {
             <>
               <h3>Ready to Create Sections</h3>
               <p>
-                You have created <b>{classes.length} {classes.length === 1 ? 'class' : 'classes'}</b> ({classes.map(c => c.name).join(', ')}). 
+                You have created <b>{classes.length} {classes.length === 1 ? 'class' : 'classes'}</b> ({classes.map(c => c.name).join(', ')}).
                 Now, create a <b>Section</b> (like "A" or "B") inside these classes to start managing students and attendance.
               </p>
             </>
@@ -705,7 +722,7 @@ const Class = () => {
               <span className={styles.subtitle}>Academic Section</span>
             </div>
           </div>
-          
+
           <div className={styles.statsRow}>
             <div className={styles.statItem}>
               <span className={styles.statLabel}>Students</span>
@@ -725,7 +742,7 @@ const Class = () => {
 
           <div className={styles.cardFooter}>
             <div className={styles.teacherInfo}>
-              <div className={styles.avatar}>{(section.class_teacher_name || 'T').split(' ').map(n=>n[0]).join('')}</div>
+              <div className={styles.avatar}>{(section.class_teacher_name || 'T').split(' ').map(n => n[0]).join('')}</div>
               <span>{section.class_teacher_name || 'Lead Teacher needed'}</span>
             </div>
             <div className={styles.cardActions}>
@@ -778,7 +795,7 @@ const Class = () => {
                   )}
                 </div>
               )}
-              <button 
+              <button
                 className={`${styles.btn} ${styles.btnPrimary}`}
                 onClick={() => {
                   setSelectedSection(section);
@@ -835,24 +852,26 @@ const Class = () => {
         </div>
       </div>
 
-      <div className={styles.statsRow} style={{ marginTop: 12, border: '1px solid var(--theme-border)', borderRadius: 12, padding: '12px 16px' }}>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Total</span>
-          <span className={styles.statValue}>{studentSummary.total}</span>
+      {showSummaryStats && (
+        <div className={styles.statsRow} style={{ marginTop: 12, border: '1px solid var(--theme-border)', borderRadius: 12, padding: '12px 16px' }}>
+          <div className={styles.statItem}>
+            <span className={styles.statLabel}>Total</span>
+            <span className={styles.statValue}>{studentSummary.total}</span>
+          </div>
+          <div className={styles.statItem}>
+            <span className={styles.statLabel}>Active</span>
+            <span className={styles.statValue}>{studentSummary.active}</span>
+          </div>
+          <div className={styles.statItem}>
+            <span className={styles.statLabel}>Present Today</span>
+            <span className={styles.statValue}>{studentSummary.present}</span>
+          </div>
+          <div className={styles.statItem}>
+            <span className={styles.statLabel}>Fee Due</span>
+            <span className={styles.statValue}>{studentSummary.feeDue}</span>
+          </div>
         </div>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Active</span>
-          <span className={styles.statValue}>{studentSummary.active}</span>
-        </div>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Present Today</span>
-          <span className={styles.statValue}>{studentSummary.present}</span>
-        </div>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Fee Due</span>
-          <span className={styles.statValue}>{studentSummary.feeDue}</span>
-        </div>
-      </div>
+      )}
 
       <div className={styles.studentFilters}>
         <div style={{ position: 'relative', flex: 1 }}>
@@ -938,10 +957,10 @@ const Class = () => {
                 <td className={styles.td} colSpan={5 + (prefs.showAttendanceColumn ? 1 : 0) + (prefs.showFeeColumn ? 1 : 0) + 3} style={{ textAlign: 'center', color: 'var(--theme-text-muted)' }}>No students match your filters.</td>
               </tr>
             ) : filteredStudents.map(student => (
-              <tr 
-                key={student.id} 
-                onClick={() => setProfileDrawerStudent(student)} 
-                style={{ 
+              <tr
+                key={student.id}
+                onClick={() => setProfileDrawerStudent(student)}
+                style={{
                   cursor: 'pointer',
                   position: 'relative',
                   zIndex: studentActionMenuId === student.id ? 100 : 1
@@ -1101,15 +1120,15 @@ const Class = () => {
                 <div className={styles.statItem}>
                   <span className={styles.statLabel}>Roll Number</span>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
-                    <input 
-                      className={styles.studentSelect} 
+                    <input
+                      className={styles.studentSelect}
                       style={{ padding: '4px 8px', width: 80, fontSize: 13 }}
                       value={editingRollNumber}
                       onChange={(e) => setEditingRollNumber(e.target.value)}
                       placeholder="N/A"
                     />
-                    <button 
-                      className={styles.btnPrimary} 
+                    <button
+                      className={styles.btnPrimary}
                       style={{ padding: '4px 8px', fontSize: 11, borderRadius: 4 }}
                       onClick={handleUpdateRollNumber}
                       disabled={isSavingRoll}
@@ -1479,22 +1498,26 @@ const Class = () => {
           <p>Academic Year management, student tracking, and automated promotion.</p>
         </div>
         <div className={styles.headerActions}>
-           <select 
-            className={`${styles.btn} ${styles.btnOutline}`} 
+          <select
+            className={`${styles.btn} ${styles.btnOutline}`}
             style={{ padding: '8px 16px', borderRadius: 12, outline: 'none' }}
             value={academicYear}
             onChange={(e) => setAcademicYear(e.target.value)}
           >
-            <option>2025-26</option>
-            <option>2024-25</option>
-            <option>2023-24</option>
+            {academicYearsList.length === 0 ? (
+              <option value="2026-27">2026-27</option>
+            ) : (
+              academicYearsList.map(y => (
+                <option key={y.id} value={y.name}>{y.name}</option>
+              ))
+            )}
           </select>
           <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsPreferencesModalOpen(true)}><Settings size={18} /> Preferences</button>
           <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => { setEditingClass(null); setIsNewClassModalOpen(true); }}><Plus size={18} /> New Class</button>
-              <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => { setEditingSection(null); setIsNewSectionModalOpen(true); }}><Plus size={18} /> New Section</button>
+          <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => { setEditingSection(null); setIsNewSectionModalOpen(true); }}><Plus size={18} /> New Section</button>
         </div>
       </div>
-      
+
       {/* Modals */}
       {isNewSectionModalOpen && (
         <div className={styles.modalOverlay} onClick={() => setIsNewSectionModalOpen(false)}>
@@ -1873,9 +1896,9 @@ const Class = () => {
             <div className={styles.toolbar} style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--theme-text-muted)' }} />
-                <input 
-                  type="text" 
-                  placeholder="Search classes, teachers..." 
+                <input
+                  type="text"
+                  placeholder="Search classes, teachers..."
                   style={{ width: '100%', padding: '10px 40px', borderRadius: 12, border: '1px solid var(--theme-border)', background: 'var(--theme-surface)', color: 'var(--theme-text)' }}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}

@@ -18,6 +18,8 @@ from .serializers import (
     HomeworkSerializer, HomeworkSubmissionSerializer, SubstituteLogSerializer,
     AssignmentSerializer, MaterialSerializer,
 )
+from .generator_service import TimetableGenerator
+from apps.accounts.models import AcademicYear
 
 from apps.staff.models import StaffAttendance, Staff
 from apps.students.models import Section
@@ -176,6 +178,167 @@ def timetable_publish_view(request, pk=None):
         return Response({"message": f"Published {count} timetable records."}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def auto_allocate_subjects(section, academic_year):
+    """
+    Helper to create default subject allocations if missing.
+    Assigns available teaching staff to subjects tied to the class.
+    """
+    from apps.staff.models import Staff
+    from django.db import transaction
+
+    # Get subjects for this class
+    subjects = Subject.objects.filter(school_class=section.school_class)
+    if not subjects.exists():
+        return False, "No subjects found for this class. Please define subjects first."
+
+    # Get all teaching staff users
+    teachers = User.objects.filter(staff_profile__is_teaching_staff=True, is_active=True)
+    if not teachers.exists():
+        return False, "No teaching staff found in the system."
+
+    allocations_created = []
+    with transaction.atomic():
+        for i, subject in enumerate(subjects):
+            # Simple round-robin assignment for fallback
+            teacher = teachers[i % teachers.count()]
+            allocation, created = SubjectAllocation.objects.get_or_create(
+                subject=subject,
+                section=section,
+                academic_year=academic_year
+            )
+            if created:
+                allocation.teachers.add(teacher)
+                allocations_created.append(f"{subject.name} -> {teacher.get_full_name()}")
+    
+    return True, f"Auto-allocated {len(allocations_created)} subjects."
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def timetable_generate_view(request):
+    """
+    AI-Assisted generator trigger.
+    """
+    try:
+        section_id = request.data.get("section_id")
+        # Find numeric section if class_name was sent (compatibility)
+        class_name = request.data.get("class_name")
+        
+        section = None
+        if section_id:
+            section = Section.objects.get(pk=section_id)
+        elif class_name:
+            parts = class_name.split(" - ")
+            if len(parts) == 2:
+                c_name, s_name = parts
+                section = Section.objects.get(school_class__name=c_name, name=s_name)
+            else:
+                section = Section.objects.get(name=class_name)
+
+        if not section:
+            return Response({"error": "Section not found."}, status=404)
+
+        # Get current active academic year or from request
+        ay_id = request.data.get("academic_year")
+        if ay_id:
+            academic_year = AcademicYear.objects.get(pk=ay_id)
+        else:
+            academic_year = AcademicYear.objects.filter(is_active=True).first()
+
+        if not academic_year:
+            return Response({"error": "Active academic year not found."}, status=400)
+
+        # CHECK FOR ALLOCATIONS: Trigger auto-allocation fallback if missing
+        allocations = SubjectAllocation.objects.filter(section=section, academic_year=academic_year)
+        auto_note = None
+        if not allocations.exists():
+            success, message = auto_allocate_subjects(section, academic_year)
+            if not success:
+                return Response({"error": message}, status=400)
+            auto_note = message
+
+        generator = TimetableGenerator(section, academic_year)
+        result = generator.generate()
+
+        if "error" in result:
+            return Response(result, status=400)
+        
+        if auto_note:
+            result["note"] = f"{result.get('note', '')} ({auto_note})".strip()
+        
+        return Response(result, status=200)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def timetable_draft_view(request):
+    """
+    Saves a full timetable grid from the frontend (Used for manual edits / drafts).
+    """
+    try:
+        data = request.data
+        class_name = data.get("class_name")
+        schedule = data.get("schedule") # Map of { Day: [ Slots ] }
+        
+        parts = class_name.split(" - ")
+        if len(parts) == 2:
+            c_name, s_name = parts
+            section = Section.objects.get(school_class__name=c_name, name=s_name)
+        else:
+            section = Section.objects.get(name=class_name)
+
+        ay = AcademicYear.objects.filter(is_active=True).first()
+        
+        day_name_to_id = {name: code for code, name in Timetable.DAY_CHOICES}
+
+        with transaction.atomic():
+            for day_name, p_list in schedule.items():
+                day_id = day_name_to_id.get(day_name)
+                if not day_id: continue
+                
+                tt, _ = Timetable.objects.get_or_create(
+                    section=section,
+                    academic_year=ay,
+                    day_of_week=day_id
+                )
+                
+                # If not published, we clear and rebuild
+                if not tt.is_published:
+                    tt.periods.all().delete()
+                    for idx, p_data in enumerate(p_list):
+                        if not p_data: continue
+                        
+                        period_type = 'class'
+                        if p_data.get('isBreak'): period_type = 'break'
+                        if p_data.get('isEvent'): period_type = 'class' # or special
+                        
+                        # Find subject and teacher if provided
+                        subject = None
+                        if p_data.get('subject'):
+                            subject = Subject.objects.filter(name=p_data['subject']).first()
+                        
+                        teacher = None
+                        if p_data.get('teacher'):
+                            teacher = User.objects.filter(first_name=p_data['teacher'].split(' ')[0]).first()
+
+                        Period.objects.create(
+                            timetable=tt,
+                            period_number=idx + 1,
+                            period_type=period_type,
+                            subject=subject,
+                            teacher=teacher,
+                            start_time=data.get('periods')[idx]['time'].split(' - ')[0],
+                            end_time=data.get('periods')[idx]['time'].split(' - ')[1]
+                        )
+        
+        return Response({"status": "success"})
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
 
 
 # ─── Period ───────────────────────────────────────────────────────────────────

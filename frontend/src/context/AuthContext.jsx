@@ -11,6 +11,29 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const getDashboardRoute = (userData) => {
+    const roleName = String(userData?.role_name || userData?.role || '').toLowerCase();
+    const portal = String(userData?.portal || '').toLowerCase();
+
+    const roleRoutes = {
+      'admin': '/admins',
+      'super admin': '/admins',
+      'super_admin': '/admins',
+      'principal': '/admins',
+      'staff': '/staff',
+      'student': '/student',
+      'parent': '/parent',
+    };
+
+    const portalRoutes = {
+      admin: '/admins',
+      student: '/student',
+      parent: '/parent',
+    };
+
+    return roleRoutes[roleName] || portalRoutes[portal] || '/';
+  };
+
   // Check for existing session on mount
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -38,18 +61,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('access_token', res.data.access);
     localStorage.setItem('refresh_token', res.data.refresh);
     setUser(res.data.user);
-    // Redirect based on role name (case-insensitive)
-    const roleName = String(res.data.user.role_name || res.data.user.role || '').toLowerCase();
-    const roleRoutes = { 
-        'admin': '/admins', 
-        'super admin': '/admins',
-        'super_admin': '/admins',
-        'principal': '/admins',
-        'staff': '/staff', 
-        'student': '/student', 
-        'parent': '/parent' 
-    };
-    router.push(roleRoutes[roleName] || '/');
+    router.push(getDashboardRoute(res.data.user));
   };
 
   const logout = async () => {

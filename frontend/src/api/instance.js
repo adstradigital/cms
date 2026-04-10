@@ -28,9 +28,14 @@ instance.interceptors.response.use(
   (error) => {
     const status = error.response?.status;
     const errorData = error.response?.data;
+    const requestUrl = String(error.config?.url || '');
+    const isAuthRequest =
+      requestUrl.includes('/accounts/login/') ||
+      requestUrl.includes('/accounts/logout/') ||
+      requestUrl.includes('/accounts/token/refresh/');
 
     if (typeof window !== 'undefined') {
-      if (status === 401) {
+      if (status === 401 && !isAuthRequest) {
         localStorage.removeItem('access_token');
         window.location.href = '/login';
       } else if (status === 403 && errorData?.error === 'Wrong portal') {

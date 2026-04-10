@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { 
   Atom,
   Home, 
@@ -17,42 +17,36 @@ import {
   LogOut,
   ChevronDown,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Bed
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import styles from './AdminSidebar.module.css';
 
 const AdminSidebar = () => {
   const pathname = usePathname();
-  const router = useRouter();
   const { logout } = useAuth();
   
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [expandedMenu, setExpandedMenu] = useState(
-    pathname?.startsWith('/admins/students') ? 'Students' : 
-    pathname?.startsWith('/admins/classes') ? 'Classes' : 
-    pathname?.startsWith('/admins/staff') ? 'Staff' : null
-  );
-  const [lastPath, setLastPath] = useState(pathname);
+  const [expandedMenu, setExpandedMenu] = useState(null);
 
   // Sync expanded state with path navigation
-  if (pathname !== lastPath) {
-    setLastPath(pathname);
+  useEffect(() => {
     if (pathname?.startsWith('/admins/students')) setExpandedMenu('Students');
     else if (pathname?.startsWith('/admins/classes')) setExpandedMenu('Classes');
     else if (pathname?.startsWith('/admins/staff')) setExpandedMenu('Staff');
-  }
+    else if (pathname?.startsWith('/admins/hostel')) setExpandedMenu('Hostel');
+  }, [pathname]);
   
   const isStudentsPath = pathname?.startsWith('/admins/students');
   const isClassesPath = pathname?.startsWith('/admins/classes');
   const isStaffPath = pathname?.startsWith('/admins/staff');
+  const isHostelPath = pathname?.startsWith('/admins/hostel');
   
   const isStudentsExpanded = expandedMenu === 'Students';
   const isClassesExpanded = expandedMenu === 'Classes';
   const isStaffExpanded = expandedMenu === 'Staff';
-
-  const navigate = (path) => {
-    router.push(path);
-  };
+  const isHostelExpanded = expandedMenu === 'Hostel';
 
   return (
     <div className={`${styles.sidebar} ${isCollapsed ? styles.sidebarCollapsed : ''}`}>
@@ -87,7 +81,8 @@ const AdminSidebar = () => {
           label="Dashboard" 
           collapsed={isCollapsed}
           active={pathname === '/admins'} 
-          onClick={() => { navigate('/admins'); setExpandedMenu(null); }} 
+          href="/admins"
+          onClick={() => setExpandedMenu(null)}
         />
 
         {/* Staff Section */}
@@ -97,7 +92,7 @@ const AdminSidebar = () => {
             label="Staff" 
             collapsed={isCollapsed}
             active={isStaffPath} 
-            onClick={() => navigate('/admins/staff/all')} 
+            href="/admins/staff/all"
           />
         ) : (
           <div className={styles.expandableMenuContainer}>
@@ -115,12 +110,12 @@ const AdminSidebar = () => {
             </div>
 
             <div className={`${styles.subItemsContainer} ${isStaffExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="All Staff" active={pathname === '/admins/staff/all'} onClick={() => navigate('/admins/staff/all')} />
-              <SubNavItem label="Teachers" active={pathname === '/admins/staff/teachers'} onClick={() => navigate('/admins/staff/teachers')} />
-              <SubNavItem label="Roles & Permissions" active={pathname === '/admins/staff/roles'} onClick={() => navigate('/admins/staff/roles')} />
-              <SubNavItem label="Attendance & HR" active={pathname === '/admins/staff/hr'} onClick={() => navigate('/admins/staff/hr')} />
-              <SubNavItem label="Teacher Leaderboard" active={pathname === '/admins/staff/leaderboard'} onClick={() => navigate('/admins/staff/leaderboard')} />
-              <SubNavItem label="Tasks & Events" active={pathname === '/admins/staff/tasks'} onClick={() => navigate('/admins/staff/tasks')} />
+              <SubNavItem label="All Staff" active={pathname === '/admins/staff/all'} href="/admins/staff/all" />
+              <SubNavItem label="Teachers" active={pathname === '/admins/staff/teachers'} href="/admins/staff/teachers" />
+              <SubNavItem label="Roles & Permissions" active={pathname === '/admins/staff/roles'} href="/admins/staff/roles" />
+              <SubNavItem label="Attendance & HR" active={pathname === '/admins/staff/hr'} href="/admins/staff/hr" />
+              <SubNavItem label="Teacher Leaderboard" active={pathname === '/admins/staff/leaderboard'} href="/admins/staff/leaderboard" />
+              <SubNavItem label="Tasks & Events" active={pathname === '/admins/staff/tasks'} href="/admins/staff/tasks" />
             </div>
           </div>
         )}
@@ -131,7 +126,7 @@ const AdminSidebar = () => {
             label="Students"
             collapsed={isCollapsed}
             active={isStudentsPath}
-            onClick={() => navigate('/admins/students/directory')}
+            href="/admins/students/directory"
           />
         ) : (
           <div className={styles.expandableMenuContainer}>
@@ -149,9 +144,9 @@ const AdminSidebar = () => {
             </div>
 
             <div className={`${styles.subItemsContainer} ${isStudentsExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="Directory" active={pathname === '/admins/students/directory'} onClick={() => navigate('/admins/students/directory')} />
-              <SubNavItem label="Attendance" active={pathname === '/admins/students/attendance'} onClick={() => navigate('/admins/students/attendance')} />
-              <SubNavItem label="Performance" active={pathname === '/admins/students/performance'} onClick={() => navigate('/admins/students/performance')} />
+              <SubNavItem label="Directory" active={pathname === '/admins/students/directory'} href="/admins/students/directory" />
+              <SubNavItem label="Attendance" active={pathname === '/admins/students/attendance'} href="/admins/students/attendance" />
+              <SubNavItem label="Performance" active={pathname === '/admins/students/performance'} href="/admins/students/performance" />
             </div>
           </div>
         )}
@@ -162,7 +157,7 @@ const AdminSidebar = () => {
             label="Classes" 
             collapsed={isCollapsed}
             active={isClassesPath} 
-            onClick={() => navigate('/admins/classes/management')} 
+            href="/admins/classes/management"
           />
         ) : (
           <div className={styles.expandableMenuContainer}>
@@ -180,10 +175,48 @@ const AdminSidebar = () => {
             </div>
 
             <div className={`${styles.subItemsContainer} ${isClassesExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="Class" active={pathname === '/admins/classes/management'} onClick={() => navigate('/admins/classes/management')} />
-              <SubNavItem label="Subject" active={pathname === '/admins/classes/subjects'} onClick={() => navigate('/admins/classes/subjects')} />
-              <SubNavItem label="Elections" active={pathname === '/admins/classes/elections'} onClick={() => navigate('/admins/classes/elections')} />
-              <SubNavItem label="Timetable Builder" active={pathname === '/admins/classes/timetable'} onClick={() => navigate('/admins/classes/timetable')} />
+              <SubNavItem label="Class" active={pathname === '/admins/classes/management'} href="/admins/classes/management" />
+              <SubNavItem label="Subject" active={pathname === '/admins/classes/subjects'} href="/admins/classes/subjects" />
+              <SubNavItem label="Elections" active={pathname === '/admins/classes/elections'} href="/admins/classes/elections" />
+              <SubNavItem label="Timetable Builder" active={pathname === '/admins/classes/timetable'} href="/admins/classes/timetable" />
+            </div>
+          </div>
+        )}
+
+        {/* Hostel Section */}
+        {isCollapsed ? (
+          <NavItem 
+            icon={<Bed size={18} />} 
+            label="Hostel" 
+            collapsed={isCollapsed}
+            active={isHostelPath} 
+            href="/admins/hostel/overview"
+          />
+        ) : (
+          <div className={styles.expandableMenuContainer}>
+            <div 
+              onClick={() => setExpandedMenu(expandedMenu === 'Hostel' ? null : 'Hostel')}
+              className={`${styles.expandableMenu} ${isHostelExpanded ? styles.expanded : styles.collapsed}`}
+            >
+              <div className={styles.expandableMenuContent}>
+                <div className={`${styles.expandableMenuIcon} ${isHostelExpanded ? styles.expanded : styles.collapsed}`}>
+                  <Bed size={18} />
+                </div>
+                <span>Hostel</span>
+              </div>
+              <ChevronDown size={14} className={`${styles.expandableChevron} ${isHostelExpanded ? styles.rotated : ''}`} />
+            </div>
+
+            <div className={`${styles.subItemsContainer} ${isHostelExpanded ? styles.expanded : styles.collapsed}`}>
+              <SubNavItem label="Overview" active={pathname === '/admins/hostel/overview'} href="/admins/hostel/overview" />
+              <SubNavItem label="Hostel List" active={pathname === '/admins/hostel/directory'} href="/admins/hostel/directory" />
+              <SubNavItem label="Rooms" active={pathname === '/admins/hostel/rooms'} href="/admins/hostel/rooms" />
+              <SubNavItem label="Allocations" active={pathname === '/admins/hostel/allocations'} href="/admins/hostel/allocations" />
+              <SubNavItem label="Attendance" active={pathname === '/admins/hostel/attendance'} href="/admins/hostel/attendance" />
+              <SubNavItem label="Visitors" active={pathname === '/admins/hostel/visitors'} href="/admins/hostel/visitors" />
+              <SubNavItem label="Mess" active={pathname === '/admins/hostel/mess'} href="/admins/hostel/mess" />
+              <SubNavItem label="Fees" active={pathname === '/admins/hostel/fees'} href="/admins/hostel/fees" />
+              <SubNavItem label="Analytics" active={pathname === '/admins/hostel/analytics'} href="/admins/hostel/analytics" />
             </div>
           </div>
         )}
@@ -192,21 +225,24 @@ const AdminSidebar = () => {
           label="Course Sessions" 
           collapsed={isCollapsed}
           active={pathname === '/admins/sessions'} 
-          onClick={() => { navigate('/admins/sessions'); setExpandedMenu(null); }} 
+          href="/admins/sessions"
+          onClick={() => setExpandedMenu(null)}
         />
         <NavItem 
           icon={<BookOpen size={18} />} 
           label="Admissions" 
           collapsed={isCollapsed}
           active={pathname === '/admins/admissions'} 
-          onClick={() => { navigate('/admins/admissions'); setExpandedMenu(null); }} 
+          href="/admins/admissions"
+          onClick={() => setExpandedMenu(null)}
         />
         <NavItem 
           icon={<FileText size={18} />} 
           label="Examinations" 
           collapsed={isCollapsed}
           active={pathname === '/admins/examinations'} 
-          onClick={() => { navigate('/admins/examinations'); setExpandedMenu(null); }} 
+          href="/admins/examinations"
+          onClick={() => setExpandedMenu(null)}
         />
       </nav>
 
@@ -218,7 +254,7 @@ const AdminSidebar = () => {
           label="Settings" 
           collapsed={isCollapsed} 
           active={pathname === '/admins/settings'}
-          onClick={() => navigate('/admins/settings')}
+          href="/admins/settings"
         />
         <NavItem icon={<HelpCircle size={18} />} label="Support" collapsed={isCollapsed} />
         <NavItem icon={<LogOut size={18} />} label="Log out" collapsed={isCollapsed} onClick={logout} />
@@ -228,68 +264,80 @@ const AdminSidebar = () => {
 };
 
 // Sub-component for Sidebar Links to keep code clean
-const NavItem = ({ icon, label, collapsed = false, active = false, onClick }) => {
-  if (active) {
+const NavItem = ({ icon, label, collapsed = false, active = false, onClick, href }) => {
+  const content = (
+    <>
+      {/* Top Concave Cutout */}
+      {!collapsed && active && (
+        <div className={styles.cutoutTop}>
+          <div className={styles.cutoutTopInner}></div>
+        </div>
+      )}
+      
+      {/* Bottom Concave Cutout */}
+      {!collapsed && active && (
+        <div className={styles.cutoutBottom}>
+          <div className={styles.cutoutBottomInner}></div>
+        </div>
+      )}
+      
+      <div style={{ opacity: active ? 1 : 0.8 }}>{icon}</div>
+      {!collapsed && <span>{label}</span>}
+    </>
+  );
+
+  const className = active 
+    ? `${styles.navItemActive} ${collapsed ? styles.navItemActiveCollapsed : ''}`
+    : `${styles.navItem} ${collapsed ? styles.navItemCollapsed : ''}`;
+
+  if (href) {
     return (
-      <div
-        onClick={onClick}
-        className={`${styles.navItemActive} ${collapsed ? styles.navItemActiveCollapsed : ''}`}
-        title={collapsed ? label : undefined}
-      >
-        {/* Top Concave Cutout */}
-        {!collapsed && (
-          <div className={styles.cutoutTop}>
-            <div className={styles.cutoutTopInner}></div>
-          </div>
-        )}
-        
-        {/* Bottom Concave Cutout */}
-        {!collapsed && (
-          <div className={styles.cutoutBottom}>
-            <div className={styles.cutoutBottomInner}></div>
-          </div>
-        )}
-        
-        {icon}
-        {!collapsed && <span>{label}</span>}
-      </div>
+      <Link href={href} className={className} onClick={onClick} title={collapsed ? label : undefined}>
+        {content}
+      </Link>
     );
   }
-  
+
   return (
-    <div onClick={onClick} className={`${styles.navItem} ${collapsed ? styles.navItemCollapsed : ''}`} title={collapsed ? label : undefined}>
-      <div style={{ opacity: 0.8 }}>{icon}</div>
-      {!collapsed && <span>{label}</span>}
+    <div onClick={onClick} className={className} title={collapsed ? label : undefined}>
+      {content}
     </div>
   );
 };
 
 // Sub-component specifically for Nested Sidebar Links
-const SubNavItem = ({ label, active = false, onClick }) => {
-  if (active) {
+const SubNavItem = ({ label, active = false, onClick, href }) => {
+  const content = (
+    <>
+      {active && (
+        <>
+          <div className={styles.cutoutTop}>
+            <div className={styles.cutoutTopInner}></div>
+          </div>
+          <div className={styles.cutoutBottom}>
+            <div className={styles.cutoutBottomInner}></div>
+          </div>
+        </>
+      )}
+      
+      <div className={active ? styles.bulletActive : styles.bulletInactive}></div>
+      <span>{label}</span>
+    </>
+  );
+
+  const className = active ? styles.subNavItemActive : styles.subNavItem;
+
+  if (href) {
     return (
-      <div onClick={onClick} className={styles.subNavItemActive}>
-        {/* Top Concave Cutout */}
-        <div className={styles.cutoutTop}>
-          <div className={styles.cutoutTopInner}></div>
-        </div>
-        
-        {/* Bottom Concave Cutout */}
-        <div className={styles.cutoutBottom}>
-          <div className={styles.cutoutBottomInner}></div>
-        </div>
-        
-        {/* Bullet point indicator */}
-        <div className={styles.bulletActive}></div>
-        <span>{label}</span>
-      </div>
+      <Link href={href} className={className} onClick={onClick}>
+        {content}
+      </Link>
     );
   }
 
   return (
-    <div onClick={onClick} className={styles.subNavItem}>
-      <div className={styles.bulletInactive}></div>
-      <span>{label}</span>
+    <div onClick={onClick} className={className}>
+      {content}
     </div>
   );
 };

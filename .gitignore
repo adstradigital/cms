@@ -33,6 +33,7 @@ backend/.idea/
 # OS/System
 .DS_Store
 Thumbs.db
+.tmp_*
  .antigravity*
  .gemini*
  .agents*

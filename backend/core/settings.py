@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'apps.staff',
     'apps.elections',
     'apps.events',
+    'apps.canteen',
     'apps.ai_brain',
 ]
 

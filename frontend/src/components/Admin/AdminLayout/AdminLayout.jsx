@@ -82,9 +82,15 @@ export default function AdminLayout({ children }) {
       {/* ─── MAIN CONTENT ─── */}
       <div className={styles.mainContentWrapper}>
         <AdminHeader />
+<<<<<<< HEAD
+        <div className={styles.workspaceBody}>
+          {children}
+        </div>
+=======
         <main style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
           {children}
         </main>
+>>>>>>> 82a6a5ab50965374437b19bbd7229656544e0c87
       </div>
 
       {/* ─── FLOATING WIDGETS ─── */}

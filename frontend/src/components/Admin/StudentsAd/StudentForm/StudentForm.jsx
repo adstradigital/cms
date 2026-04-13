@@ -28,7 +28,7 @@ const createDocumentEntry = () => ({
   title: '',
 });
 
-const StudentForm = ({ onCancel, onSaved, studentId = null }) => {
+const StudentForm = ({ onCancel, onSaved, studentId = null, inquiryId = null }) => {
   const [activeStep, setActiveStep] = useState(1);
   const [grades, setGrades] = useState([]);
   const [sections, setSections] = useState([]);
@@ -225,6 +225,46 @@ const StudentForm = ({ onCancel, onSaved, studentId = null }) => {
 
     fetchStudentForEdit();
   }, [studentId]);
+
+  useEffect(() => {
+    const fetchInquiryForPrefill = async () => {
+      if (!inquiryId || isEditMode) return;
+      setLoading(true);
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/students/admission-inquiries/${inquiryId}/`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+        });
+        if (!res.ok) throw new Error('Failed to load inquiry');
+        const inquiry = await res.json();
+        
+        let firstName = inquiry.student_name;
+        let lastName = '';
+        if (inquiry.student_name && inquiry.student_name.includes(' ')) {
+           const parts = inquiry.student_name.split(' ');
+           firstName = parts[0];
+           lastName = parts.slice(1).join(' ');
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          first_name: firstName || '',
+          last_name: lastName || '',
+          grade: inquiry.class_requested || '',
+          guardian_name: inquiry.guardian_name || '',
+          guardian_phone: inquiry.contact_phone || '',
+          guardian_email: inquiry.contact_email || '',
+          previous_school: inquiry.previous_school || '',
+          health_notes: inquiry.notes || '', // push notes into health/internal notes just in case
+        }));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInquiryForPrefill();
+  }, [inquiryId, isEditMode]);
 
   const handleStepClick = (id) => {
     // Optionally allow jumping to previous steps only

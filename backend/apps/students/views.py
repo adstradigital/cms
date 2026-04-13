@@ -4,11 +4,12 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Class, Section, Student, StudentDocument
 from .serializers import (
     ClassSerializer, SectionSerializer, StudentSerializer, 
-    StudentRegistrationSerializer, StudentDocumentSerializer
+    StudentRegistrationSerializer, StudentDocumentSerializer,
+    AdmissionInquirySerializer
 )
+from .models import Class, Section, Student, StudentDocument, AdmissionInquiry
 from apps.permissions.mixins import RolePermissionMixin
 
 # ─── ViewSets ─────────────────────────────────────────────────────────────────
@@ -265,6 +266,101 @@ class StudentDocumentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(student_id=self.kwargs['student_pk'])
+
+
+class AdmissionInquiryViewSet(RolePermissionMixin, viewsets.ModelViewSet):
+    """
+    Handles CRM functionality for prospective students.
+    Admins can Track, Filter by Status, and Edit inquiries.
+    """
+    required_permission = 'students.view' # or specific admissions permission
+    serializer_class = AdmissionInquirySerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = AdmissionInquiry.objects.select_related("class_requested").all()
+
+        # Filter by school
+        if not user.is_superuser and user.school:
+            qs = qs.filter(school=user.school)
+
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        search_query = self.request.query_params.get("search")
+        if search_query:
+            qs = qs.filter(student_name__icontains=search_query)
+
+        return qs
+
+    def perform_create(self, serializer):
+        school = self.request.user.school
+        if not school and self.request.user.is_superuser:
+            from apps.accounts.models import School
+            school = School.objects.first()
+        serializer.save(school=school)
+
+    @action(detail=True, methods=['POST'], url_path='convert')
+    def convert_to_student(self, request, pk=None):
+        """
+        Converts an AdmissionInquiry into a formal Student.
+        Auto-generates Username, Password, and Admission Number.
+        """
+        import random
+        
+        inquiry = self.get_object()
+        
+        if inquiry.status == 'Enrolled':
+            return Response({"error": "This inquiry has already been converted."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Parse Name
+        names = inquiry.student_name.strip().split()
+        first_name = names[0] if names else 'Unknown'
+        last_name = ' '.join(names[1:]) if len(names) > 1 else ''
+        
+        # Generate credentials
+        rand_id = random.randint(1000, 9999)
+        username = f"{first_name.lower().replace('.', '')}{rand_id}"
+        admission_number = f"ADM-{rand_id}"
+        
+        data = {
+            'first_name': first_name,
+            'last_name': last_name,
+            'username': username,
+            'password': 'Student@123',
+            'admission_number': admission_number,
+            'guardian_name': inquiry.guardian_name,
+            'guardian_phone': inquiry.contact_phone,
+            'parent_email': inquiry.contact_email,
+            'previous_school': inquiry.previous_school,
+            'health_notes': inquiry.notes,
+        }
+        
+        serializer = StudentRegistrationSerializer(data=data, context={'request': request})
+        if serializer.is_valid():
+            try:
+                from django.db import transaction
+                with transaction.atomic():
+                    student = serializer.save()
+                    # Link to school
+                    student.user.school = inquiry.school
+                    student.user.save()
+                    
+                    # Update inquiry status automatically
+                    inquiry.status = 'Enrolled'
+                    inquiry.save()
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                
+            return Response({
+                "success": True, 
+                "student_id": student.id, 
+                "username": username,
+                "admission_number": admission_number
+            }, status=status.HTTP_200_OK)
+            
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ─── Function Based Views (Refactored/Legacy) ─────────────────────────────────

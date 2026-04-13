@@ -5,13 +5,15 @@ from django.db.models import Sum, Avg
 from .models import (
     FoodItem, DailyMenu, CanteenComplaint, CanteenSupplier, 
     CanteenInventoryItem, CanteenInventoryLog, CanteenWastageLog, 
-    CanteenConsumptionLog, FoodCategory, CanteenOrder
+    CanteenConsumptionLog, FoodCategory, CanteenOrder,
+    CanteenIngredient, CanteenDish, CanteenCombo
 )
 from .serializers import (
     FoodItemSerializer, DailyMenuSerializer, CanteenComplaintSerializer, 
     CanteenSupplierSerializer, CanteenInventoryItemSerializer, 
     CanteenInventoryLogSerializer, CanteenWastageLogSerializer, 
-    CanteenConsumptionLogSerializer, FoodCategorySerializer, CanteenOrderSerializer
+    CanteenConsumptionLogSerializer, FoodCategorySerializer, CanteenOrderSerializer,
+    CanteenIngredientSerializer, CanteenDishSerializer, CanteenComboSerializer
 )
 
 class FoodCategoryViewSet(viewsets.ModelViewSet):
@@ -31,6 +33,18 @@ class FoodItemViewSet(viewsets.ModelViewSet):
 class DailyMenuViewSet(viewsets.ModelViewSet):
     queryset = DailyMenu.objects.all()
     serializer_class = DailyMenuSerializer
+
+class CanteenIngredientViewSet(viewsets.ModelViewSet):
+    queryset = CanteenIngredient.objects.all()
+    serializer_class = CanteenIngredientSerializer
+
+class CanteenDishViewSet(viewsets.ModelViewSet):
+    queryset = CanteenDish.objects.all()
+    serializer_class = CanteenDishSerializer
+
+class CanteenComboViewSet(viewsets.ModelViewSet):
+    queryset = CanteenCombo.objects.all()
+    serializer_class = CanteenComboSerializer
 
 class CanteenComplaintViewSet(viewsets.ModelViewSet):
     queryset = CanteenComplaint.objects.all()

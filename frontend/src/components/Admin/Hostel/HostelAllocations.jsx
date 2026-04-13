@@ -8,6 +8,7 @@ import {
   LogOut,
   Clock,
   ExternalLink,
+  Edit,
   X,
   Loader2,
   Wand2,
@@ -65,20 +66,26 @@ const HostelAllocations = () => {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterHostel, setFilterHostel] = useState('');
+  const [filterRoom, setFilterRoom] = useState('');
   const [isAllocateModalOpen, setIsAllocateModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [allocateMode, setAllocateMode] = useState('manual');
   const [manualForm, setManualForm] = useState(DEFAULT_MANUAL_FORM);
   const [autoForm, setAutoForm] = useState(DEFAULT_AUTO_FORM);
+  const [transferForm, setTransferForm] = useState({ student: '', hostel: '', to_room: '', reason: '' });
+  const [viewingAllotment, setViewingAllotment] = useState(null);
+  const [editingAllotment, setEditingAllotment] = useState(null);
 
   useEffect(() => {
     fetchAllocations();
   }, []);
 
   useEffect(() => {
-    if (isAllocateModalOpen) {
+    if (isAllocateModalOpen || isTransferModalOpen) {
       fetchAllocationLookups();
     }
-  }, [isAllocateModalOpen]);
+  }, [isAllocateModalOpen, isTransferModalOpen]);
 
   useEffect(() => {
     if (!manualForm.room) return;
@@ -123,7 +130,7 @@ const HostelAllocations = () => {
       const [hostelsRes, roomsRes, studentsRes, activeAllotmentsRes] = await Promise.all([
         hostelApi.getHostels(),
         hostelApi.getRooms({ status: 'available' }),
-        instance.get('/students/students/', { params: { is_active: 'true' } }),
+        instance.get('/students/students/', { params: { is_active: 'true', paginate: 'false' } }),
         hostelApi.getAllotments({ active: 'true' }),
       ]);
       const activeAllotments = normalizeListPayload(activeAllotmentsRes.data);
@@ -170,6 +177,16 @@ const HostelAllocations = () => {
     setIsAllocateModalOpen(false);
   };
 
+  const handleOpenTransferModal = () => {
+    setTransferForm({ student: '', hostel: '', to_room: '', reason: '' });
+    setIsTransferModalOpen(true);
+  };
+
+  const handleCloseTransferModal = () => {
+    if (submitting) return;
+    setIsTransferModalOpen(false);
+  };
+
   const activeAllotmentStudentIds = useMemo(
     () => new Set(activeAllotmentStudents.map((studentId) => String(studentId))),
     [activeAllotmentStudents]
@@ -203,10 +220,42 @@ const HostelAllocations = () => {
     [availableRooms, manualForm.hostel]
   );
 
+  const transferRoomOptions = useMemo(
+    () =>
+      availableRooms.filter(
+        (room) => !transferForm.hostel || String(room.hostel) === String(transferForm.hostel)
+      ),
+    [availableRooms, transferForm.hostel]
+  );
+
+  const filterHostelOptions = useMemo(() => {
+    const unique = new Map();
+    allocations.forEach((item) => {
+      if (item.hostel_name && item.hostel_id) {
+        unique.set(String(item.hostel_id), item.hostel_name);
+      }
+    });
+    return Array.from(unique.entries()).map(([id, name]) => ({ id, name }));
+  }, [allocations]);
+
+  const filterRoomOptions = useMemo(() => {
+    const unique = new Map();
+    allocations.forEach((item) => {
+      if (item.room_number && item.room && (!filterHostel || String(item.hostel_id) === String(filterHostel))) {
+        unique.set(String(item.room), item.room_number);
+      }
+    });
+    return Array.from(unique.entries()).map(([id, number]) => ({ id, number }));
+  }, [allocations, filterHostel]);
+
   const filteredAllocations = useMemo(() => {
+    let result = allocations;
+    if (filterHostel) result = result.filter((item) => String(item.hostel_id) === String(filterHostel));
+    if (filterRoom) result = result.filter((item) => String(item.room) === String(filterRoom));
+
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return allocations;
-    return allocations.filter((item) => {
+    if (!query) return result;
+    return result.filter((item) => {
       const haystack = [
         item.student_name,
         item.student_admission,
@@ -218,7 +267,7 @@ const HostelAllocations = () => {
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [allocations, searchTerm]);
+  }, [allocations, searchTerm, filterHostel, filterRoom]);
 
   const handleManualAllocate = async (event) => {
     event.preventDefault();
@@ -249,6 +298,48 @@ const HostelAllocations = () => {
         fetchAllocationLookups();
         setManualForm((prev) => ({ ...prev, student: '' }));
       }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleTransferSubmit = async (event) => {
+    event.preventDefault();
+    if (!transferForm.student || !transferForm.to_room) {
+      alert('Please select both student and destination room.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await hostelApi.createTransfer({
+        student: Number(transferForm.student),
+        to_room: Number(transferForm.to_room),
+        reason: transferForm.reason?.trim() || '',
+      });
+      alert('Student transferred successfully.');
+      setIsTransferModalOpen(false);
+      fetchAllocations();
+    } catch (err) {
+      const message = getApiErrorMessage(err, 'Transfer failed.');
+      alert(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit = async (event) => {
+    event.preventDefault();
+    if (!editingAllotment) return;
+    setSubmitting(true);
+    try {
+      await hostelApi.updateAllotment(editingAllotment.id, {
+        remarks: editingAllotment.remarks || '',
+      });
+      alert('Allotment updated successfully.');
+      setEditingAllotment(null);
+      fetchAllocations();
+    } catch (err) {
+      alert(getApiErrorMessage(err, 'Failed to update allotment.'));
     } finally {
       setSubmitting(false);
     }
@@ -305,18 +396,43 @@ const HostelAllocations = () => {
   return (
     <div className={styles.tabContent}>
       <div className={styles.filterBar}>
-        <div className={styles.searchWrapper}>
-          <Search size={18} />
-          <input 
-            type="text" 
-            placeholder="Search student or admission number..." 
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
+          <div className={styles.searchWrapper} style={{ minWidth: '250px' }}>
+            <Search size={18} />
+            <input 
+              type="text" 
+              placeholder="Search student or admission number..." 
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </div>
+          
+          <select
+            className={styles.formControl}
+            style={{ width: '180px' }}
+            value={filterHostel}
+            onChange={(e) => {
+              setFilterHostel(e.target.value);
+              setFilterRoom('');
+            }}
+          >
+            <option value="">All Hostels</option>
+            {filterHostelOptions.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+
+          <select
+            className={styles.formControl}
+            style={{ width: '150px' }}
+            value={filterRoom}
+            onChange={(e) => setFilterRoom(e.target.value)}
+          >
+            <option value="">All Rooms</option>
+            {filterRoomOptions.map(r => <option key={r.id} value={r.id}>Room {r.number}</option>)}
+          </select>
         </div>
         
         <div style={{ display: 'flex', gap: '12px' }}>
-            <button className={styles.btnSecondary}>
+            <button className={styles.btnSecondary} onClick={handleOpenTransferModal}>
               <ArrowRightLeft size={18} />
               Transfer Student
             </button>
@@ -383,6 +499,7 @@ const HostelAllocations = () => {
                     <button 
                       className={styles.btnIcon}
                       title="Details"
+                      onClick={() => setViewingAllotment(item)}
                     >
                       <ExternalLink size={16} />
                     </button>
@@ -668,6 +785,200 @@ const HostelAllocations = () => {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {isTransferModalOpen && (
+        <div className={styles.modalBackdrop} onClick={handleCloseTransferModal}>
+          <div
+            className={styles.modalContent}
+            style={{ width: 'min(760px, 96vw)' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>Transfer Student</h2>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={handleCloseTransferModal}
+                aria-label="Close transfer modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {lookupLoading ? (
+              <div style={{ padding: '36px 0', textAlign: 'center', color: '#475569' }}>
+                <Loader2 size={20} className="animate-spin" style={{ margin: '0 auto 10px' }} />
+                Loading assignments and room data...
+              </div>
+            ) : (
+              <form className={styles.modalForm} onSubmit={handleTransferSubmit}>
+                <div className={styles.formGrid}>
+                  <div className={styles.formGroup}>
+                    <label>Student to Transfer</label>
+                    <select
+                      required
+                      className={styles.formControl}
+                      value={transferForm.student}
+                      onChange={(event) =>
+                        setTransferForm((prev) => ({ ...prev, student: event.target.value }))
+                      }
+                    >
+                      <option value="">Select Actively Allotted Student</option>
+                      {allocations.map((alloc) => (
+                        <option key={alloc.student} value={alloc.student}>
+                          {`${alloc.student_name} (${alloc.student_admission}) - Currently in ${alloc.hostel_name} Room ${alloc.room_number}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>Destination Hostel (Optional Filter)</label>
+                    <select
+                      className={styles.formControl}
+                      value={transferForm.hostel}
+                      onChange={(event) =>
+                        setTransferForm((prev) => ({
+                          ...prev,
+                          hostel: event.target.value,
+                          to_room: ''
+                        }))
+                      }
+                    >
+                      <option value="">All Hostels</option>
+                      {hostels.map((hostel) => (
+                        <option key={hostel.id} value={hostel.id}>
+                          {hostel.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+                    <label>Destination Room</label>
+                    <select
+                      required
+                      className={styles.formControl}
+                      value={transferForm.to_room}
+                      onChange={(event) =>
+                        setTransferForm((prev) => ({ ...prev, to_room: event.target.value }))
+                      }
+                    >
+                      <option value="">Select New Available Room</option>
+                      {transferRoomOptions.map((room) => (
+                        <option key={room.id} value={room.id}>
+                          {`${room.hostel_name} | Room ${room.room_number} | Floor ${room.floor_number} | ${room.available_beds} beds left`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+                    <label>Transfer Reason</label>
+                    <textarea
+                      required
+                      className={styles.formControl}
+                      placeholder="Reason for transferring the student..."
+                      value={transferForm.reason}
+                      onChange={(event) =>
+                        setTransferForm((prev) => ({ ...prev, reason: event.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.modalActions}>
+                  <button type="button" className={styles.btnSecondary} onClick={handleCloseTransferModal}>
+                    Cancel
+                  </button>
+                  <button type="submit" className={styles.btnPrimary} disabled={submitting}>
+                    {submitting ? <Loader2 className="animate-spin" size={16} /> : 'Transfer Student'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {viewingAllotment && (
+        <div className={styles.modalBackdrop} onClick={() => setViewingAllotment(null)}>
+          <div
+            className={styles.modalContent}
+            style={{ width: 'min(500px, 96vw)' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>Allocation Details</h2>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setViewingAllotment(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: '#334155', fontSize: '14px' }}>
+              <div><strong>Student Name:</strong> {viewingAllotment.student_name}</div>
+              <div><strong>Admission Number:</strong> {viewingAllotment.student_admission || 'N/A'}</div>
+              <div><strong>Hostel:</strong> {viewingAllotment.hostel_name}</div>
+              <div><strong>Floor:</strong> Floor {viewingAllotment.floor_number}</div>
+              <div><strong>Room Number:</strong> {viewingAllotment.room_number}</div>
+              <div><strong>Allotted By:</strong> {viewingAllotment.allotted_by_name || 'System/Admin'}</div>
+              <div><strong>Allotted Date:</strong> {new Date(viewingAllotment.join_date).toLocaleDateString()}</div>
+              <div><strong>Remarks:</strong> {viewingAllotment.remarks || 'None'}</div>
+            </div>
+            <div className={styles.modalActions} style={{ marginTop: '24px' }}>
+              <button type="button" className={styles.btnPrimary} onClick={() => setViewingAllotment(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingAllotment && (
+        <div className={styles.modalBackdrop} onClick={() => !submitting && setEditingAllotment(null)}>
+          <div
+            className={styles.modalContent}
+            style={{ width: 'min(500px, 96vw)' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>Edit Remarks</h2>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setEditingAllotment(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form className={styles.modalForm} onSubmit={handleEditSubmit}>
+              <div className={styles.formGroup}>
+                <label>Remarks</label>
+                <textarea
+                  className={styles.formControl}
+                  placeholder="Any special note for this allotment..."
+                  value={editingAllotment.remarks || ''}
+                  onChange={(event) =>
+                    setEditingAllotment((prev) => ({ ...prev, remarks: event.target.value }))
+                  }
+                  rows={4}
+                />
+              </div>
+              <div className={styles.modalActions}>
+                <button type="button" className={styles.btnSecondary} onClick={() => setEditingAllotment(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className={styles.btnPrimary} disabled={submitting}>
+                  {submitting ? <Loader2 className="animate-spin" size={16} /> : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

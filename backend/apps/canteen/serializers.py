@@ -2,7 +2,8 @@ from rest_framework import serializers
 from .models import (
     FoodItem, DailyMenu, CanteenComplaint, CanteenSupplier, 
     CanteenInventoryItem, CanteenInventoryLog, CanteenWastageLog, 
-    CanteenConsumptionLog, FoodCategory, CanteenOrder
+    CanteenConsumptionLog, FoodCategory, CanteenOrder,
+    CanteenIngredient, CanteenDish, CanteenCombo
 )
 
 class FoodCategorySerializer(serializers.ModelSerializer):
@@ -15,8 +16,21 @@ class FoodItemSerializer(serializers.ModelSerializer):
         model = FoodItem
         fields = "__all__"
 
+class CanteenIngredientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CanteenIngredient
+        fields = "__all__"
+
+class CanteenDishSerializer(serializers.ModelSerializer):
+    ingredients_detail = CanteenIngredientSerializer(source="ingredients", many=True, read_only=True)
+    
+    class Meta:
+        model = CanteenDish
+        fields = "__all__"
+
 class DailyMenuSerializer(serializers.ModelSerializer):
-    items_detail = FoodItemSerializer(source="items", many=True, read_only=True)
+    dishes_detail = CanteenDishSerializer(source="dishes", many=True, read_only=True)
+    ingredients_detail = CanteenIngredientSerializer(source="ingredients", many=True, read_only=True)
     
     class Meta:
         model = DailyMenu
@@ -57,6 +71,14 @@ class CanteenConsumptionLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = CanteenConsumptionLog
         fields = "__all__"
+
+class CanteenComboSerializer(serializers.ModelSerializer):
+    dishes_detail = CanteenDishSerializer(source="dishes", many=True, read_only=True)
+
+    class Meta:
+        model = CanteenCombo
+        fields = "__all__"
+
 
 class CanteenOrderSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)

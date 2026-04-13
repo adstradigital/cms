@@ -56,12 +56,15 @@ export function AuthProvider({ children }) {
     }
   };
 
+
   const login = async (credentials) => {
     const res = await authApi.login(credentials);
+    const userData = res.data.user;
+
     localStorage.setItem('access_token', res.data.access);
     localStorage.setItem('refresh_token', res.data.refresh);
-    setUser(res.data.user);
-    router.push(getDashboardRoute(res.data.user));
+    setUser(userData);
+    router.push(getDashboardRoute(userData));
   };
 
   const logout = async () => {

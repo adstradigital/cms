@@ -23,7 +23,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    const fetchStudents = async () => {
+    const fetchFilterOptions = async () => {
       try {
         setLoading(true);
         const collected = [];
@@ -119,11 +119,11 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
 
   return (
     <div className={styles.listContainer}>
-      
+
       {/* Table Header Controls */}
       <div className={styles.listHeader}>
         <h2 className={styles.headerTitle}>Student Directory</h2>
-        
+
         <div className={styles.headerControls}>
           <div className={styles.searchWrap}>
             <Search size={16} className={styles.searchIcon} />
@@ -186,7 +186,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
             <tr>
               <th>Student Name</th>
               <th>Roll / ID</th>
-              <th>Class & Section</th>
+              <th>Class &amp; Section</th>
               <th>Primary Contact</th>
               <th>Status</th>
               <th className={styles.thRight}>Actions</th>
@@ -278,7 +278,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
           </tbody>
         </table>
       </div>
-      
+
       {/* Pagination Footer */}
       <div className={styles.footer}>
         <span>Showing {startEntry}-{endEntry} of {filteredStudents.length} entries</span>

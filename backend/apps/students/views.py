@@ -1,5 +1,5 @@
-from django.db.models import Count
-from rest_framework import status, viewsets
+from django.db.models import Count, Q
+from rest_framework import status, viewsets, filters
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -23,12 +23,24 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
     """
     required_permission = 'students.view'
     serializer_class = StudentSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = [
+        'user__first_name', 'user__last_name',
+        'admission_number', 'roll_number',
+        'user__profile__father_name', 'user__profile__mother_name',
+        'user__profile__parent_phone',
+    ]
     
     
     def get_serializer_class(self):
         if self.action in ['create', 'partial_update', 'update']:
             return StudentRegistrationSerializer
         return StudentSerializer
+
+    def paginate_queryset(self, queryset):
+        if self.request.query_params.get('paginate', '').lower() == 'false':
+            return None
+        return super().paginate_queryset(queryset)
 
     def get_queryset(self):
         user = self.request.user

@@ -18,9 +18,9 @@ import { useAuth } from '@/context/AuthContext';
 import styles from './Login.module.css';
 
 const Login = ({
-  role = 'student',
-  title = 'Student Portal',
-  subtitle = 'Please sign in to continue.',
+  role: activeRole = 'student',
+  title: initialTitle = 'Student Portal',
+  subtitle: initialSubtitle = 'Please sign in to continue.',
   brandingTitle = 'Campus\nManagement\nSystem',
   brandingSubtitle = 'Welcome to the student portal. Access your academic dashboard and attendance.',
 }) => {
@@ -32,14 +32,49 @@ const Login = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Dynamic content based on portal
+  const portalConfig = {
+    student: {
+      title: 'Student Portal',
+      subtitle: 'Please sign in to continue.',
+      label: 'Student ID',
+      placeholder: 'Enter your Roll Number or ID',
+      btnText: 'Sign In to Student Portal'
+    },
+    admin: {
+      title: 'Admin Console',
+      subtitle: 'Secure access for administrators.',
+      label: 'Admin Username',
+      placeholder: 'Enter admin username',
+      btnText: 'Sign In to Admin Console'
+    },
+    staff: {
+      title: 'Staff Portal',
+      subtitle: 'Authorized personnel only.',
+      label: 'Staff Username',
+      placeholder: 'Enter staff username',
+      btnText: 'Sign In to Staff Portal'
+    },
+    parent: {
+      title: 'Parent Portal',
+      subtitle: 'Access your ward\'s academic progress.',
+      label: 'Parent Email / ID',
+      placeholder: 'Enter your Parent ID',
+      btnText: 'Sign In to Parent Portal'
+    }
+  };
+
+  const currentConfig = portalConfig[activeRole] || portalConfig.student;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      await login({ username, password, role: role });
+      await login({ username, password, role: activeRole });
     } catch (err) {
       setError(
+        err.message ||
         err.response?.data?.error ||
         err.response?.data?.detail ||
         'Login failed. Please check your credentials.'
@@ -48,6 +83,7 @@ const Login = ({
       setLoading(false);
     }
   };
+
 
   return (
     <div className={styles.pageWrapper}>
@@ -67,10 +103,12 @@ const Login = ({
             </div>
 
             <h1 className={styles.brandTitle} style={{ whiteSpace: 'pre-line' }}>
-              {brandingTitle}
+              {activeRole === 'admin' ? 'Admin\nManagement\nConsole' : brandingTitle}
             </h1>
             <p className={styles.brandSubtitle}>
-              {brandingSubtitle}
+              {activeRole === 'admin' 
+                ? 'Comprehensive tools for campus administration, staff management, and system configuration.'
+                : brandingSubtitle}
             </p>
           </div>
 
@@ -85,43 +123,11 @@ const Login = ({
         {/* ─── RIGHT: Login Form ──────────────────────────────────── */}
         <div className={styles.formPanel}>
 
-          {/* Top-right icons */}
-          <div className={styles.topIcons}>
-            <button type="button" title="System Diagnostic Tools" className={styles.iconBtn}>
-              <Wrench size={18} />
-            </button>
-            <button type="button" title="Settings" className={styles.iconBtn}>
-              <Settings size={18} />
-            </button>
-          </div>
-
-          {/* Mobile logo */}
-          <div className={styles.mobileLogo}>
-            <BookOpen size={28} />
-            <span className={styles.mobileLogoText}>CMS</span>
-          </div>
 
           {/* Welcome */}
           <div className={styles.welcomeBlock}>
-            {role === 'staff' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <span style={{ 
-                  background: 'rgba(14, 165, 233, 0.1)', 
-                  color: '#0ea5e9', 
-                  padding: '4px 10px', 
-                  borderRadius: '20px', 
-                  fontSize: '11px', 
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
-                  <Briefcase size={12} /> Staff / Admin
-                </span>
-              </div>
-            )}
-            <h2 className={styles.welcomeTitle}>{title}</h2>
-            <p className={styles.welcomeSubtitle}>{subtitle}</p>
+            <h2 className={styles.welcomeTitle}>{currentConfig.title}</h2>
+            <p className={styles.welcomeSubtitle}>{currentConfig.subtitle}</p>
           </div>
 
           {/* Error */}
@@ -142,7 +148,7 @@ const Login = ({
             {/* Username */}
             <div className={styles.fieldGroup}>
               <label className={styles.fieldLabel} htmlFor="username">
-                {role === 'student' ? 'Student ID' : role === 'parent' ? 'Parent Email / ID' : 'Staff Username'}
+                {currentConfig.label}
               </label>
               <div className={styles.inputWrap}>
                 <input
@@ -151,13 +157,7 @@ const Login = ({
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className={styles.input}
-                  placeholder={
-                    role === 'student' 
-                      ? 'Enter your Roll Number or ID' 
-                      : role === 'parent' 
-                        ? 'Enter your Parent ID' 
-                        : 'Enter your staff username'
-                  }
+                  placeholder={currentConfig.placeholder}
                   required
                 />
                 <span className={styles.inputIcon}><User size={18} /></span>
@@ -205,7 +205,7 @@ const Login = ({
                   Authenticating...
                 </>
               ) : (
-                `Sign In to ${role.charAt(0).toUpperCase() + role.slice(1)} Portal`
+                currentConfig.btnText
               )}
             </button>
 

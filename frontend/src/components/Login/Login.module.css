@@ -308,7 +308,8 @@
   margin: 0;
 }
 
-/* ─── Role Selector ────────────────────────────────────────────────────── */
+
+/* ─── Role Selector (Legacy/Others) ────────────────────────────────────── */
 .roleSelector {
   display: flex;
   padding: var(--space-1);

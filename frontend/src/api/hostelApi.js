@@ -26,6 +26,7 @@ const hostelApi = {
   getAllotments: (params) => instance.get('/hostel/allotments/', { params }),
   getAllotmentDetail: (id) => instance.get(`/hostel/allotments/${id}/`),
   createAllotment: (data) => instance.post('/hostel/allotments/', data),
+  updateAllotment: (id, data) => instance.patch(`/hostel/allotments/${id}/`, data),
   vacateStudent: (id) => instance.post(`/hostel/allotments/${id}/vacate/`),
   autoAssign: (data) => instance.post('/hostel/allotments/auto-assign/', data),
 
@@ -65,6 +66,8 @@ const hostelApi = {
   // Mess
   getMessMenus: (params) => instance.get('/hostel/mess/menus/', { params }),
   createMessMenu: (data) => instance.post('/hostel/mess/menus/', data),
+  updateMessMenu: (id, data) => instance.put(`/hostel/mess/menus/${id}/`, data),
+  bulkSaveMessMenu: (data) => instance.post('/hostel/mess/menus/bulk/', data),
   getMessAttendance: (params) => instance.get('/hostel/mess/attendance/', { params }),
   markMessAttendance: (data) => instance.post('/hostel/mess/attendance/', data),
   getMessDietProfiles: (params) => instance.get('/hostel/mess/diet-profiles/', { params }),

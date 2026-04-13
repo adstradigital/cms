@@ -143,19 +143,26 @@ const StudentForm = ({ onCancel, onSaved, studentId = null }) => {
         setGrades(data);
       } catch (err) { console.error(err); }
     };
+    fetchGrades();
+  }, []);
 
+  // Fetch sections when grade changes
+  useEffect(() => {
     const fetchSections = async () => {
+      if (!formData.grade) {
+        setSections([]);
+        return;
+      }
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/students/sections/', {
+        const res = await fetch(`http://127.0.0.1:8000/api/students/sections/?class=${formData.grade}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         const data = await res.json();
         setSections(data);
       } catch (err) { console.error(err); }
     };
-    fetchGrades();
     fetchSections();
-  }, []);
+  }, [formData.grade]);
 
   useEffect(() => {
     const fetchStudentForEdit = async () => {
@@ -321,7 +328,9 @@ const StudentForm = ({ onCancel, onSaved, studentId = null }) => {
                   name="grade"
                   className={styles.formSelect} 
                   value={formData.grade}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, grade: e.target.value, section: '' }));
+                  }}
                 >
                   <option value="">Select Grade</option>
                   {grades.map(g => (

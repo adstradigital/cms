@@ -45,6 +45,8 @@ urlpatterns = [
 
     # Mess
     path("mess/menus/", views.mess_menu_list_view, name="mess-menu-list"),
+    path("mess/menus/<int:pk>/", views.mess_menu_detail_view, name="mess-menu-detail"),
+    path("mess/menus/bulk/", views.mess_menu_bulk_upsert_view, name="mess-menu-bulk"),
     path("mess/attendance/", views.mess_attendance_list_view, name="mess-attendance-list"),
     path("mess/diet-profiles/", views.mess_diet_profile_list_view, name="mess-diet-profile-list"),
     path("mess/feedback/", views.mess_feedback_list_view, name="mess-feedback-list"),

@@ -133,15 +133,25 @@ class StudentRegistrationSerializer(serializers.Serializer):
             'username': validated_data.pop('username'),
             'first_name': validated_data.pop('first_name'),
             'last_name': validated_data.pop('last_name'),
-            'email': validated_data.get('email', ''),
-            'phone': validated_data.get('phone', ''),
+            'email': validated_data.pop('email', ''),
+            'phone': validated_data.pop('phone', ''),
         }
         password = validated_data.pop('password')
         
         # Assign Student Role
         student_role, _ = Role.objects.get_or_create(name="student")
+
+        # Derive school from section (ground truth), fallback to requesting user's school
+        section = validated_data.get('section')
+        school = None
+        if section and section.school_class and section.school_class.school:
+            school = section.school_class.school
+        if not school:
+            request = self.context.get('request')
+            if request and hasattr(request.user, 'school'):
+                school = request.user.school
         
-        user = User.objects.create(**user_data)
+        user = User.objects.create(**user_data, portal=User.PORTAL_STUDENT, school=school)
         user.set_password(password)
         user.role = student_role
         user.save()

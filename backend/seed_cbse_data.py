@@ -123,15 +123,21 @@ def seed_data():
     print(f"  [+] Seeded {sub_count} Subjects across classes.")
 
     # 5. Staff
-    staff_roles = [
-        ("principal_user", "Principal", "principal@mycbseschool.edu", "Dr. Rajesh Kumar"),
-        ("admin_user", "Administrator", "admin@mycbseschool.edu", "Mr. Amit Sharma"),
-        ("teacher_sci", "Senior Teacher", "teacher.sci@mycbseschool.edu", "Ms. Sunita Gupta"),
-        ("teacher_com", "Senior Teacher", "teacher.com@mycbseschool.edu", "Mr. Vijay Singh"),
+    staff_roles_data = [
+        ("principal_user", "Principal", "principal@mycbseschool.edu", "Dr. Rajesh Kumar", "Principal"),
+        ("admin_user", "Administrator", "admin@mycbseschool.edu", "Mr. Amit Sharma", "Admin"),
+        ("teacher_sci", "Senior Teacher", "teacher.sci@mycbseschool.edu", "Ms. Sunita Gupta", "Subject Teacher"),
+        ("teacher_com", "Senior Teacher", "teacher.com@mycbseschool.edu", "Mr. Vijay Singh", "Subject Teacher"),
     ]
 
-    for username, design, email, full_name in staff_roles:
+    from apps.permissions.models import Role
+    
+    for username, design, email, full_name, role_name in staff_roles_data:
         first_name, last_name = full_name.split(" ", 1)
+        
+        # Get role object
+        role_obj = Role.objects.filter(name=role_name).first()
+        
         user, created = User.objects.get_or_create(
             username=username,
             defaults={
@@ -140,10 +146,17 @@ def seed_data():
                 'last_name': last_name,
                 'password': make_password('Pass@123'),
                 'school': school,
-                'portal': User.PORTAL_ADMIN
+                'portal': User.PORTAL_ADMIN,
+                'role': role_obj
             }
         )
-        if created:
+        # Force update role/portal for existing users if seeded again
+        if not created:
+            user.role = role_obj
+            user.portal = User.PORTAL_ADMIN
+            user.save(update_fields=['role', 'portal'])
+
+        if created or not hasattr(user, 'staff'):
             # Create Staff Profile
             staff = Staff.objects.create(
                 user=user,
@@ -153,8 +166,8 @@ def seed_data():
                 is_teaching_staff=(design != "Administrator")
             )
             if staff.is_teaching_staff:
-                TeacherDetail.objects.create(staff=staff, specialization="General")
-            print(f"  [+] Created Staff: {full_name}")
+                TeacherDetail.objects.get_or_create(staff=staff, defaults={'specialization': "General"})
+            print(f"  [+] Seeded Staff: {full_name} (Role: {role_name})")
 
     # 6. Students (Sample)
     for cls_name, section in sections_map.items():

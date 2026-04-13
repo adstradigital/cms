@@ -196,32 +196,20 @@ const RoomModal = ({ isOpen, onClose, onSave, initialData }) => {
               </select>
             </div>
             <div className={styles.formGroup}>
-              <label>AC Type</label>
-              <select 
-                className={styles.formControl}
-                value={formData.ac_type}
-                onChange={(e) => setFormData({...formData, ac_type: e.target.value})}
-              >
-                <option value="non_ac">Non-AC</option>
-                <option value="ac">AC</option>
-              </select>
+              <label>Monthly Rent (৳)</label>
+              <input 
+                type="number" 
+                className={styles.formControl} 
+                value={formData.monthly_rent}
+                onChange={(e) => {
+                  const rawValue = e.target.value;
+                  setFormData({
+                    ...formData,
+                    monthly_rent: rawValue === '' ? '' : parseFloat(rawValue)
+                  });
+                }}
+              />
             </div>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Monthly Rent (৳)</label>
-            <input 
-              type="number" 
-              className={styles.formControl} 
-              value={formData.monthly_rent}
-              onChange={(e) => {
-                const rawValue = e.target.value;
-                setFormData({
-                  ...formData,
-                  monthly_rent: rawValue === '' ? '' : parseFloat(rawValue)
-                });
-              }}
-            />
           </div>
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>

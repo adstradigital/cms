@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import styles from './HostelModule.module.css';
 import hostelApi from '@/api/hostelApi';
-import instance from '@/api/instance';
 
 const DEFAULT_FORM = {
   student: '',
@@ -68,16 +67,40 @@ const getApiErrorMessage = (error, fallbackMessage) => {
 const HostelVisitors = () => {
   const [visitors, setVisitors] = useState([]);
   const [students, setStudents] = useState([]);
+  const [hostels, setHostels] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterHostel, setFilterHostel] = useState('');
+  const [filterRoom, setFilterRoom] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState(DEFAULT_FORM);
 
   useEffect(() => {
     fetchVisitors();
+    fetchHostels();
+    fetchRooms();
   }, []);
+
+  const fetchHostels = async () => {
+    try {
+      const res = await hostelApi.getHostels();
+      setHostels(normalizeListPayload(res.data));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchRooms = async () => {
+    try {
+      const res = await hostelApi.getRooms();
+      setRooms(normalizeListPayload(res.data));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchVisitors = async () => {
     setLoading(true);
@@ -95,12 +118,22 @@ const HostelVisitors = () => {
   const fetchStudents = async () => {
     setLookupLoading(true);
     try {
-      const res = await instance.get('/students/students/', { params: { is_active: 'true' } });
-      setStudents(normalizeListPayload(res.data));
+      // Only show students who have an active hostel allotment
+      const res = await hostelApi.getAllotments({ active: 'true' });
+      const allotments = normalizeListPayload(res.data);
+      // Map allotment records to a student-like shape expected by the form
+      const allocatedStudents = allotments.map((a) => ({
+        id: a.student,
+        admission_number: a.student_admission,
+        user: { first_name: a.student_name, last_name: '' },
+        hostel_name: a.hostel_name,
+        room_number: a.room_number,
+      }));
+      setStudents(allocatedStudents);
     } catch (err) {
       console.error(err);
       setStudents([]);
-      alert(getApiErrorMessage(err, 'Failed to load student list.'));
+      alert(getApiErrorMessage(err, 'Failed to load allocated student list.'));
     } finally {
       setLookupLoading(false);
     }
@@ -178,10 +211,24 @@ const HostelVisitors = () => {
     }
   };
 
+  const filterHostelOptions = useMemo(() => {
+    return hostels.map(h => ({ id: h.id, name: h.name }));
+  }, [hostels]);
+
+  const filterRoomOptions = useMemo(() => {
+    return rooms
+      .filter(r => !filterHostel || String(r.hostel) === String(filterHostel))
+      .map(r => ({ id: r.id, number: r.room_number }));
+  }, [rooms, filterHostel]);
+
   const filteredVisitors = useMemo(() => {
+    let result = visitors;
+    if (filterHostel) result = result.filter((item) => String(item.hostel_id) === String(filterHostel));
+    if (filterRoom) result = result.filter((item) => String(item.room_id) === String(filterRoom));
+
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return visitors;
-    return visitors.filter((item) => {
+    if (!query) return result;
+    return result.filter((item) => {
       const haystack = [
         item.visitor_name,
         item.visitor_phone,
@@ -189,13 +236,15 @@ const HostelVisitors = () => {
         item.student_admission,
         item.relation,
         item.approval_status,
+        item.hostel_name,
+        item.room_number,
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [visitors, searchTerm]);
+  }, [visitors, searchTerm, filterHostel, filterRoom]);
 
   const sortedStudents = useMemo(
     () => [...students].sort((a, b) => getStudentName(a).localeCompare(getStudentName(b))),
@@ -205,14 +254,39 @@ const HostelVisitors = () => {
   return (
     <div className={styles.tabContent}>
       <div className={styles.filterBar}>
-        <div className={styles.searchWrapper}>
-          <Search size={18} />
-          <input 
-            type="text" 
-            placeholder="Search visitor or student..." 
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
+          <div className={styles.searchWrapper} style={{ minWidth: '250px' }}>
+            <Search size={18} />
+            <input 
+              type="text" 
+              placeholder="Search visitor or student..." 
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </div>
+          
+          <select
+            className={styles.formControl}
+            style={{ width: '180px' }}
+            value={filterHostel}
+            onChange={(e) => {
+              setFilterHostel(e.target.value);
+              setFilterRoom('');
+            }}
+          >
+            <option value="">All Hostels</option>
+            {filterHostelOptions.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+
+          <select
+            className={styles.formControl}
+            style={{ width: '150px' }}
+            value={filterRoom}
+            onChange={(e) => setFilterRoom(e.target.value)}
+          >
+            <option value="">All Rooms</option>
+            {filterRoomOptions.map(r => <option key={r.id} value={r.id}>Room {r.number}</option>)}
+          </select>
         </div>
         
         <button className={styles.btnPrimary} onClick={handleOpenModal}>
@@ -316,7 +390,7 @@ const HostelVisitors = () => {
                       <option value="">Select Student</option>
                       {sortedStudents.map((student) => (
                         <option key={student.id} value={student.id}>
-                          {`${getStudentName(student)} (${student.admission_number || 'N/A'})`}
+                          {`${getStudentName(student)} (${student.admission_number || 'N/A'}) - ${student.hostel_name} (Room ${student.room_number})`}
                         </option>
                       ))}
                     </select>

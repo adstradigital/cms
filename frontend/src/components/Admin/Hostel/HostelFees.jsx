@@ -75,6 +75,12 @@ const HostelFees = () => {
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterHostel, setFilterHostel] = useState('');
+  const [filterRoom, setFilterRoom] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [hostels, setHostels] = useState([]);
+  const [rooms, setRooms] = useState([]);
 
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -83,14 +89,49 @@ const HostelFees = () => {
   const [billForm, setBillForm] = useState(DEFAULT_BILL_FORM);
   const [billingPeriods] = useState(() => buildBillingPeriodOptions());
 
+  const [paymentModalData, setPaymentModalData] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({
+    amount_paid: '',
+    payment_method: 'gpay',
+    transaction_id: ''
+  });
+
+  useEffect(() => {
+    fetchHostels();
+    fetchRooms();
+  }, []);
+
   useEffect(() => {
     fetchFees();
-  }, []);
+  }, [filterHostel, filterRoom, filterStatus]);
+
+  const fetchHostels = async () => {
+    try {
+      const res = await hostelApi.getHostels();
+      setHostels(normalizeListPayload(res.data));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchRooms = async () => {
+    try {
+      const res = await hostelApi.getRooms();
+      setRooms(normalizeListPayload(res.data));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchFees = async () => {
     setLoading(true);
     try {
-      const res = await hostelApi.getFees();
+      const params = {};
+      if (filterHostel) params.hostel = filterHostel;
+      if (filterRoom) params.room = filterRoom;
+      if (filterStatus) params.status = filterStatus;
+
+      const res = await hostelApi.getFees(params);
       setFees(normalizeListPayload(res.data));
     } catch (err) {
       console.error(err);
@@ -99,6 +140,16 @@ const HostelFees = () => {
       setLoading(false);
     }
   };
+
+  const filterHostelOptions = useMemo(() => {
+    return hostels.map(h => ({ id: h.id, name: h.name }));
+  }, [hostels]);
+
+  const filterRoomOptions = useMemo(() => {
+    return rooms
+      .filter(r => !filterHostel || String(r.hostel) === String(filterHostel))
+      .map(r => ({ id: r.id, number: r.room_number }));
+  }, [rooms, filterHostel]);
 
   const fetchBillCandidates = async () => {
     setLookupLoading(true);
@@ -254,6 +305,34 @@ const HostelFees = () => {
     }
   };
 
+  const handleOpenPaymentModal = (fee) => {
+    setPaymentModalData(fee);
+    setPaymentForm({
+      amount_paid: toAmount(fee.balance_due), // Default to full balance
+      payment_method: 'gpay',
+      transaction_id: `TXN${Math.floor(Math.random() * 100000000)}` 
+    });
+  };
+
+  const handleProcessPayment = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      await hostelApi.payFee(paymentModalData.id, {
+        amount_paid: Number(paymentForm.amount_paid),
+        payment_method: paymentForm.payment_method,
+        transaction_id: paymentForm.transaction_id
+      });
+      alert('Payment processed successfully!');
+      setPaymentModalData(null);
+      fetchFees();
+    } catch (err) {
+      alert(getApiErrorMessage(err, 'Failed to process payment.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'paid':
@@ -281,7 +360,10 @@ const HostelFees = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button className={styles.btnSecondary}>
+          <button 
+            className={`${styles.btnSecondary} ${showFilters ? styles.btnActive : ''}`}
+            onClick={() => setShowFilters(!showFilters)}
+          >
             <Filter size={18} />
             Filters
           </button>
@@ -293,14 +375,77 @@ const HostelFees = () => {
         </div>
       </div>
 
+      {showFilters && (
+        <div className={styles.filterRow} style={{ marginBottom: '20px', display: 'flex', gap: '12px', flexWrap: 'wrap', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>Hostel</label>
+            <select
+              className={styles.formControl}
+              style={{ width: '180px' }}
+              value={filterHostel}
+              onChange={(e) => {
+                setFilterHostel(e.target.value);
+                setFilterRoom('');
+              }}
+            >
+              <option value="">All Hostels</option>
+              {filterHostelOptions.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>Room</label>
+            <select
+              className={styles.formControl}
+              style={{ width: '150px' }}
+              value={filterRoom}
+              onChange={(e) => setFilterRoom(e.target.value)}
+            >
+              <option value="">All Rooms</option>
+              {filterRoomOptions.map(r => <option key={r.id} value={r.id}>Room {r.number}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>Status</label>
+            <select
+              className={styles.formControl}
+              style={{ width: '150px' }}
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="paid">Paid</option>
+              <option value="partial">Partial</option>
+              <option value="overdue">Overdue</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button 
+              className={styles.btnSecondary}
+              style={{ height: '38px', padding: '0 12px' }}
+              onClick={() => {
+                setFilterHostel('');
+                setFilterRoom('');
+                setFilterStatus('');
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className={styles.tableContainer}>
         <table className={styles.table}>
           <thead>
             <tr>
               <th style={{ width: '25%' }}>Student</th>
               <th style={{ width: '15%' }}>Period</th>
-              <th style={{ width: '15%' }}>Amount Due</th>
-              <th style={{ width: '15%' }}>Paid</th>
+              <th style={{ width: '20%' }}>Amount Due</th>
+              <th style={{ width: '10%' }}>Paid</th>
               <th style={{ width: '10%' }}>Balance</th>
               <th style={{ width: '10%' }}>Status</th>
               <th style={{ width: '10%' }}>Action</th>
@@ -309,50 +454,78 @@ const HostelFees = () => {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '40px' }}>
-                  Loading fee records...
+                <td colSpan="7" style={{ textAlign: 'center', padding: '60px' }}>
+                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: '#64748b' }}>
+                     <Loader2 size={24} className="animate-spin" />
+                     <span>Loading fee records...</span>
+                   </div>
                 </td>
               </tr>
             ) : filteredFees.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '40px' }}>
-                  No fee records found.
+                <td colSpan="7" style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
+                  No fee records found matches your filters.
                 </td>
               </tr>
             ) : (
               filteredFees.map((item) => {
                 const balanceDue = toAmount(item.balance_due);
+                const roomRent = toAmount(item.room_rent);
+                const messFee = toAmount(item.mess_fee);
+                const elecFee = toAmount(item.electricity_charges);
+
                 return (
                   <tr key={item.id}>
                     <td>
-                      <div style={{ fontWeight: '600', color: '#1e293b' }}>{item.student_name}</div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>Room {item.room_number}</div>
-                    </td>
-                    <td style={{ fontWeight: '500' }}>
-                      <div>{item.period_label}</div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>Due: {item.due_date}</div>
-                    </td>
-                    <td style={{ fontWeight: '700', color: '#1e293b' }}>
-                      <div>{amountLabel(item.amount_due)}</div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>
-                        Rent {amountLabel(item.room_rent)} + Elec {amountLabel(item.electricity_charges)} + Mess {amountLabel(item.mess_fee)}
+                      <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '15px' }}>{item.student_name}</div>
+                      <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                        <span>{item.student_admission}</span>
+                        <span style={{ color: '#cbd5e1' }}>|</span>
+                        <span>Room {item.room_number}</span>
                       </div>
                     </td>
-                    <td style={{ color: '#166534', fontWeight: '600' }}>{amountLabel(item.amount_paid)}</td>
-                    <td style={{ fontWeight: '600', color: balanceDue > 0 ? '#ef4444' : '#64748b' }}>
-                      {balanceDue > 0 ? amountLabel(balanceDue) : 'Settled'}
+                    <td>
+                      <div style={{ fontWeight: '600', color: '#334155' }}>{item.period_label}</div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>Due: {item.due_date}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: '700', fontSize: '16px', color: '#0f172a' }}>{amountLabel(item.amount_due)}</div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', letterSpacing: '0.01em' }}>
+                        {roomRent > 0 && `Rent ${amountLabel(roomRent)}`} 
+                        {messFee > 0 && ` • Mess ${amountLabel(messFee)}`}
+                        {elecFee > 0 && ` • Elec ${amountLabel(elecFee)}`}
+                      </div>
+                    </td>
+                    <td style={{ color: '#166534', fontWeight: '600', fontSize: '15px' }}>{amountLabel(item.amount_paid)}</td>
+                    <td>
+                      {balanceDue > 0 ? (
+                        <div>
+                          <div style={{ fontWeight: '700', color: '#ef4444', fontSize: '15px' }}>{amountLabel(balanceDue)}</div>
+                          <div style={{ fontSize: '10px', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>Balance</div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontWeight: '500' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }}></span>
+                          Settled
+                        </div>
+                      )}
                     </td>
                     <td>{getStatusBadge(item.status)}</td>
                     <td>
                       <div className={styles.actionWrapper} style={{ gap: '8px' }}>
-                        {balanceDue > 0 && (
-                          <button className={styles.btnPrimary} style={{ padding: '6px 12px', fontSize: '12px', minHeight: '34px' }}>
+                        {balanceDue > 0 ? (
+                          <button 
+                            className={styles.btnPrimary} 
+                            style={{ padding: '8px 16px', fontSize: '13px', borderRadius: '10px' }}
+                            onClick={() => handleOpenPaymentModal(item)}
+                          >
                             Pay
                           </button>
+                        ) : (
+                          <button className={styles.btnIcon} title="Download Receipt">
+                            <Download size={16} />
+                          </button>
                         )}
-                        <button className={styles.btnIcon} title="Download Receipt">
-                          <Download size={16} />
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -503,6 +676,95 @@ const HostelFees = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Payment Gateway Modal */}
+      {paymentModalData && (
+        <div className={styles.modalBackdrop} onClick={() => !submitting && setPaymentModalData(null)}>
+          <div
+            className={styles.modalContent}
+            style={{ width: 'max-content', maxWidth: '500px' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader} style={{ marginBottom: '15px' }}>
+              <h2 className={styles.modalTitle}>Process Payment</h2>
+              <button type="button" className={styles.modalClose} onClick={() => setPaymentModalData(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Paying for</p>
+              <h3 style={{ margin: '4px 0 0', fontSize: '16px', color: '#1e293b' }}>{paymentModalData.student_name}</h3>
+              <p style={{ margin: '4px 0 0', fontSize: '14px', fontWeight: 'bold', color: '#ef4444' }}>
+                Balance: {amountLabel(paymentModalData.balance_due)}
+              </p>
+            </div>
+
+            <form className={styles.modalForm} onSubmit={handleProcessPayment}>
+              <div className={styles.formGroup}>
+                <label>Amount to Pay</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  max={paymentModalData.balance_due}
+                  step="0.01"
+                  className={styles.formControl}
+                  value={paymentForm.amount_paid}
+                  onChange={e => setPaymentForm(p => ({ ...p, amount_paid: e.target.value }))}
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Payment Method</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {['gpay', 'phonepe', 'paytm', 'credit_card', 'cash'].map(method => (
+                    <label key={method} style={{ 
+                      display: 'flex', alignItems: 'center', gap: '8px', 
+                      padding: '10px', border: '1px solid #e2e8f0', 
+                      borderRadius: '8px', cursor: 'pointer',
+                      background: paymentForm.payment_method === method ? '#f1f5f9' : '#fff',
+                      borderColor: paymentForm.payment_method === method ? '#1e293b' : '#e2e8f0'
+                    }}>
+                      <input 
+                        type="radio" 
+                        name="payment_method" 
+                        value={method} 
+                        checked={paymentForm.payment_method === method}
+                        onChange={e => setPaymentForm(p => ({ ...p, payment_method: e.target.value }))}
+                        style={{ margin: 0, accentColor: '#1e293b' }}
+                      />
+                      <span style={{ textTransform: 'capitalize', fontSize: '13px', fontWeight: '500' }}>
+                        {method === 'gpay' ? 'GPay' : method === 'phonepe' ? 'PhonePe' : method.replace('_', ' ')}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.formGroup} style={{ marginTop: '5px' }}>
+                <label>Transaction ID / Reference</label>
+                <input
+                  type="text"
+                  required
+                  className={styles.formControl}
+                  value={paymentForm.transaction_id}
+                  onChange={e => setPaymentForm(p => ({ ...p, transaction_id: e.target.value }))}
+                />
+              </div>
+
+              <div className={styles.modalActions} style={{ marginTop: '20px' }}>
+                <button type="button" className={styles.btnSecondary} onClick={() => setPaymentModalData(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className={styles.btnPrimary} disabled={submitting}>
+                  {submitting ? <Loader2 className="animate-spin" size={16} /> : `Pay ${amountLabel(paymentForm.amount_paid || 0)}`}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

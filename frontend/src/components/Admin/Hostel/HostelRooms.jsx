@@ -17,6 +17,7 @@ import RoomModal from './RoomModal';
 const HostelRooms = () => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const [hostels, setHostels] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -55,6 +56,14 @@ const HostelRooms = () => {
   useEffect(() => {
     fetchRooms();
   }, [fetchRooms]);
+
+  const filteredRooms = React.useMemo(() => {
+    if (!searchTerm.trim()) return rooms;
+    const lowerQuery = searchTerm.trim().toLowerCase();
+    return rooms.filter(room => 
+      String(room.room_number).toLowerCase().includes(lowerQuery)
+    );
+  }, [rooms, searchTerm]);
 
   const handleSaveRoom = async (data, id) => {
     try {
@@ -123,6 +132,8 @@ const HostelRooms = () => {
           <input 
             type="text" 
             placeholder="Search room by number..." 
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
         
@@ -178,9 +189,9 @@ const HostelRooms = () => {
           <tbody>
             {loading ? (
               <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px' }}>Loading rooms...</td></tr>
-            ) : rooms.length === 0 ? (
+            ) : filteredRooms.length === 0 ? (
               <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px' }}>No rooms found.</td></tr>
-            ) : rooms.map((room) => (
+            ) : filteredRooms.map((room) => (
               <tr key={room.id}>
                 <td style={{ fontWeight: '600', color: '#1e293b' }}>{room.room_number}</td>
                 <td>

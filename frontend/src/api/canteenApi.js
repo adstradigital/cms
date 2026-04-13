@@ -43,6 +43,14 @@ const canteenApi = {
   getConsumptionLogs: (params) => instance.get('/canteen/consumption-logs/', { params }),
   createConsumptionLog: (data) => instance.post('/canteen/consumption-logs/', data),
   getAnalytics: () => instance.get('/canteen/consumption-logs/analytics/'),
+
+  // Ingredient, Dish, Combo
+  getIngredients: () => instance.get('/canteen/ingredients/'),
+  createIngredient: (data) => instance.post('/canteen/ingredients/', data),
+  getDishes: (params) => instance.get('/canteen/dishes/', { params }),
+  createDish: (data) => instance.post('/canteen/dishes/', data),
+  getCombos: (params) => instance.get('/canteen/combos/', { params }),
+  createCombo: (data) => instance.post('/canteen/combos/', data),
 };
 
 export default canteenApi;

@@ -23,6 +23,11 @@ class Hostel(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, unique=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, default="boys")
+    category = models.CharField(
+        max_length=10, 
+        choices=[("junior", "Junior (1-7)"), ("senior", "Senior (8-12)")], 
+        default="junior"
+    )
     warden = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_hostels"
     )
@@ -112,6 +117,30 @@ class Room(models.Model):
         unique_together = ("hostel", "room_number")
 
 
+class StudentHostelPreference(models.Model):
+    student = models.OneToOneField(
+        Student, on_delete=models.CASCADE, related_name="hostel_preference"
+    )
+    preferred_hostel_type = models.CharField(
+        max_length=10, 
+        choices=[("boys", "Boys Only"), ("girls", "Girls Only"), ("mixed", "Mixed")],
+        default="mixed"
+    )
+    friend_ids = models.JSONField(
+        default=list, 
+        blank=True, 
+        help_text="List of student IDs/admission numbers of preferred roommates"
+    )
+    remarks = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Pref: {self.student.user.get_full_name()}"
+
+    class Meta:
+        db_table = "hostel_preferences"
+
+
 class RoomAllotment(models.Model):
     student = models.OneToOneField(
         Student, on_delete=models.CASCADE, related_name="hostel_allotment"
@@ -120,7 +149,7 @@ class RoomAllotment(models.Model):
     allotted_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="allotments_made"
     )
-    join_date = models.DateField(default=timezone.now)
+    join_date = models.DateField(default=timezone.localdate)
     leave_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     remarks = models.TextField(blank=True)
@@ -141,7 +170,7 @@ class RoomTransfer(models.Model):
         User, on_delete=models.SET_NULL, null=True, related_name="transfers_executed"
     )
     reason = models.TextField(blank=True)
-    transfer_date = models.DateField(default=timezone.now)
+    transfer_date = models.DateField(default=timezone.localdate)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -162,7 +191,7 @@ class NightAttendance(models.Model):
 
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="night_attendances")
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="night_attendances")
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=timezone.localdate)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="present")
     marked_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="night_attendance_marked"
@@ -219,7 +248,7 @@ class RuleViolation(models.Model):
     ]
 
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="violations")
-    violation_date = models.DateField(default=timezone.now)
+    violation_date = models.DateField(default=timezone.localdate)
     description = models.TextField()
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default="minor")
     action_taken = models.TextField(blank=True)
@@ -350,7 +379,7 @@ class MessMealAttendance(models.Model):
 
     hostel = models.ForeignKey(Hostel, on_delete=models.CASCADE, related_name="mess_meal_attendance")
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="mess_meal_attendance")
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=timezone.localdate)
     meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ate")
     remarks = models.TextField(blank=True)
@@ -398,7 +427,7 @@ class MessFeedback(models.Model):
 
     hostel = models.ForeignKey(Hostel, on_delete=models.CASCADE, related_name="mess_feedback")
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="mess_feedback")
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=timezone.localdate)
     meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES)
     rating = models.PositiveSmallIntegerField(default=5)
     complaint = models.TextField(blank=True)
@@ -495,7 +524,7 @@ class MessVendorSupply(models.Model):
     unit = models.CharField(max_length=20, default="kg")
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    supply_date = models.DateField(default=timezone.now)
+    supply_date = models.DateField(default=timezone.localdate)
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="pending")
     remarks = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -510,7 +539,7 @@ class MessVendorSupply(models.Model):
 
 class MessWastageLog(models.Model):
     hostel = models.ForeignKey(Hostel, on_delete=models.CASCADE, related_name="mess_wastage_logs")
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=timezone.localdate)
     meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES)
     item_name = models.CharField(max_length=120)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -530,7 +559,7 @@ class MessWastageLog(models.Model):
 
 class MessConsumptionLog(models.Model):
     hostel = models.ForeignKey(Hostel, on_delete=models.CASCADE, related_name="mess_consumption_logs")
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=timezone.localdate)
     meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES)
     item_name = models.CharField(max_length=120)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -557,7 +586,7 @@ class MessFoodOrder(models.Model):
 
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="mess_orders")
     hostel = models.ForeignKey(Hostel, on_delete=models.CASCADE, related_name="mess_orders")
-    order_date = models.DateField(default=timezone.now)
+    order_date = models.DateField(default=timezone.localdate)
     meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES)
     items = models.TextField()
     is_veg = models.BooleanField(default=True)

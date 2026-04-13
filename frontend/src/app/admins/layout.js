@@ -44,7 +44,7 @@ export default function AdminsGlobalLayout({ children }) {
     if (loading) return;
 
     if (!user) {
-      router.replace('/login');
+      router.replace('/login/admin');
       return;
     }
 

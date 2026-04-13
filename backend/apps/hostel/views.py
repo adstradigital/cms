@@ -1,6 +1,6 @@
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Count, Sum, Avg, Q, F, Value, IntegerField
+from django.db.models import Count, Sum, Avg, Q, F, Value, IntegerField, Case, When
 from decimal import Decimal, InvalidOperation
 from datetime import date, timedelta
 from rest_framework import status
@@ -13,7 +13,7 @@ from .models import (
     NightAttendance, EntryExitLog, RuleViolation, VisitorLog, HostelFee,
     MessMenuPlan, MessMealAttendance, MessDietProfile, MessFeedback,
     MessInventoryItem, MessInventoryLog, MessVendor, MessVendorSupply,
-    MessWastageLog, MessConsumptionLog, MessFoodOrder
+    MessWastageLog, MessConsumptionLog, MessFoodOrder, StudentHostelPreference
 )
 from .serializers import (
     HostelSerializer, FloorSerializer, RoomSerializer, RoomAllotmentSerializer,
@@ -284,27 +284,114 @@ def vacate_view(request, pk):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def transfer_list_view(request):
+    try:
+        if request.method == "GET":
+            qs = RoomTransfer.objects.select_related(
+                "student", "student__user", "from_room", "from_room__hostel", "to_room", "to_room__hostel", "transferred_by"
+            ).all()
+            return Response(RoomTransferSerializer(qs, many=True).data)
+
+        # POST: Create Transfer
+        student_id = request.data.get("student")
+        to_room_id = request.data.get("to_room")
+        reason = request.data.get("reason", "")
+
+        try:
+            student = Student.objects.get(pk=student_id)
+        except Student.DoesNotExist:
+            return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            to_room = Room.objects.get(pk=to_room_id)
+        except Room.DoesNotExist:
+            return Response({"error": "Destination room not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            active_allotment = RoomAllotment.objects.get(student=student, is_active=True)
+            from_room = active_allotment.room
+        except RoomAllotment.DoesNotExist:
+            return Response({"error": "Student must have an active room allotment to be transferred."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if str(from_room.id) == str(to_room.id):
+            return Response({"error": "Destination room cannot be the same as the current room."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if to_room.occupied >= to_room.capacity:
+            return Response({"error": "Destination room is at full capacity."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            # 1. Update from_room occupancy
+            from_room.occupied = max(0, from_room.occupied - 1)
+            from_room.update_status()
+            from_room.save()
+
+            # 2. Update to_room occupancy
+            to_room.occupied += 1
+            to_room.update_status()
+            to_room.save()
+
+            # 3. Create Transfer Record
+            transfer = RoomTransfer.objects.create(
+                student=student,
+                from_room=from_room,
+                to_room=to_room,
+                transferred_by=request.user,
+                reason=reason,
+                transfer_date=timezone.now().date()
+            )
+
+            # 4. Update the active Allotment instead of ending it
+            active_allotment.room = to_room
+            active_allotment.allotted_by = request.user
+            active_allotment.save()
+
+        return Response(RoomTransferSerializer(transfer).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def submit_preference_view(request):
+    """Allow students to submit friend group and hostel type preferences."""
+    try:
+        student_id = request.data.get("student")
+        preferred_type = request.data.get("preferred_hostel_type", "mixed")
+        friend_ids = request.data.get("friend_ids", [])
+        
+        if not student_id:
+            return Response({"error": "Student ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        student = Student.objects.get(pk=student_id)
+        
+        pref, created = StudentHostelPreference.objects.update_or_create(
+            student=student,
+            defaults={
+                "preferred_hostel_type": preferred_type,
+                "friend_ids": friend_ids,
+                "remarks": request.data.get("remarks", "")
+            }
+        )
+        return Response({"message": "Preferences saved successfully."}, status=status.HTTP_200_OK)
+    except Student.DoesNotExist:
+        return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def auto_assign_view(request):
-    """Auto-assign a student using optional rules (gender, course, academic year)."""
+    """
+    Intelligent Auto-assign using Hard Rules (Class, Room Gender) and 
+    Soft rules (Friend groups, preferred hostel type).
+    """
     try:
-        def parse_bool(raw_value, default=True):
-            if raw_value is None:
-                return default
-            if isinstance(raw_value, bool):
-                return raw_value
-            return str(raw_value).strip().lower() in ("1", "true", "yes", "on")
-
-        hostel_id = request.data.get("hostel")
         student_id = request.data.get("student")
-        room_type = request.data.get("room_type")
-        apply_gender_rule = parse_bool(request.data.get("apply_gender_rule"), True)
-        apply_class_rule = parse_bool(
-            request.data.get("apply_class_rule", request.data.get("apply_course_rule")),
-            True
-        )
-        apply_year_rule = parse_bool(request.data.get("apply_year_rule"), True)
 
         if not student_id:
             return Response({"error": "Student is required for auto allocation."}, status=status.HTTP_400_BAD_REQUEST)
@@ -319,84 +406,131 @@ def auto_assign_view(request):
         if RoomAllotment.objects.filter(student_id=student_id, is_active=True).exists():
             return Response({"error": "Student already has an active allotment."}, status=status.HTTP_400_BAD_REQUEST)
 
-        hostel_qs = Hostel.objects.filter(is_active=True)
-        if hostel_id:
-            hostel_qs = hostel_qs.filter(pk=hostel_id)
-            if not hostel_qs.exists():
-                return Response({"error": "Hostel not found."}, status=status.HTTP_404_NOT_FOUND)
+        # 1. Determine Student Demographics
+        student_gender = ""
+        if hasattr(student.user, "profile"):
+            student_gender = (student.user.profile.gender or "").lower()
+            
+        if not student_gender:
+             return Response({"error": "Student gender is not set in profile."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        class_name = ""
+        if student.section and student.section.school_class:
+            class_name = student.section.school_class.name.lower()
+            
+        if not class_name:
+             return Response({"error": "Student class is not set. Required for allocation."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if apply_gender_rule:
-            student_gender = ""
-            if hasattr(student.user, "profile"):
-                student_gender = (student.user.profile.gender or "").lower()
+        # Grade Junior/Senior Split (Junior: 1-7, LKG, UKG)
+        is_junior = "grade 8" not in class_name and "grade 9" not in class_name and "grade 10" not in class_name and "grade 11" not in class_name and "grade 12" not in class_name
+        student_category = "junior" if is_junior else "senior"
 
-            if student_gender == "male":
-                hostel_qs = hostel_qs.filter(gender__in=["boys", "mixed"])
-            elif student_gender == "female":
-                hostel_qs = hostel_qs.filter(gender__in=["girls", "mixed"])
-            elif student_gender:
-                hostel_qs = hostel_qs.filter(gender="mixed")
+        # 2. Get Student Preferences (if any)
+        preferred_type = "mixed"
+        friend_ids = []
+        try:
+            pref = StudentHostelPreference.objects.get(student=student)
+            preferred_type = pref.preferred_hostel_type
+            friend_ids = pref.friend_ids
+        except StudentHostelPreference.DoesNotExist:
+            pass
 
-            if not hostel_qs.exists():
-                return Response(
-                    {"error": "No active hostels match this student's gender rule."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+        # 3. Filter Valid Hostels (Hard Rules)
+        hostel_qs = Hostel.objects.filter(is_active=True, category=student_category)
+        if student_gender == "male":
+            hostel_qs = hostel_qs.filter(gender__in=["boys", "mixed"])
+        else:
+            hostel_qs = hostel_qs.filter(gender__in=["girls", "mixed"])
 
-        qs = Room.objects.filter(
+        if not hostel_qs.exists():
+            return Response({"error": f"No active hostels found for {student_category} {student_gender}s."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Build base room queryset
+        available_rooms = Room.objects.filter(
             hostel__in=hostel_qs,
-            status="available",
+            status__in=["available"],
             occupied__lt=F("capacity")
-        ).select_related("hostel", "floor")
+        ).select_related("hostel")
 
-        if room_type:
-            qs = qs.filter(room_type=room_type)
+        # 4. Strict Room Filtering (Hard Rules: Same Class, Same Gender)
+        valid_room_ids = []
+        best_friend_room = None
+        best_class_room = None
+        best_empty_room = None
+        
+        # We process rooms in Python to handle the complex counts reliably
+        # (Doing this purely in SQL with annotations can be messy across many relationships)
+        available_rooms = list(available_rooms)
+        
+        # Pre-fetch allotments for these rooms to analyze occupants
+        room_ids = [r.id for r in available_rooms]
+        active_allotments = list(RoomAllotment.objects.filter(
+            is_active=True, 
+            room_id__in=room_ids
+        ).select_related("student", "student__section__school_class", "student__user__profile"))
 
-        if apply_class_rule and student.section_id:
-            qs = qs.annotate(
-                same_course_count=Count(
-                    "allotments",
-                    filter=Q(
-                        allotments__is_active=True,
-                        allotments__student__section__school_class_id=student.section.school_class_id,
-                    ),
-                )
-            )
-        else:
-            qs = qs.annotate(same_course_count=Value(0, output_field=IntegerField()))
+        allotments_by_room = {}
+        for a in active_allotments:
+            allotments_by_room.setdefault(a.room_id, []).append(a)
 
-        if apply_year_rule and student.academic_year_id:
-            qs = qs.annotate(
-                same_year_count=Count(
-                    "allotments",
-                    filter=Q(
-                        allotments__is_active=True,
-                        allotments__student__academic_year_id=student.academic_year_id,
-                    ),
-                )
-            )
-        else:
-            qs = qs.annotate(same_year_count=Value(0, output_field=IntegerField()))
+        scored_rooms = []
 
-        qs = qs.annotate(
-            rule_score=F("same_course_count") + F("same_year_count")
-        ).order_by("-rule_score", "occupied", "id")
+        for room in available_rooms:
+            occupants = allotments_by_room.get(room.id, [])
+            
+            # Rule: Empty rooms are always valid
+            if not occupants:
+                score = 0
+                if room.hostel.gender == preferred_type:
+                    score += 10 # Preferred hostel type bonus
+                scored_rooms.append((score, room))
+                continue
+                
+            # Rule: If occupied, MUST match Gender and Class strictly
+            is_valid = True
+            friend_count = 0
+            
+            for occ in occupants:
+                # Check Gender
+                occ_gender = (occ.student.user.profile.gender or "").lower() if hasattr(occ.student.user, "profile") else ""
+                if occ_gender != student_gender:
+                    is_valid = False
+                    break
+                    
+                # Check Class
+                occ_class = occ.student.section.school_class.name.lower() if (occ.student.section and occ.student.section.school_class) else ""
+                if occ_class != class_name:
+                    is_valid = False
+                    break
+                    
+                # Count Friends
+                if str(occ.student.admission_number) in friend_ids or str(occ.student.id) in friend_ids:
+                    friend_count += 1
+                    
+            if is_valid:
+                # Scoring:
+                # Priority 1: Friends (+100 per friend)
+                # Priority 2: Classmates (Already guaranteed if valid, +50 to prioritize filling partially full class rooms)
+                # Priority 3: Preferred Hostel Type (+10)
+                score = 50 + (friend_count * 100)
+                if room.hostel.gender == preferred_type:
+                    score += 10
+                    
+                scored_rooms.append((score, room))
 
-        room = qs.first()
-        if not room:
-            if apply_gender_rule or apply_class_rule or apply_year_rule:
-                return Response(
-                    {"error": "No available rooms matched the selected auto-allocation rules."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            return Response({"error": "No available rooms matching criteria."}, status=status.HTTP_404_NOT_FOUND)
+        if not scored_rooms:
+             return Response({"error": "No available rooms match the strict class/gender rules."}, status=status.HTTP_404_NOT_FOUND)
 
+        # Sort by score descending
+        scored_rooms.sort(key=lambda x: x[0], reverse=True)
+        chosen_room = scored_rooms[0][1]
+
+        # Process Allocation
         existing_allotment = RoomAllotment.objects.filter(student_id=student_id).first()
 
         with transaction.atomic():
             if existing_allotment:
-                # OneToOne relation allows one historical record per student, so reactivate it.
-                existing_allotment.room = room
+                existing_allotment.room = chosen_room
                 existing_allotment.allotted_by = request.user
                 existing_allotment.join_date = timezone.now().date()
                 existing_allotment.leave_date = None
@@ -407,14 +541,14 @@ def auto_assign_view(request):
             else:
                 allotment = RoomAllotment.objects.create(
                     student_id=student_id,
-                    room=room,
+                    room=chosen_room,
                     allotted_by=request.user,
                     join_date=timezone.now().date(),
                 )
 
-            room.occupied += 1
-            room.update_status()
-            room.save()
+            chosen_room.occupied += 1
+            chosen_room.update_status()
+            chosen_room.save()
             Student.objects.filter(pk=student_id).update(hostel_resident=True)
 
         return Response(RoomAllotmentSerializer(allotment).data, status=status.HTTP_201_CREATED)
@@ -712,12 +846,15 @@ def hostel_fee_list_view(request):
             hostel_id = request.query_params.get("hostel")
             fee_status = request.query_params.get("status")
             student_id = request.query_params.get("student")
+            room_id = request.query_params.get("room")
             if hostel_id:
                 qs = qs.filter(room__hostel_id=hostel_id)
             if fee_status:
                 qs = qs.filter(status=fee_status)
             if student_id:
                 qs = qs.filter(student_id=student_id)
+            if room_id:
+                qs = qs.filter(room_id=room_id)
             return Response(HostelFeeSerializer(qs, many=True).data)
 
         payload = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
@@ -955,6 +1092,62 @@ def mess_menu_list_view(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         obj = serializer.save(created_by=request.user)
         return Response(MessMenuPlanSerializer(obj).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def mess_menu_detail_view(request, pk):
+    try:
+        obj = MessMenuPlan.objects.get(pk=pk)
+        if request.method == "GET":
+            return Response(MessMenuPlanSerializer(obj).data)
+        elif request.method in ["PUT", "PATCH"]:
+            serializer = MessMenuPlanSerializer(obj, data=request.data, partial=(request.method == "PATCH"))
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        elif request.method == "DELETE":
+            obj.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+    except MessMenuPlan.DoesNotExist:
+        return Response({"error": "Menu plan not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mess_menu_bulk_upsert_view(request):
+    try:
+        data_list = request.data
+        if not isinstance(data_list, list):
+            return Response({"error": "Expected a list of menu plans."}, status=status.HTTP_400_BAD_REQUEST)
+
+        results = []
+        for item in data_list:
+            hostel_id = item.get("hostel")
+            plan_date = item.get("plan_date")
+            meal_type = item.get("meal_type")
+
+            if not all([hostel_id, plan_date, meal_type]):
+                continue
+
+            obj, created = MessMenuPlan.objects.update_or_create(
+                hostel_id=hostel_id,
+                plan_date=plan_date,
+                meal_type=meal_type,
+                defaults={
+                    "items": item.get("items", ""),
+                    "notes": item.get("notes", ""),
+                    "created_by": request.user,
+                },
+            )
+            results.append(MessMenuPlanSerializer(obj).data)
+
+        return Response(results, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

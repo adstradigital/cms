@@ -37,6 +37,35 @@ class FoodItem(models.Model):
     class Meta:
         db_table = "canteen_food_items"
 
+class CanteenIngredient(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "canteen_ingredients"
+
+class CanteenDish(models.Model):
+    DISH_TYPE_CHOICES = [
+        ("solid", "Solid Item (e.g. Idli, Dosa)"),
+        ("liquid", "Liquid Item (e.g. Sambar, Chutney)"),
+        ("full_meal", "Full Meal (e.g. Biriyani)"),
+    ]
+    
+    name = models.CharField(max_length=150)
+    dish_type = models.CharField(max_length=50, blank=True, null=True)
+    ingredients = models.ManyToManyField(CanteenIngredient, related_name="dishes")
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    is_veg = models.BooleanField(null=True, blank=True, default=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.get_dish_type_display()})"
+
+    class Meta:
+        db_table = "canteen_dishes"
+
 class DailyMenu(models.Model):
     MEAL_CHOICES = [
         ("breakfast", "Breakfast"),
@@ -46,9 +75,12 @@ class DailyMenu(models.Model):
     ]
     
     date = models.DateField(default=timezone.now)
-    meal_type = models.CharField(max_length=20, choices=MEAL_CHOICES)
-    items = models.ManyToManyField(FoodItem, related_name="menus")
-    special_note = models.TextField(blank=True)
+    meal_type = models.CharField(max_length=20, choices=MEAL_CHOICES, null=True, blank=True)
+    items = models.TextField(blank=True) # Deprecated
+    dish_name = models.CharField(max_length=200, blank=True) # Deprecated
+    
+    dishes = models.ManyToManyField(CanteenDish, blank=True, related_name="menus")
+    ingredients = models.ManyToManyField(CanteenIngredient, blank=True, related_name="menu_extras")
     
     class Meta:
         db_table = "canteen_daily_menus"
@@ -119,7 +151,7 @@ class CanteenInventoryLog(models.Model):
 
 class CanteenWastageLog(models.Model):
     date = models.DateField(default=timezone.now)
-    meal_type = models.CharField(max_length=20, choices=DailyMenu.MEAL_CHOICES)
+    meal_type = models.CharField(max_length=20, choices=DailyMenu.MEAL_CHOICES, null=True, blank=True)
     item_name = models.CharField(max_length=150)
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
     unit = models.CharField(max_length=20, default="kg")
@@ -131,13 +163,28 @@ class CanteenWastageLog(models.Model):
 
 class CanteenConsumptionLog(models.Model):
     date = models.DateField(default=timezone.now)
-    meal_type = models.CharField(max_length=20, choices=DailyMenu.MEAL_CHOICES)
+    meal_type = models.CharField(max_length=20, choices=DailyMenu.MEAL_CHOICES, null=True, blank=True)
     total_servings = models.PositiveIntegerField()
     total_cost = models.DecimalField(max_digits=12, decimal_places=2)
     average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
 
     class Meta:
         db_table = "canteen_consumption_logs"
+
+class CanteenCombo(models.Model):
+    name = models.CharField(max_length=150)
+    dishes = models.ManyToManyField(CanteenDish, related_name="combos")
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    is_veg = models.BooleanField(default=True)
+    is_available = models.BooleanField(default=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "canteen_combos"
+
 
 class CanteenOrder(models.Model):
     STATUS_CHOICES = [

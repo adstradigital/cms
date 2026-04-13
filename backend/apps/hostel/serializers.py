@@ -88,6 +88,7 @@ class RoomAllotmentSerializer(serializers.ModelSerializer):
     student_admission = serializers.CharField(source="student.admission_number", read_only=True)
     room_number = serializers.CharField(source="room.room_number", read_only=True)
     hostel_name = serializers.CharField(source="room.hostel.name", read_only=True)
+    hostel_id = serializers.IntegerField(source="room.hostel.id", read_only=True)
     floor_number = serializers.IntegerField(source="room.floor.number", read_only=True)
     allotted_by_name = serializers.CharField(source="allotted_by.get_full_name", read_only=True, default="")
 
@@ -144,6 +145,10 @@ class VisitorLogSerializer(serializers.ModelSerializer):
     student_admission = serializers.CharField(source="student.admission_number", read_only=True)
     approved_by_name = serializers.CharField(source="approved_by.get_full_name", read_only=True, default="")
     duration_minutes = serializers.SerializerMethodField()
+    hostel_name = serializers.SerializerMethodField()
+    hostel_id = serializers.SerializerMethodField()
+    room_number = serializers.SerializerMethodField()
+    room_id = serializers.SerializerMethodField()
 
     class Meta:
         model = VisitorLog
@@ -154,6 +159,28 @@ class VisitorLogSerializer(serializers.ModelSerializer):
             delta = obj.check_out - obj.check_in
             return round(delta.total_seconds() / 60)
         return None
+
+    def _get_active_allotment(self, obj):
+        if not hasattr(obj, '_active_allotment'):
+            from apps.hostel.models import RoomAllotment
+            obj._active_allotment = RoomAllotment.objects.filter(student=obj.student, is_active=True).first()
+        return obj._active_allotment
+
+    def get_hostel_name(self, obj):
+        al = self._get_active_allotment(obj)
+        return al.room.hostel.name if al and al.room else ""
+
+    def get_hostel_id(self, obj):
+        al = self._get_active_allotment(obj)
+        return al.room.hostel.id if al and al.room else None
+
+    def get_room_number(self, obj):
+        al = self._get_active_allotment(obj)
+        return al.room.room_number if al and al.room else ""
+
+    def get_room_id(self, obj):
+        al = self._get_active_allotment(obj)
+        return al.room.id if al and al.room else None
 
 
 class HostelFeeSerializer(serializers.ModelSerializer):

@@ -217,15 +217,90 @@ const getStudentLabel = (student) => {
   return `${name} (${student?.admission_number || 'N/A'})`;
 };
 
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const MEALS = ['breakfast', 'lunch', 'snacks', 'dinner'];
+
+const DEFAULT_WEEKLY_MENU = {
+  Monday: {
+    breakfast: { dish: 'Upma', items: 'Cherupayar Curry, Banana, Tea/Coffee' },
+    lunch: { dish: 'Rice', items: 'Sambar, Cabbage Upperi, Mango Pickle, Pappadam' },
+    snacks: { dish: 'Chicken Roll / Veg Roll', items: 'Tea/Coffee' },
+    dinner: { dish: 'Biriyani', items: 'Veg / Non-Veg' },
+  },
+  Tuesday: {
+    breakfast: { dish: 'Chappati', items: 'Kadala Curry' },
+    lunch: { dish: 'Rice', items: 'Fish Curry / Vegetable Curry, Mango Pickle, Pappadam, Payar Upperi' },
+    snacks: { dish: 'Cutlet', items: 'Veg / Non-veg' },
+    dinner: { dish: 'Rice', items: 'Salmon Curry / Cauliflower Curry' },
+  },
+  Wednesday: {
+    breakfast: { dish: 'Appam', items: 'Pattaani Curry' },
+    lunch: { dish: 'Ghee Rice', items: 'Chicken / Veg Stew' },
+    snacks: { dish: 'Uzhunnu Vada', items: 'Tea/Coffee' },
+    dinner: { dish: 'Chappati', items: 'Egg Curry / Veg Stew' },
+  },
+  Thursday: {
+    breakfast: { dish: 'Pathiri', items: 'Kadala Curry' },
+    lunch: { dish: 'Rice', items: 'Dal Curry, Pappadam, Mango Pickle, Beetroot Upperi' },
+    snacks: { dish: 'Samosa', items: 'Tea/Coffee' },
+    dinner: { dish: 'Biriyani', items: 'Veg / Non-Veg' },
+  },
+  Friday: {
+    breakfast: { dish: 'Poori', items: 'Kadala Curry' },
+    lunch: { dish: 'Tomato Rice', items: 'Pappadam, Pickle' },
+    snacks: { dish: 'Chikku Shake', items: 'Brownie' },
+    dinner: { dish: 'Rice', items: 'Fish Curry / Vegetable Curry' },
+  },
+  Saturday: {
+    breakfast: { dish: 'Masala Dosa', items: 'Sambar, Chutney' },
+    lunch: { dish: 'Rice', items: 'Chicken Curry / Soybean Curry' },
+    snacks: { dish: 'Chicken Puffs / Veg Puffs', items: 'Tea/Coffee' },
+    dinner: { dish: 'Fried Rice', items: 'Chilli Chicken / Gobi Manchurian' },
+  },
+  Sunday: {
+    breakfast: { dish: 'Putt', items: 'Green Peas Curry' },
+    lunch: { dish: 'Rice', items: 'Vegetable Curry, Pappdam, Mango pickle' },
+    snacks: { dish: 'Ulivada', items: 'Tea/Coffee' },
+    dinner: { dish: 'Kanji', items: 'Pappadam, Mango Pickle, Pea' },
+  },
+};
+
+const getMonday = (d) => {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(date.setDate(diff));
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+};
+
+const getWeekDates = (monday) => {
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+};
+
 const HostelMess = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedHostel, setSelectedHostel] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
+  const [selectedDateFilter, setSelectedDateFilter] = useState(today());
+  const [selectedWeekStart, setSelectedWeekStart] = useState(() => getMonday(new Date()));
   const [loading, setLoading] = useState(false);
 
   const [hostels, setHostels] = useState([]);
   const [students, setStudents] = useState([]);
+  const [activeAllotments, setActiveAllotments] = useState([]);
+  const [hasInitializedHostel, setHasInitializedHostel] = useState(false);
+
+  const [menuMode, setMenuMode] = useState('grid'); // 'grid' or 'form'
+  const [bulkMenuData, setBulkMenuData] = useState({}); // { 'YYYY-MM-DD||breakfast': { dish, items } }
+  const [editingMeal, setEditingMeal] = useState(null); // { date, meal_type, id }
 
   const [analytics, setAnalytics] = useState(null);
   const [studentCosts, setStudentCosts] = useState([]);
@@ -243,7 +318,7 @@ const HostelMess = () => {
   const [attendanceForm, setAttendanceForm] = useState({ student: '', hostel: '', date: today(), meal_type: 'breakfast', status: 'ate' });
   const [dietForm, setDietForm] = useState({ student: '', preference: 'veg', allergies: '' });
   const [feedbackForm, setFeedbackForm] = useState({ student: '', hostel: '', date: today(), meal_type: 'lunch', rating: '5', complaint: '' });
-  const [inventoryForm, setInventoryForm] = useState({ hostel: '', name: '', unit: 'kg', current_stock: '', minimum_stock: '' });
+  const [inventoryForm, setInventoryForm] = useState({ hostel: '', name: '', qty_count: '1', unit_size: '1kg', current_stock: '', minimum_stock: '' });
   const [vendorForm, setVendorForm] = useState({ hostel: '', name: '', phone: '', categories: [] });
   const [supplyMeta, setSupplyMeta] = useState({ hostel: '', vendor: '', supply_date: today(), payment_status: 'pending' });
   const [supplyItem, setSupplyItem] = useState({ item_category: '', item_name: '', qty_count: '1', unit_size: '', unit_price: '', amount: '' });
@@ -287,23 +362,26 @@ const HostelMess = () => {
 
   const fetchLookups = useCallback(async () => {
     try {
-      const [hostelRes, studentRes] = await Promise.all([
+      const [hostelRes, studentRes, allotmentRes] = await Promise.all([
         hostelApi.getHostels(),
-        instance.get('/students/students/', { params: { is_active: 'true' } }),
+        instance.get('/students/students/', { params: { is_active: 'true', paginate: 'false' } }),
+        hostelApi.getAllotments({ active: 'true' }),
       ]);
       const hostelList = normalizeListPayload(hostelRes.data);
       setHostels(hostelList);
       setStudents(normalizeListPayload(studentRes.data));
+      setActiveAllotments(normalizeListPayload(allotmentRes.data));
 
-      if (!selectedHostel && hostelList.length > 0) {
+      if (!hasInitializedHostel && hostelList.length > 0) {
         const firstHostel = String(hostelList[0].id);
         setSelectedHostel(firstHostel);
         setDefaultHostelInForms(firstHostel);
+        setHasInitializedHostel(true);
       }
     } catch (error) {
       alert(getApiErrorMessage(error, 'Failed to load mess hostels/students.'));
     }
-  }, [selectedHostel, setDefaultHostelInForms]);
+  }, [hasInitializedHostel, setDefaultHostelInForms]);
 
   const fetchSectionData = useCallback(async () => {
     setLoading(true);
@@ -323,7 +401,14 @@ const HostelMess = () => {
       }
 
       if (activeSection === 'menu') {
-        const params = monthRange(selectedMonth);
+        const monday = selectedWeekStart;
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        
+        const params = {
+          start_date: monday.toISOString().split('T')[0],
+          end_date: sunday.toISOString().split('T')[0]
+        };
         if (selectedHostel) params.hostel = selectedHostel;
         const res = await hostelApi.getMessMenus(params);
         setMenus(normalizeListPayload(res.data));
@@ -331,7 +416,7 @@ const HostelMess = () => {
       }
 
       if (activeSection === 'attendance') {
-        const params = monthRange(selectedMonth);
+        const params = { start_date: selectedDateFilter, end_date: selectedDateFilter };
         if (selectedHostel) params.hostel = selectedHostel;
         const res = await hostelApi.getMessAttendance(params);
         setAttendance(normalizeListPayload(res.data));
@@ -404,7 +489,7 @@ const HostelMess = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeSection, selectedHostel, selectedMonth]);
+  }, [activeSection, selectedHostel, selectedMonth, selectedDateFilter]);
 
   useEffect(() => {
     fetchLookups();
@@ -453,9 +538,20 @@ const HostelMess = () => {
   );
 
   const filteredAttendance = useMemo(
-    () => attendance.filter((item) => inSelectedMonth(item.date, selectedMonth) && matchesSearch(item.student_name, item.meal_type, item.status)),
-    [attendance, selectedMonth, matchesSearch]
+    () => attendance.filter((item) => item.date === selectedDateFilter && matchesSearch(item.student_name, item.meal_type, item.status)),
+    [attendance, selectedDateFilter, matchesSearch]
   );
+
+  const filteredDiets = useMemo(() => {
+    return diets.filter((item) => {
+      if (!matchesSearch(item.student_name, item.preference, item.allergies)) return false;
+      if (selectedHostel) {
+        const allotment = activeAllotments.find((a) => String(a.student) === String(item.student));
+        if (!allotment || String(allotment.hostel_id || allotment.hostel) !== String(selectedHostel)) return false;
+      }
+      return true;
+    });
+  }, [diets, selectedHostel, activeAllotments, matchesSearch]);
 
   const filteredFeedback = useMemo(
     () => feedback.filter((item) => inSelectedMonth(item.date, selectedMonth) && matchesSearch(item.student_name, item.complaint, item.status)),
@@ -700,6 +796,130 @@ const HostelMess = () => {
     }
   };
 
+  const navigateWeek = (direction) => {
+    setSelectedWeekStart((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + direction * 7);
+      return next;
+    });
+  };
+
+  const currentWeekDates = useMemo(() => getWeekDates(selectedWeekStart), [selectedWeekStart]);
+
+  const weekMenuMap = useMemo(() => {
+    const map = {};
+    menus.forEach((item) => {
+      const parsed = unpackMenuItems(item.items);
+      map[`${item.plan_date}||${item.meal_type}`] = { id: item.id, dish: parsed.dish_name, items: parsed.items };
+    });
+    return map;
+  }, [menus]);
+
+  const applyDefaultTemplate = () => {
+    if (!selectedHostel) {
+      alert('Please select a hostel first.');
+      return;
+    }
+    const bulkData = [];
+    currentWeekDates.forEach((date, index) => {
+      const dayName = WEEKDAYS[index];
+      const dayTemplate = DEFAULT_WEEKLY_MENU[dayName];
+      if (dayTemplate) {
+        MEALS.forEach((meal) => {
+          const entry = dayTemplate[meal];
+          if (entry) {
+            bulkData.push({
+              hostel: Number(selectedHostel),
+              plan_date: date,
+              meal_type: meal,
+              items: packMenuItems(entry.dish, entry.items),
+            });
+          }
+        });
+      }
+    });
+    handleBulkSave(bulkData);
+  };
+
+  const handleBulkSave = async (data) => {
+    setLoading(true);
+    try {
+      await hostelApi.bulkSaveMessMenu(data);
+      alert('Weekly menu updated successfully.');
+      setMenuMode('grid');
+      fetchSectionData();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Failed to save weekly menu.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSingleSave = async (event) => {
+    event.preventDefault();
+    if (!editingMeal) return;
+    try {
+      const payload = {
+        hostel: Number(selectedHostel),
+        plan_date: editingMeal.date,
+        meal_type: editingMeal.meal_type,
+        items: packMenuItems(editingMeal.dish, editingMeal.items),
+      };
+      if (editingMeal.id) {
+        await hostelApi.updateMessMenu(editingMeal.id, payload);
+      } else {
+        await hostelApi.createMessMenu(payload);
+      }
+      alert('Menu item saved.');
+      setEditingMeal(null);
+      fetchSectionData();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Failed to save menu item.'));
+    }
+  };
+
+  const openBulkEditor = (mode) => {
+    if (!selectedHostel) {
+      alert('Please select a hostel first.');
+      return;
+    }
+    const initialData = {};
+    currentWeekDates.forEach((date, idx) => {
+      MEALS.forEach((meal) => {
+        const existing = weekMenuMap[`${date}||${meal}`];
+        initialData[`${date}||${meal}`] = {
+          dish: mode === 'create' ? '' : existing?.dish || '',
+          items: mode === 'create' ? '' : existing?.items || '',
+        };
+      });
+    });
+    setBulkMenuData(initialData);
+    setMenuMode('form');
+  };
+
+  const saveBulkMenu = async (event) => {
+    event.preventDefault();
+    const payload = [];
+    Object.entries(bulkMenuData).forEach(([key, value]) => {
+      const [date, meal] = key.split('||');
+      if (value.dish) {
+        payload.push({
+          hostel: Number(selectedHostel),
+          plan_date: date,
+          meal_type: meal,
+          items: packMenuItems(value.dish, value.items),
+        });
+      }
+    });
+
+    if (payload.length === 0) {
+      alert('Please add at least one menu item.');
+      return;
+    }
+
+    handleBulkSave(payload);
+  };
+
   const generateVendorInvoice = () => {
     if (!invoiceFilter.vendor || !invoiceFilter.date) {
       alert('Please select a vendor and date.');
@@ -922,13 +1142,23 @@ const HostelMess = () => {
             ))}
           </select>
 
-          <input
-            type="month"
-            className={styles.formControl}
-            style={{ width: '155px' }}
-            value={selectedMonth}
-            onChange={(event) => setSelectedMonth(event.target.value)}
-          />
+          {activeSection === 'attendance' ? (
+            <input
+              type="date"
+              className={styles.formControl}
+              style={{ width: '155px' }}
+              value={selectedDateFilter}
+              onChange={(event) => setSelectedDateFilter(event.target.value)}
+            />
+          ) : activeSection !== 'diet' && activeSection !== 'menu' ? (
+            <input
+              type="month"
+              className={styles.formControl}
+              style={{ width: '155px' }}
+              value={selectedMonth}
+              onChange={(event) => setSelectedMonth(event.target.value)}
+            />
+          ) : null}
 
           <button className={styles.btnSecondary} type="button" onClick={fetchSectionData}>
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -1027,96 +1257,167 @@ const HostelMess = () => {
 
       {activeSection === 'menu' && (
         <>
-          <div className={styles.tableContainer} style={{ padding: '14px', marginBottom: '12px' }}>
-            <form
-              className={styles.modalForm}
-              onSubmit={(event) =>
-                onSubmit(
-                  event,
-                  hostelApi.createMessMenu,
-                  () => ({
-                    hostel: Number(menuForm.hostel),
-                    plan_date: menuForm.plan_date,
-                    meal_type: menuForm.meal_type,
-                    items: packMenuItems(menuForm.dish_name, menuForm.items),
-                  }),
-                  'Menu plan saved.',
-                  () => setMenuForm((prev) => ({ ...prev, dish_name: '', items: '' }))
-                )
-              }
-            >
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
-                  <label>Hostel</label>
-                  <select className={styles.formControl} value={menuForm.hostel} onChange={(event) => setMenuForm((prev) => ({ ...prev, hostel: event.target.value }))} required>
-                    <option value="">Select Hostel</option>
-                    {hostels.map((hostel) => <option key={hostel.id} value={hostel.id}>{hostel.name}</option>)}
-                  </select>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Date</label>
-                  <input className={styles.formControl} type="date" value={menuForm.plan_date} onChange={(event) => setMenuForm((prev) => ({ ...prev, plan_date: event.target.value }))} required />
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Meal</label>
-                  <select className={styles.formControl} value={menuForm.meal_type} onChange={(event) => setMenuForm((prev) => ({ ...prev, meal_type: event.target.value }))}>
-                    {MEAL_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-                  </select>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Dish Name</label>
-                  <input
-                    className={styles.formControl}
-                    type="text"
-                    value={menuForm.dish_name}
-                    onChange={(event) => setMenuForm((prev) => ({ ...prev, dish_name: event.target.value }))}
-                    placeholder="e.g. Idli Sambar"
-                    required
-                  />
-                </div>
-                <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                  <label>Items</label>
-                  <textarea
-                    className={styles.formControl}
-                    value={menuForm.items}
-                    onChange={(event) => setMenuForm((prev) => ({ ...prev, items: event.target.value }))}
-                    placeholder="e.g. Sambar, coconut chutney, tea"
-                    required
-                  />
-                </div>
-              </div>
-              <div className={styles.modalActions}><button className={styles.btnPrimary} type="submit">Save Menu</button></div>
-            </form>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+             <div style={{ display: 'flex', gap: '8px' }}>
+                <button className={styles.btnSecondary} onClick={() => openBulkEditor('create')}>
+                   ➕ Create Menu
+                </button>
+                <button className={styles.btnSecondary} onClick={() => openBulkEditor('edit')}>
+                   ✏️ Change Menu
+                </button>
+             </div>
           </div>
 
-          <div className={styles.tableContainer}>
-            <table className={styles.table}>
-              <thead><tr><th>Date</th><th>Meal</th><th>Hostel</th><th>Dish</th><th>Items</th></tr></thead>
-              <tbody>
-                {menus.length === 0
-                  ? loadingRow(5, 'No menu plans found.')
-                  : menus
-                      .filter((item) => {
-                        const parsed = unpackMenuItems(item.items);
-                        return matchesSearch(item.hostel_name, parsed.dish_name, parsed.items, item.meal_type);
-                      })
-                      .map((item) => {
-                        const parsed = unpackMenuItems(item.items);
+          {menuMode === 'grid' ? (
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+              gap: '12px',
+              marginBottom: '30px'
+            }}>
+              {WEEKDAYS.map((day, idx) => {
+                const dateStr = currentWeekDates[idx];
+                return (
+                  <div key={day} className={styles.tableContainer} style={{ padding: '0', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ 
+                      padding: '8px', 
+                      background: '#f8fafc', 
+                      borderBottom: '1px solid #e2e8f0', 
+                      textAlign: 'center',
+                      fontWeight: 700,
+                      fontSize: '13px'
+                    }}>
+                      {day}
+                    </div>
+                    <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                      {MEALS.map(meal => {
+                        const data = weekMenuMap[`${dateStr}||${meal}`];
                         return (
-                      <tr key={item.id}>
-                        <td>{formatDate(item.plan_date)}</td>
-                        <td style={{ textTransform: 'capitalize' }}>{item.meal_type}</td>
-                        <td>{item.hostel_name}</td>
-                        <td style={{ whiteSpace: 'normal', fontWeight: 600 }}>{parsed.dish_name || '-'}</td>
-                        <td style={{ whiteSpace: 'normal' }}>{parsed.items || '-'}</td>
-                      </tr>
+                          <div 
+                            key={meal} 
+                            onClick={() => setEditingMeal({ date: dateStr, meal_type: meal, ...data })}
+                            style={{ 
+                              padding: '10px', 
+                              borderRadius: '8px', 
+                              border: '1px solid #f1f5f9',
+                              background: data ? '#fff' : '#fcfdfe',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              borderLeft: data ? '4px solid #1e293b' : '4px solid #e2e8f0'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#f1f5f9'; e.currentTarget.style.transform = 'none'; }}
+                          >
+                            <div style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, color: '#94a3b8', marginBottom: '2px' }}>{meal}</div>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: data ? '#1e293b' : '#cbd5e1' }}>
+                              {data?.dish || 'No menu planned'}
+                            </div>
+                            {data?.items && (
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {data.items}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={styles.tableContainer} style={{ padding: '24px', marginBottom: '30px' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 700 }}>Weekly Menu Editor</h3>
+                  <button className={styles.btnSecondary} onClick={() => setMenuMode('grid')}>Cancel Editor</button>
+               </div>
+               <form onSubmit={saveBulkMenu}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {WEEKDAYS.map((day, dIdx) => {
+                      const date = currentWeekDates[dIdx];
+                      return (
+                        <div key={day} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                           <div style={{ fontWeight: 700, color: '#1e293b', marginBottom: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                              {day}
+                           </div>
+                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+                              {MEALS.map(meal => (
+                                <div key={meal} className={styles.formGroup}>
+                                   <label style={{ fontSize: '11px' }}>{meal.toUpperCase()}</label>
+                                   <input 
+                                      className={styles.formControl} 
+                                      placeholder="Dish name" 
+                                      style={{ minHeight: '36px', fontSize: '13px', marginBottom: '4px' }}
+                                      value={bulkMenuData[`${date}||${meal}`]?.dish || ''}
+                                      onChange={(e) => setBulkMenuData(p => ({ ...p, [`${date}||${meal}`]: { ...p[`${date}||${meal}`], dish: e.target.value } }))}
+                                   />
+                                   <input 
+                                      className={styles.formControl} 
+                                      placeholder="Items" 
+                                      style={{ minHeight: '36px', fontSize: '11px' }}
+                                      value={bulkMenuData[`${date}||${meal}`]?.items || ''}
+                                      onChange={(e) => setBulkMenuData(p => ({ ...p, [`${date}||${meal}`]: { ...p[`${date}||${meal}`], items: e.target.value } }))}
+                                   />
+                                </div>
+                              ))}
+                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                     <button className={styles.btnSecondary} type="button" onClick={() => setMenuMode('grid')}>Discard Changes</button>
+                     <button className={styles.btnPrimary} type="submit" disabled={loading}>
+                       {loading ? <Loader2 size={16} className="animate-spin" /> : 'Save Full Weekly Menu'}
+                     </button>
+                  </div>
+               </form>
+            </div>
+          )}
+
+          {editingMeal && (
+            <div className={styles.modalBackdrop}>
+              <div className={styles.modalContent} style={{ width: '450px' }}>
+                <div className={styles.modalHeader}>
+                  <h3 className={styles.modalTitle}>Edit {editingMeal.meal_type} Menu</h3>
+                  <button className={styles.modalClose} onClick={() => setEditingMeal(null)}>✕</button>
+                </div>
+                <div style={{ marginBottom: '16px', fontSize: '13px', color: '#64748b' }}>
+                  Weekly Template Update
+                </div>
+                <form onSubmit={handleSingleSave} className={styles.modalForm}>
+                   <div className={styles.formGroup}>
+                      <label>Dish Name</label>
+                      <input 
+                        className={styles.formControl} 
+                        value={editingMeal.dish || ''} 
+                        onChange={(e) => setEditingMeal(prev => ({ ...prev, dish: e.target.value }))}
+                        placeholder="e.g. Masala Dosa"
+                        required
+                      />
+                   </div>
+                   <div className={styles.formGroup}>
+                      <label>Items / Components</label>
+                      <textarea 
+                        className={styles.formControl} 
+                        value={editingMeal.items || ''} 
+                        onChange={(e) => setEditingMeal(prev => ({ ...prev, items: e.target.value }))}
+                        placeholder="e.g. Sambar, Coconut Chutney"
+                      />
+                   </div>
+                   <div className={styles.modalActions}>
+                      <button className={styles.btnSecondary} type="button" onClick={() => setEditingMeal(null)}>Cancel</button>
+                      <button className={styles.btnPrimary} type="submit" disabled={loading}>
+                        {loading ? <Loader2 size={16} className="animate-spin" /> : 'Save Changes'}
+                      </button>
+                   </div>
+                </form>
+              </div>
+            </div>
+          )}
         </>
       )}
+
 
       {activeSection === 'attendance' && (
         <>
@@ -1142,16 +1443,26 @@ const HostelMess = () => {
               <div className={styles.formGrid}>
                 <div className={styles.formGroup}>
                   <label>Student</label>
-                  <select className={styles.formControl} value={attendanceForm.student} onChange={(event) => setAttendanceForm((prev) => ({ ...prev, student: event.target.value }))} required>
+                  <select 
+                    className={styles.formControl} 
+                    value={attendanceForm.student} 
+                    onChange={(event) => {
+                      const studentId = event.target.value;
+                      const allotment = activeAllotments.find((a) => String(a.student) === String(studentId));
+                      setAttendanceForm((prev) => ({ 
+                        ...prev, 
+                        student: studentId,
+                        hostel: allotment ? String(allotment.hostel_id || '') : prev.hostel
+                      }));
+                    }} 
+                    required
+                  >
                     <option value="">Select Student</option>
-                    {sortedStudents.map((student) => <option key={student.id} value={student.id}>{getStudentLabel(student)}</option>)}
-                  </select>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Hostel (Optional)</label>
-                  <select className={styles.formControl} value={attendanceForm.hostel} onChange={(event) => setAttendanceForm((prev) => ({ ...prev, hostel: event.target.value }))}>
-                    <option value="">Auto from allotment</option>
-                    {hostels.map((hostel) => <option key={hostel.id} value={hostel.id}>{hostel.name}</option>)}
+                    {activeAllotments.map((alloc) => (
+                      <option key={alloc.student} value={alloc.student}>
+                        {`${alloc.student_name} (${alloc.student_admission}) - ${alloc.hostel_name}`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className={styles.formGroup}>
@@ -1223,7 +1534,7 @@ const HostelMess = () => {
                   <label>Student</label>
                   <select className={styles.formControl} value={dietForm.student} onChange={(event) => setDietForm((prev) => ({ ...prev, student: event.target.value }))} required>
                     <option value="">Select Student</option>
-                    {sortedStudents.map((student) => <option key={student.id} value={student.id}>{getStudentLabel(student)}</option>)}
+                    {activeAllotments.map((alloc) => <option key={alloc.student} value={alloc.student}>{`${alloc.student_name} (${alloc.student_admission}) - ${alloc.hostel_name}`}</option>)}
                   </select>
                 </div>
                 <div className={styles.formGroup}>
@@ -1245,9 +1556,9 @@ const HostelMess = () => {
             <table className={styles.table}>
               <thead><tr><th>Student</th><th>Preference</th><th>Allergies/Restrictions</th></tr></thead>
               <tbody>
-                {diets.length === 0
+                {filteredDiets.length === 0
                   ? loadingRow(3, 'No diet profiles found.')
-                  : diets.filter((row) => matchesSearch(row.student_name, row.preference, row.allergies)).map((row) => (
+                  : filteredDiets.map((row) => (
                       <tr key={row.id}>
                         <td>
                           <div style={{ fontWeight: 600 }}>{row.student_name || '-'}</div>
@@ -1273,16 +1584,26 @@ const HostelMess = () => {
               <div className={styles.formGrid}>
                 <div className={styles.formGroup}>
                   <label>Student</label>
-                  <select className={styles.formControl} value={feedbackForm.student} onChange={(event) => setFeedbackForm((prev) => ({ ...prev, student: event.target.value }))} required>
+                  <select 
+                    className={styles.formControl} 
+                    value={feedbackForm.student} 
+                    onChange={(event) => {
+                      const studentId = event.target.value;
+                      const allotment = activeAllotments.find((a) => String(a.student) === String(studentId));
+                      setFeedbackForm((prev) => ({ 
+                        ...prev, 
+                        student: studentId,
+                        hostel: allotment ? String(allotment.hostel_id || '') : prev.hostel
+                      }));
+                    }} 
+                    required
+                  >
                     <option value="">Select Student</option>
-                    {sortedStudents.map((student) => <option key={student.id} value={student.id}>{getStudentLabel(student)}</option>)}
-                  </select>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Hostel (Optional)</label>
-                  <select className={styles.formControl} value={feedbackForm.hostel} onChange={(event) => setFeedbackForm((prev) => ({ ...prev, hostel: event.target.value }))}>
-                    <option value="">Auto from allotment</option>
-                    {hostels.map((hostel) => <option key={hostel.id} value={hostel.id}>{hostel.name}</option>)}
+                    {activeAllotments.map((alloc) => (
+                      <option key={alloc.student} value={alloc.student}>
+                        {`${alloc.student_name} (${alloc.student_admission}) - ${alloc.hostel_name}`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className={styles.formGroup}><label>Date</label><input className={styles.formControl} type="date" value={feedbackForm.date} onChange={(event) => setFeedbackForm((prev) => ({ ...prev, date: event.target.value }))} /></div>
@@ -1359,7 +1680,7 @@ const HostelMess = () => {
                   () => ({
                     hostel: Number(inventoryForm.hostel),
                     name: inventoryForm.name,
-                    unit: inventoryForm.unit,
+                    unit: `${inventoryForm.qty_count} x ${inventoryForm.unit_size}`,
                     current_stock: parseAmount(inventoryForm.current_stock),
                     minimum_stock: parseAmount(inventoryForm.minimum_stock),
                   }),
@@ -1371,7 +1692,18 @@ const HostelMess = () => {
               <div className={styles.formGrid}>
                 <div className={styles.formGroup}><label>Hostel</label><select className={styles.formControl} value={inventoryForm.hostel} onChange={(event) => setInventoryForm((prev) => ({ ...prev, hostel: event.target.value }))} required><option value="">Select Hostel</option>{hostels.map((hostel) => <option key={hostel.id} value={hostel.id}>{hostel.name}</option>)}</select></div>
                 <div className={styles.formGroup}><label>Item Name</label><input className={styles.formControl} value={inventoryForm.name} onChange={(event) => setInventoryForm((prev) => ({ ...prev, name: event.target.value }))} required /></div>
-                <div className={styles.formGroup}><label>Unit</label><input className={styles.formControl} value={inventoryForm.unit} onChange={(event) => setInventoryForm((prev) => ({ ...prev, unit: event.target.value }))} /></div>
+                <div className={styles.formGroup}>
+                  <label>Qty (Numbers)</label>
+                  <select className={styles.formControl} value={inventoryForm.qty_count} onChange={(event) => setInventoryForm((prev) => ({ ...prev, qty_count: event.target.value }))}>
+                    {[...Array(100)].map((_, i) => <option key={i+1} value={i+1}>{i+1}</option>)}
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Unit Size</label>
+                  <select className={styles.formControl} value={inventoryForm.unit_size} onChange={(event) => setInventoryForm((prev) => ({ ...prev, unit_size: event.target.value }))}>
+                    {MESS_UNIT_SIZE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
                 <div className={styles.formGroup}><label>Current Stock</label><input className={styles.formControl} type="number" min="0" step="0.01" value={inventoryForm.current_stock} onChange={(event) => setInventoryForm((prev) => ({ ...prev, current_stock: event.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Minimum Stock</label><input className={styles.formControl} type="number" min="0" step="0.01" value={inventoryForm.minimum_stock} onChange={(event) => setInventoryForm((prev) => ({ ...prev, minimum_stock: event.target.value }))} /></div>
               </div>

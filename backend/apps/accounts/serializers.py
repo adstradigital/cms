@@ -48,7 +48,7 @@ class UserSerializer(serializers.ModelSerializer):
             "id", "username", "email", "first_name", "last_name",
             "full_name", "phone", "is_verified", "is_active",
             "role", "role_name", "school", "school_name",
-            "profile", "date_joined", "is_superuser",
+            "profile", "date_joined", "is_superuser", "portal",
             "accessible_section_ids", "role_scope", "managed_sections"
         ]
 

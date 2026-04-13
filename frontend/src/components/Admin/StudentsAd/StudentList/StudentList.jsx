@@ -209,10 +209,6 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
                   key={student.id} 
                   className={`${styles.tableRow} ${activeDropdown === student.id ? styles.tableRowActiveDropdown : ''}`}
                   onClick={() => onViewProfile(student.id)}
-                  style={{ 
-                    position: 'relative', 
-                    zIndex: activeDropdown === student.id ? 100 : 1 
-                  }}
                 >
                   <td>
                     <div className={styles.studentNameCol}>

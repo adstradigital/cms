@@ -29,13 +29,28 @@ const QuickActionFab = ({ onAction, scale = 1 }) => {
 
   const handlePointerDown = useCallback((e) => {
     if (e.target.closest(`.${styles.actionItem}`)) return;
+
+    // Capture current actual position if it's still null (driven by CSS defaults)
+    let curX = position.x;
+    let curY = position.y;
+
+    if (curX === null || curY === null) {
+      const container = dragRef.current?.closest(`.${styles.fabContainer}`);
+      const rect = container?.getBoundingClientRect();
+      if (rect) {
+        curX = rect.left + rect.width / 2;
+        curY = rect.top + rect.height / 2;
+        setPosition({ x: curX, y: curY });
+      }
+    }
+
     setIsDragging(true);
     hasMoved.current = false;
     dragStart.current = {
       x: e.clientX,
       y: e.clientY,
-      posX: position.x,
-      posY: position.y,
+      posX: curX || 0,
+      posY: curY || 0,
     };
     dragRef.current?.setPointerCapture(e.pointerId);
   }, [position]);
@@ -49,8 +64,8 @@ const QuickActionFab = ({ onAction, scale = 1 }) => {
       hasMoved.current = true;
     }
 
-    const newX = Math.min(Math.max(30, dragStart.current.posX + dx), window.innerWidth - 30);
-    const newY = Math.min(Math.max(30, dragStart.current.posY + dy), window.innerHeight - 30);
+    const newX = Math.min(Math.max(28, dragStart.current.posX + dx), window.innerWidth - 28);
+    const newY = Math.min(Math.max(28, dragStart.current.posY + dy), window.innerHeight - 28);
     setPosition({ x: newX, y: newY });
   }, [isDragging]);
 

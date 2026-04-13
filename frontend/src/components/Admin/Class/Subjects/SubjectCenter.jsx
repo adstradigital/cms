@@ -17,16 +17,31 @@ import styles from './Subjects.module.css';
 import adminApi from '@/api/adminApi';
 import LessonPlanner from './LessonPlanner';
 
-const SubjectCenter = () => {
-  const [view, setView] = useState('grid');
+const SubjectCenter = ({ section = null }) => {
+  const sectionId = section?.id ? Number(section.id) : null;
+  const forcedClassId = section?.school_class ? String(section.school_class) : '';
+  const isSectionScoped = Boolean(sectionId);
+  const [view, setView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('subjectViewMode') || 'grid';
+    }
+    return 'grid';
+  });
+
+  const handleSetView = (newView) => {
+    setView(newView);
+    localStorage.setItem('subjectViewMode', newView);
+  };
   const [subjects, setSubjects] = useState([]);
   const [allocations, setAllocations] = useState([]);
   const [lessonPlans, setLessonPlans] = useState([]);
   const [sections, setSections] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [academicYears, setAcademicYears] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState(forcedClassId);
 
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedAllocation, setSelectedAllocation] = useState(null);
@@ -35,15 +50,18 @@ const SubjectCenter = () => {
   const [editingAllocation, setEditingAllocation] = useState(null);
 
   const [newAlloc, setNewAlloc] = useState({ subject: '', section: '', teachers: [], academic_year: '' });
-  const [newSubject, setNewSubject] = useState({ name: '', code: '', description: '' });
+  const [newSubject, setNewSubject] = useState({ name: '', code: '', description: '', school_class: forcedClassId, weekly_periods: 5 });
   const [selectedSectionStats, setSelectedSectionStats] = useState(0);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      const effectiveClassId = forcedClassId || selectedClassId;
+      const subjectParams = effectiveClassId ? { school_class: effectiveClassId } : undefined;
+      const allocationParams = isSectionScoped ? { section: sectionId } : undefined;
       const [subsRes, allocRes, plansRes, sectionsRes, teachersRes, yearsRes] = await Promise.all([
-        adminApi.getSubjects(),
-        adminApi.getAllocations(),
+        adminApi.getSubjects(subjectParams),
+        adminApi.getAllocations(allocationParams),
         adminApi.getLessonPlans(),
         adminApi.getSections(),
         adminApi.getUsers({ portal: 'admin' }),
@@ -52,7 +70,21 @@ const SubjectCenter = () => {
       setSubjects(Array.isArray(subsRes.data) ? subsRes.data : []);
       setAllocations(Array.isArray(allocRes.data) ? allocRes.data : []);
       setLessonPlans(Array.isArray(plansRes.data) ? plansRes.data : []);
-      setSections(Array.isArray(sectionsRes.data) ? sectionsRes.data : []);
+      const sectionRows = Array.isArray(sectionsRes.data) ? sectionsRes.data : [];
+      setSections(sectionRows);
+      const classMap = new Map();
+      sectionRows.forEach((s) => {
+        const cid = s.school_class || s.school_class_id;
+        if (!cid) return;
+        if (!classMap.has(cid)) {
+          classMap.set(cid, { id: cid, name: s.class_name || `Class ${cid}` });
+        }
+      });
+      const classList = Array.from(classMap.values()).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      if (forcedClassId && section?.class_name && !classList.find((c) => String(c.id) === String(forcedClassId))) {
+        classList.push({ id: Number(forcedClassId), name: section.class_name });
+      }
+      setClasses(classList);
       setTeachers(Array.isArray(teachersRes.data) ? teachersRes.data : []);
       const years = Array.isArray(yearsRes.data) ? yearsRes.data : [];
       setAcademicYears(years);
@@ -70,7 +102,16 @@ const SubjectCenter = () => {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedClassId, forcedClassId, sectionId]);
+
+  useEffect(() => {
+    if (!forcedClassId) return;
+    setSelectedClassId(forcedClassId);
+    setNewSubject((prev) => ({ ...prev, school_class: forcedClassId }));
+    if (isSectionScoped) {
+      setNewAlloc((prev) => ({ ...prev, section: sectionId }));
+    }
+  }, [forcedClassId, isSectionScoped, sectionId]);
 
   const subjectTopicMap = useMemo(() => {
     const map = {};
@@ -136,6 +177,14 @@ const SubjectCenter = () => {
     return subjects.filter((s) => s.name.toLowerCase().includes(q) || (s.code || '').toLowerCase().includes(q));
   }, [subjects, query]);
 
+  const scopedSections = useMemo(() => {
+    if (isSectionScoped) {
+      return sections.filter((s) => Number(s.id) === sectionId);
+    }
+    if (!selectedClassId) return sections;
+    return sections.filter((s) => String(s.school_class || s.school_class_id) === String(selectedClassId));
+  }, [isSectionScoped, sectionId, sections, selectedClassId]);
+
   const openAllocationModal = (subjectId, allocation = null) => {
     if (allocation) {
       setEditingAllocation(allocation);
@@ -149,20 +198,27 @@ const SubjectCenter = () => {
       setSelectedSectionStats(sectionObj?.student_count || 0);
     } else {
       setEditingAllocation(null);
-      setNewAlloc((prev) => ({ ...prev, subject: subjectId, section: '', teachers: [], academic_year: prev.academic_year || '' }));
-      setSelectedSectionStats(0);
+      const scopedSectionObj = sections.find((s) => Number(s.id) === sectionId);
+      setNewAlloc((prev) => ({
+        ...prev,
+        subject: subjectId,
+        section: isSectionScoped ? sectionId : '',
+        teachers: [],
+        academic_year: prev.academic_year || '',
+      }));
+      setSelectedSectionStats(isSectionScoped ? (scopedSectionObj?.student_count || 0) : 0);
     }
     setIsAssigning(true);
   };
 
   const saveAllocation = async () => {
-    if (!newAlloc.subject || !newAlloc.section || !newAlloc.academic_year || newAlloc.teachers.length === 0) {
+    if (!newAlloc.subject || (!isSectionScoped && !newAlloc.section) || !newAlloc.academic_year || newAlloc.teachers.length === 0) {
       alert('Please select class, academic year, and at least one teacher.');
       return;
     }
     const payload = {
       subject: Number(newAlloc.subject),
-      section: Number(newAlloc.section),
+      section: Number(isSectionScoped ? sectionId : newAlloc.section),
       academic_year: Number(newAlloc.academic_year),
       teachers: newAlloc.teachers.map(Number),
     };
@@ -318,12 +374,16 @@ const SubjectCenter = () => {
       <div className={styles.header}>
         <div className={styles.titleArea}>
           <h2>Subject & Syllabus Center</h2>
-          <p>Manage curriculum, lesson plans, and teacher allocations.</p>
+          <p>
+            {isSectionScoped
+              ? `Manage curriculum for ${section?.class_name || 'Class'} - ${section?.name || 'Section'}.`
+              : 'Manage curriculum, lesson plans, and teacher allocations.'}
+          </p>
         </div>
         <div className={styles.actionRow}>
           <div className={styles.filters} style={{ marginRight: 12 }}>
-            <button className={styles.iconBtn} onClick={() => setView('grid')} style={{ background: view === 'grid' ? 'var(--color-primary)' : 'white', color: view === 'grid' ? 'white' : 'inherit' }}><LayoutGrid size={18} /></button>
-            <button className={styles.iconBtn} onClick={() => setView('list')} style={{ background: view === 'list' ? 'var(--color-primary)' : 'white', color: view === 'list' ? 'white' : 'inherit' }}><List size={18} /></button>
+            <button className={styles.iconBtn} onClick={() => handleSetView('grid')} style={{ background: view === 'grid' ? 'var(--color-primary)' : 'white', color: view === 'grid' ? 'white' : 'inherit' }}><LayoutGrid size={18} /></button>
+            <button className={styles.iconBtn} onClick={() => handleSetView('list')} style={{ background: view === 'list' ? 'var(--color-primary)' : 'white', color: view === 'list' ? 'white' : 'inherit' }}><List size={18} /></button>
           </div>
           <button className={`${styles.btn} ${styles.primary}`} onClick={() => setIsAddingSubject(true)}><Plus size={18} /> Add Subject</button>
         </div>
@@ -335,6 +395,23 @@ const SubjectCenter = () => {
           <input type="text" placeholder="Search subjects..." className={styles.searchInput} value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
         <div className={styles.filters}>
+          {!isSectionScoped ? (
+            <select
+              className={styles.select}
+              value={selectedClassId}
+              onChange={(e) => setSelectedClassId(e.target.value)}
+              style={{ minWidth: 200 }}
+            >
+              <option value="">All Classes</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          ) : (
+            <div className={styles.select} style={{ minWidth: 260, display: 'flex', alignItems: 'center' }}>
+              {section?.class_name || 'Class'} - {section?.name || 'Section'}
+            </div>
+          )}
           <button className={`${styles.btn} ${styles.outline}`}><Filter size={18} /> Filters</button>
         </div>
       </div>
@@ -360,10 +437,14 @@ const SubjectCenter = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 8 }}>Select Class</label>
-                <select className={styles.select} style={{ width: '100%' }} value={newAlloc.section} onChange={(e) => { const sid = Number(e.target.value); setNewAlloc((prev) => ({ ...prev, section: sid })); const sectionObj = sections.find((s) => s.id === sid); setSelectedSectionStats(sectionObj?.student_count || 0); }}>
-                  <option value="">-- Choose a class --</option>
-                  {sections.map((s) => <option key={s.id} value={s.id}>{s.class_name} - {s.name}</option>)}
-                </select>
+                {!isSectionScoped ? (
+                  <select className={styles.select} style={{ width: '100%' }} value={newAlloc.section} onChange={(e) => { const sid = Number(e.target.value); setNewAlloc((prev) => ({ ...prev, section: sid })); const sectionObj = sections.find((s) => s.id === sid); setSelectedSectionStats(sectionObj?.student_count || 0); }}>
+                    <option value="">-- Choose a class --</option>
+                    {scopedSections.map((s) => <option key={s.id} value={s.id}>{s.class_name} - {s.name}</option>)}
+                  </select>
+                ) : (
+                  <input className={styles.searchInput} readOnly style={{ width: '100%', paddingLeft: 12 }} value={`${section?.class_name || ''} - ${section?.name || ''}`} />
+                )}
               </div>
 
               <div>
@@ -440,19 +521,58 @@ const SubjectCenter = () => {
                 <label style={{ fontSize: 13, fontWeight: 600 }}>Description (Optional)</label>
                 <textarea className={styles.searchInput} style={{ width: '100%', paddingLeft: 12, marginTop: 4, minHeight: 80, paddingTop: 10 }} placeholder="General syllabus overview..." value={newSubject.description} onChange={(e) => setNewSubject({ ...newSubject, description: e.target.value })} />
               </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600 }}>Class</label>
+                {!isSectionScoped ? (
+                  <select
+                    className={styles.select}
+                    style={{ width: '100%', marginTop: 4 }}
+                    value={newSubject.school_class}
+                    onChange={(e) => setNewSubject({ ...newSubject, school_class: e.target.value })}
+                  >
+                    <option value="">-- Select class --</option>
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input className={styles.searchInput} readOnly style={{ width: '100%', paddingLeft: 12, marginTop: 4 }} value={section?.class_name || ''} />
+                )}
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600 }}>Weekly Periods</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  className={styles.searchInput}
+                  style={{ width: '100%', paddingLeft: 12, marginTop: 4 }}
+                  value={newSubject.weekly_periods}
+                  onChange={(e) => setNewSubject({ ...newSubject, weekly_periods: Number(e.target.value || 1) })}
+                />
+              </div>
               <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
                 <button className={styles.btn} onClick={() => setIsAddingSubject(false)} style={{ flex: 1 }}>Cancel</button>
                 <button
                   className={`${styles.btn} ${styles.primary}`}
                   style={{ flex: 1 }}
                   onClick={async () => {
+                    if (!newSubject.school_class) {
+                      alert('Please select class for this subject.');
+                      return;
+                    }
                     try {
-                      const res = await adminApi.createSubject(newSubject);
+                      const payload = {
+                        ...newSubject,
+                        school_class: Number(newSubject.school_class),
+                        weekly_periods: Number(newSubject.weekly_periods || 5),
+                      };
+                      const res = await adminApi.createSubject(payload);
                       setSubjects((prev) => [res.data, ...prev]);
                       setIsAddingSubject(false);
-                      setNewSubject({ name: '', code: '', description: '' });
+                      setNewSubject({ name: '', code: '', description: '', school_class: forcedClassId || '', weekly_periods: 5 });
                     } catch (err) {
-                      alert('Creation failed. Check if code already exists.');
+                      alert(err?.response?.data?.error || 'Creation failed. Check class and subject code.');
                     }
                   }}
                 >

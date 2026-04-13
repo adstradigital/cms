@@ -70,6 +70,13 @@
   background: var(--color-surface-hover);
 }
 
+.btnActive {
+  background: var(--color-surface-hover) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+}
+
 .tabContainer {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -241,6 +248,11 @@
   border-color: var(--color-primary);
   transform: translateY(-4px);
   box-shadow: var(--shadow-lg);
+  z-index: 10;
+}
+
+.cardActive {
+  z-index: 20 !important;
 }
 
 .cardRank {
@@ -337,13 +349,14 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--color-primary-light);
-  color: white;
+  background: var(--color-primary);
+  color: #ffffff !important;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 11px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .cardActions {

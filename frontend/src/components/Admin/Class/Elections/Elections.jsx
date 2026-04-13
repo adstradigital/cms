@@ -178,8 +178,13 @@ const ElectionsView = ({ section = null, sections = [] }) => {
     <div className={styles.setupCard}>
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
         <div style={{ display: 'inline-flex', padding: 24, background: '#f8fafc', borderRadius: '50%', marginBottom: 16, border: '1px solid #e2e8f0' }}><Fingerprint size={48} color="#1e293b" /></div>
-        <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0f172a' }}>Election Console</h2>
-        <p style={{ color: '#64748b', fontSize: '1.1rem' }}>Configure and deploy a secure voting terminal.</p>
+        <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0f172a' }}>
+          {section ? `${section.class_name} — Section ${section.name} Election Console` : 'Election Console'}
+        </h2>
+        <p style={{ color: '#64748b', fontSize: '1.1rem' }}>
+          {section ? `Class Teacher: ${section.class_teacher_name || 'Not assigned'} • ` : ''}
+          Configure and deploy a secure voting terminal for this section.
+        </p>
       </div>
 
       <div className={styles.formGroup}>
@@ -243,7 +248,13 @@ const ElectionsView = ({ section = null, sections = [] }) => {
   const renderDashboard = () => (
     <div className={styles.dashboardContainer}>
       <div className={styles.header}>
-        <div className={styles.titleArea}><h2>{election.title}</h2><p>{election.className} • {election.role}</p></div>
+        <div className={styles.titleArea}>
+          <h2>{election.title}</h2>
+          <p>
+            {section ? `${section.class_name} — Section ${section.name}` : election.className} • {election.role}
+            {section?.class_teacher_name && ` • Class Teacher: ${section.class_teacher_name}`}
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: 16 }}>
           <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={launchKiosk}><Layout size={20} /> Launch Kiosk Terminal</button>
           <button className={`${styles.btn} ${styles.btnDanger}`} onClick={() => setConfirmEndOpen(true)}><StopCircle size={20} /> End Session</button>

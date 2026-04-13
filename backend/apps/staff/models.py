@@ -50,6 +50,11 @@ class Staff(models.Model):
 class TeacherDetail(models.Model):
     staff = models.OneToOneField(Staff, on_delete=models.CASCADE, related_name="teacher_detail")
     specialization = models.CharField(max_length=255, blank=True) # e.g. "Pure Mathematics"
+    teaching_subjects = models.ManyToManyField(
+        "academics.Subject",
+        blank=True,
+        related_name="teacher_details",
+    )
     bio = models.TextField(blank=True)
     
     # Academic context like assigned subjects and classes is already handled 

@@ -70,6 +70,26 @@ const ReportCardsView = ({ section }) => {
     }
   };
 
+  const autoGenerateReportCards = async () => {
+    if (!section?.id || !examId) return;
+    try {
+      setLoading(true);
+      const res = await adminApi.generateAiReportCardsForSection({
+        section_id: section.id,
+        exam_id: Number(examId),
+        persist: true,
+      });
+      const generated = res?.data?.generated_count || 0;
+      const skipped = res?.data?.skipped_count || 0;
+      push(`Auto-generated ${generated} report cards${skipped ? `, skipped ${skipped}` : ''}.`, 'success');
+      await loadReportCards();
+    } catch (e) {
+      push(e?.response?.data?.error || 'Could not auto-generate report cards', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -81,6 +101,7 @@ const ReportCardsView = ({ section }) => {
         </div>
         <div className={styles.actions}>
           <button className={styles.btn} onClick={load} disabled={!section?.id || loading}><RefreshCw size={16} /> Refresh</button>
+          <button className={styles.btn} onClick={autoGenerateReportCards} disabled={!section?.id || !examId || loading}>Auto Generate</button>
           <button className={styles.btn} onClick={() => setConfirmCalcOpen(true)} disabled={!examId || loading}><BarChart3 size={16} /> Calculate Stats</button>
         </div>
       </div>

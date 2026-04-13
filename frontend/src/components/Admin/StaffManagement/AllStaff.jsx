@@ -22,7 +22,18 @@ export default function AllStaff() {
   // View State
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
-  const [isGrid, setIsGrid] = useState(false);
+  const [isGrid, setIsGrid] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('staffViewMode');
+      return saved === null ? true : saved === 'grid';
+    }
+    return true;
+  });
+
+  const handleSetIsGrid = (val) => {
+    setIsGrid(val);
+    localStorage.setItem('staffViewMode', val ? 'grid' : 'list');
+  };
 
   // Modals & Action State
   const [addOpen, setAddOpen] = useState(false);
@@ -95,7 +106,7 @@ export default function AllStaff() {
         setFilterRole={setFilterRole}
         roles={roles}
         isGrid={isGrid}
-        setIsGrid={setIsGrid}
+        setIsGrid={handleSetIsGrid}
         exportToCSV={handleExportCSV}
         openAddModal={() => setAddOpen(true)}
       />

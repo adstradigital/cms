@@ -10,6 +10,7 @@ from .serializers import StaffSerializer, TeacherDetailSerializer, StaffCreateSe
 from django.utils import timezone
 from apps.accounts.models import User
 from apps.permissions.models import Role as RoleV2
+from apps.academics.models import Subject
 
 def _random_password(length=12):
     alphabet = string.ascii_letters + string.digits
@@ -25,7 +26,7 @@ def staff_list_view(request):
         status_filter = request.query_params.get('status')
         role_filter = request.query_params.get('role')  # teacher | non_teacher
         role_id = request.query_params.get('role_id')
-        qs = Staff.objects.select_related("user", "user__role").all()
+        qs = Staff.objects.select_related("user", "user__role", "teacher_detail").all()
 
         if role_filter == 'teacher':
             qs = qs.filter(is_teaching_staff=True)
@@ -57,6 +58,7 @@ def staff_list_view(request):
     phone = data.get("phone") or ""
     role_id = data.get("role")
     role = RoleV2.objects.filter(pk=role_id).first() if role_id else None
+    requested_subject_ids = data.get("teaching_subject_ids", []) or []
 
     with transaction.atomic():
         user = User.objects.create(
@@ -86,13 +88,18 @@ def staff_list_view(request):
             is_teaching_staff=data.get("is_teaching_staff", True),
         )
         if staff.is_teaching_staff:
-            TeacherDetail.objects.get_or_create(
+            teacher_detail, _ = TeacherDetail.objects.get_or_create(
                 staff=staff,
                 defaults={
                     "specialization": data.get("specialization", ""),
                     "bio": data.get("bio", ""),
                 },
             )
+            if requested_subject_ids:
+                allowed_subjects = Subject.objects.filter(id__in=requested_subject_ids).filter(
+                    models.Q(school=request.user.school) | models.Q(school__isnull=True)
+                )
+                teacher_detail.teaching_subjects.set(allowed_subjects)
 
     return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
 
@@ -100,7 +107,7 @@ def staff_list_view(request):
 @permission_classes([permissions.IsAuthenticated])
 def teacher_list_view(request):
     """Detailed teacher list with academic allocations."""
-    qs = Staff.objects.select_related("user", "user__role").filter(is_teaching_staff=True)
+    qs = Staff.objects.select_related("user", "user__role", "teacher_detail").filter(is_teaching_staff=True)
     serializer = StaffSerializer(qs, many=True)
     
     # Enrich with teacher detail if needed
@@ -110,7 +117,7 @@ def teacher_list_view(request):
 @permission_classes([permissions.IsAuthenticated])
 def staff_detail_view(request, pk):
     try:
-        staff = Staff.objects.select_related("user", "user__role").get(pk=pk)
+        staff = Staff.objects.select_related("user", "user__role", "teacher_detail").get(pk=pk)
     except Staff.DoesNotExist:
         return Response(status=status.HTTP_404_NOT_FOUND)
         
@@ -139,6 +146,13 @@ def staff_detail_view(request, pk):
             staff.user.role_id = data["role"]
         if "is_active" in data:
             staff.user.is_active = data["is_active"]
+        if "teaching_subject_ids" in data and staff.is_teaching_staff:
+            teacher_detail, _ = TeacherDetail.objects.get_or_create(staff=staff)
+            requested_subject_ids = data.get("teaching_subject_ids", []) or []
+            allowed_subjects = Subject.objects.filter(id__in=requested_subject_ids).filter(
+                models.Q(school=staff.user.school) | models.Q(school__isnull=True)
+            )
+            teacher_detail.teaching_subjects.set(allowed_subjects)
         staff.user.save()
         staff.save()
         return Response(StaffSerializer(staff).data, status=status.HTTP_200_OK)

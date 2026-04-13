@@ -44,4 +44,8 @@ urlpatterns = [
     # Substitute
     path("substitutes/", views.substitute_log_list_view, name="substitute-log-list"),
     path("substitutes/available/", views.available_substitutes_view, name="available-substitutes"),
+
+    # Course Sessions
+    path("course-sessions/", views.course_session_list_view, name="course-session-list"),
+    path("course-sessions/<int:pk>/", views.course_session_detail_view, name="course-session-detail"),
 ]

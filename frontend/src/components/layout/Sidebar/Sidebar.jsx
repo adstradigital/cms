@@ -13,7 +13,7 @@ const menuItems = {
     { label: 'Classes', href: '/admins/classes', icon: '🏫' },
   
     { label: 'Course Sessions', href: '/admins/courses', icon: '📚' },
-    { label: 'Admissions', href: '/admins/admissions', icon: '📝' },
+    { label: 'Lead Generation', href: '/admins/leads', icon: '📝' },
     { label: 'Examinations', href: '/admins/exams', icon: '📑' },
   ],
   staff: [

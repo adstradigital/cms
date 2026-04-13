@@ -1,8 +1,10 @@
 from rest_framework import serializers
 from .models import (
     Subject, SyllabusUnit, SyllabusChapter, SyllabusTopic, SubjectAllocation, LessonPlan,
-    Timetable, Period, Homework, HomeworkSubmission, SubstituteLog, Assignment, Material
+    Timetable, Period, Homework, HomeworkSubmission, SubstituteLog, Assignment, Material,
+    CourseSession,
 )
+
 
 
 class LessonPlanSerializer(serializers.ModelSerializer):
@@ -151,3 +153,46 @@ class MaterialSerializer(serializers.ModelSerializer):
 
     def get_section_name(self, obj):
         return f"{obj.section.school_class.name} — {obj.section.name}"
+
+
+class CourseSessionSerializer(serializers.ModelSerializer):
+    subject_name    = serializers.CharField(source="subject.name", read_only=True)
+    subject_color   = serializers.CharField(source="subject.color_code", read_only=True)
+    section_name    = serializers.SerializerMethodField()
+    class_name      = serializers.CharField(source="section.school_class.name", read_only=True)
+    teacher_name    = serializers.SerializerMethodField()
+    academic_year_label = serializers.SerializerMethodField()
+    session_type_display = serializers.CharField(source="get_session_type_display", read_only=True)
+    status_display  = serializers.CharField(source="get_status_display", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CourseSession
+        fields = [
+            "id", "academic_year", "academic_year_label",
+            "section", "section_name", "class_name",
+            "subject", "subject_name", "subject_color",
+            "teacher", "teacher_name",
+            "session_type", "session_type_display",
+            "title", "date", "start_time", "end_time",
+            "status", "status_display", "notes",
+            "created_by", "created_by_name", "created_at", "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at", "created_by"]
+
+    def get_section_name(self, obj):
+        return f"{obj.section.school_class.name} — {obj.section.name}"
+
+    def get_teacher_name(self, obj):
+        if obj.teacher:
+            return obj.teacher.get_full_name()
+        return None
+
+    def get_academic_year_label(self, obj):
+        ay = obj.academic_year
+        return f"{ay.start_date.year}–{ay.end_date.year}" if ay else ""
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name()
+        return None

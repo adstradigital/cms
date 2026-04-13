@@ -239,3 +239,43 @@ class Material(models.Model):
     class Meta:
         db_table = "materials"
         ordering = ["-created_at"]
+
+
+class CourseSession(models.Model):
+    SESSION_TYPE_CHOICES = [
+        ("lecture", "Lecture"),
+        ("lab", "Lab / Practical"),
+        ("tutorial", "Tutorial"),
+        ("revision", "Revision"),
+        ("test", "Class Test"),
+        ("other", "Other"),
+    ]
+    STATUS_CHOICES = [
+        ("scheduled", "Scheduled"),
+        ("ongoing", "Ongoing"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="course_sessions")
+    section       = models.ForeignKey("students.Section", on_delete=models.CASCADE, related_name="course_sessions")
+    subject       = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="course_sessions")
+    teacher       = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="course_sessions")
+    session_type  = models.CharField(max_length=20, choices=SESSION_TYPE_CHOICES, default="lecture")
+    title         = models.CharField(max_length=255, blank=True, help_text="Optional label; defaults to subject name if blank.")
+    date          = models.DateField()
+    start_time    = models.TimeField()
+    end_time      = models.TimeField()
+    status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default="scheduled")
+    notes         = models.TextField(blank=True)
+    created_by    = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="created_course_sessions")
+    created_at    = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        label = self.title or self.subject.name
+        return f"{label} — {self.section} ({self.date})"
+
+    class Meta:
+        db_table = "course_sessions"
+        ordering = ["-date", "start_time"]

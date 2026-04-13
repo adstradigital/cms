@@ -56,38 +56,10 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Defines which roles are allowed per portal
-  const portalRoleMap = {
-    student: ['student'],
-    parent:  ['parent'],
-    admin:   ['admin', 'super admin', 'super_admin', 'principal'],
-    staff:   ['staff'],
-  };
 
   const login = async (credentials) => {
     const res = await authApi.login(credentials);
     const userData = res.data.user;
-    const requestedPortal = String(credentials.role || '').toLowerCase();
-    const userRole = String(userData?.role_name || userData?.role || '').toLowerCase();
-
-    // Validate that the user's actual role matches the portal they are logging in from
-    if (requestedPortal && portalRoleMap[requestedPortal]) {
-      const allowedRoles = portalRoleMap[requestedPortal];
-      if (!allowedRoles.includes(userRole)) {
-        // Determine which portal they SHOULD use
-        let correctPortalMsg = 'the correct portal';
-        if (['admin', 'super admin', 'super_admin', 'principal'].includes(userRole)) {
-          correctPortalMsg = 'Admin Console';
-        } else if (userRole === 'staff') {
-          correctPortalMsg = 'Staff Portal';
-        } else if (userRole === 'student') {
-          correctPortalMsg = 'Student Portal';
-        } else if (userRole === 'parent') {
-          correctPortalMsg = 'Parent Portal';
-        }
-        throw new Error(`Access denied. Your account is assigned to the ${correctPortalMsg}. Please select the correct tab above.`);
-      }
-    }
 
     localStorage.setItem('access_token', res.data.access);
     localStorage.setItem('refresh_token', res.data.refresh);

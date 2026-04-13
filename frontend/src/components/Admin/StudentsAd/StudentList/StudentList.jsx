@@ -3,7 +3,7 @@ import { Search, Filter, Plus, MoreVertical, Eye, Edit3, Trash2 } from 'lucide-r
 import styles from './StudentList.module.css';
 import instance from '@/api/instance';
 
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 10;
 
 const getPerformanceScore = (student) => {
   const raw = student?.average_marks ?? student?.avg_marks ?? student?.performance_score ?? student?.marks_percentage;
@@ -23,7 +23,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    const fetchFilterOptions = async () => {
+    const fetchStudents = async () => {
       try {
         setLoading(true);
         const collected = [];

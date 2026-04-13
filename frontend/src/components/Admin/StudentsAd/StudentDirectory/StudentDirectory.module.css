@@ -4,6 +4,7 @@
   flex: 1;
   overflow: hidden;
   height: 100%;
+  min-height: 0;
 }
 
 .centerColumn {
@@ -12,7 +13,7 @@
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
-  padding-bottom: 16px;
+  min-height: 0;
 }
 
 /* Hide scrollbar */
@@ -20,6 +21,6 @@
   display: none;
 }
 .centerColumn {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

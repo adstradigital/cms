@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calendar, CheckCircle2, Clock3, MailWarning, Search, UserCheck, UserX } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock3, MailWarning, Search, UserCheck, UserX } from 'lucide-react';
 import styles from './AttendenceStdAd.module.css';
 
 const API_BASE = 'http://127.0.0.1:8000/api';
@@ -105,6 +105,31 @@ export default function AttendenceStdAd() {
     );
   }, [overview, search]);
 
+  // ─── Pagination ───
+  const ITEMS_PER_PAGE = 15;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, section, month, year, threshold]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * ITEMS_PER_PAGE;
+  const pageStudents = filteredStudents.slice(pageStart, pageStart + ITEMS_PER_PAGE);
+  const startEntry = filteredStudents.length === 0 ? 0 : pageStart + 1;
+  const endEntry = Math.min(pageStart + ITEMS_PER_PAGE, filteredStudents.length);
+
+  const visiblePages = useMemo(() => {
+    const windowSize = 5;
+    if (totalPages <= windowSize) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const start = Math.max(1, safePage - 2);
+    const end = Math.min(totalPages, start + windowSize - 1);
+    const adjustedStart = Math.max(1, end - windowSize + 1);
+    return Array.from({ length: end - adjustedStart + 1 }, (_, i) => adjustedStart + i);
+  }, [safePage, totalPages]);
+
   const sendWarning = async () => {
     if (!selectedStudentId) return;
     const fallback = `Your attendance is below ${threshold}%. Please improve attendance immediately.`;
@@ -201,7 +226,7 @@ export default function AttendenceStdAd() {
                 </tr>
               </thead>
               <tbody>
-                {filteredStudents.map((row) => (
+                {pageStudents.map((row) => (
                   <tr
                     key={row.student_id}
                     className={`${styles.row} ${selectedStudentId === row.student_id ? styles.rowActive : ''}`}
@@ -231,6 +256,36 @@ export default function AttendenceStdAd() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Pagination Footer */}
+          <div className={styles.paginationFooter}>
+            <span>Showing {startEntry}–{endEntry} of {filteredStudents.length}</span>
+            <div className={styles.pageControls}>
+              <button
+                className={styles.pageBtn}
+                disabled={safePage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </button>
+              {visiblePages.map((page) => (
+                <button
+                  key={page}
+                  className={`${styles.pageBtn} ${safePage === page ? styles.pageBtnActive : ''}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                className={styles.pageBtn}
+                disabled={safePage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
 

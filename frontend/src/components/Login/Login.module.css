@@ -308,40 +308,6 @@
   margin: 0;
 }
 
-/* ─── Portal Switcher ─────────────────────────────────────────────────── */
-.portalSwitcher {
-  display: flex;
-  gap: var(--space-1);
-  background: var(--color-surface-hover);
-  padding: var(--space-1);
-  border-radius: var(--radius-xl);
-  margin-bottom: var(--space-8);
-  border: 1px solid var(--color-border);
-}
-
-.portalTab {
-  flex: 1;
-  padding: var(--space-2) var(--space-4);
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.portalTab:hover {
-  color: var(--color-text);
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.activeTab {
-  background: var(--color-surface);
-  color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
-}
 
 /* ─── Role Selector (Legacy/Others) ────────────────────────────────────── */
 .roleSelector {

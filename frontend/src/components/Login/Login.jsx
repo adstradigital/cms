@@ -18,13 +18,12 @@ import { useAuth } from '@/context/AuthContext';
 import styles from './Login.module.css';
 
 const Login = ({
-  role: initialRole = 'student',
+  role: activeRole = 'student',
   title: initialTitle = 'Student Portal',
   subtitle: initialSubtitle = 'Please sign in to continue.',
   brandingTitle = 'Campus\nManagement\nSystem',
   brandingSubtitle = 'Welcome to the student portal. Access your academic dashboard and attendance.',
 }) => {
-  const [activeRole, setActiveRole] = useState(initialRole);
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -85,10 +84,6 @@ const Login = ({
     }
   };
 
-  const handlePortalChange = (newRole) => {
-    setActiveRole(newRole);
-    setError('');
-  };
 
   return (
     <div className={styles.pageWrapper}>
@@ -128,27 +123,6 @@ const Login = ({
         {/* ─── RIGHT: Login Form ──────────────────────────────────── */}
         <div className={styles.formPanel}>
 
-          {/* Portal Switcher Tabs */}
-          <div className={styles.portalSwitcher}>
-            <button 
-              className={`${styles.portalTab} ${activeRole === 'student' ? styles.activeTab : ''}`}
-              onClick={() => handlePortalChange('student')}
-            >
-              Student
-            </button>
-            <button 
-              className={`${styles.portalTab} ${activeRole === 'admin' ? styles.activeTab : ''}`}
-              onClick={() => handlePortalChange('admin')}
-            >
-              Admin
-            </button>
-            <button 
-              className={`${styles.portalTab} ${activeRole === 'staff' ? styles.activeTab : ''}`}
-              onClick={() => handlePortalChange('staff')}
-            >
-              Staff
-            </button>
-          </div>
 
           {/* Welcome */}
           <div className={styles.welcomeBlock}>

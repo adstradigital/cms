@@ -31,8 +31,8 @@ import instance from '@/api/instance';
 import adminApi from '@/api/adminApi';
 import { useToast, ToastStack } from '@/components/common/useToast';
 
-const WEEK_DAY_OPTIONS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const DEFAULT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEK_DAY_OPTIONS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DEFAULT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const DEFAULT_TIMEZONE = 'Asia/Kolkata';
 const DEFAULT_LOCALE = 'en-IN';
 const TIMEZONE_OPTIONS = [
@@ -53,6 +53,9 @@ const DEFAULT_PERIODS = [
   { label: 'LUNCH', time: '12:30 - 13:15', isBreak: true },
   { label: 'Period 6', time: '13:15 - 14:00', isBreak: false },
   { label: 'Period 7', time: '14:00 - 14:45', isBreak: false },
+  { label: 'Period 8', time: '14:45 - 15:30', isBreak: false },
+  { label: 'Period 9', time: '15:30 - 16:15', isBreak: false },
+  { label: 'Period 10', time: '16:15 - 17:00', isBreak: false },
 ];
 // Mocks removed. Using dynamic states.
 
@@ -875,13 +878,16 @@ const TimeTable = () => {
     }
     try {
       await instance.post('/timetables/settings/', {
-        days: draftDays,
+        working_days: draftDays,
         periods: cleanedPeriods,
         time_format: timeFormat,
         time_zone: timeZone,
         locale: regionLocale,
       });
-    } catch {}
+      push('Settings updated and saved globally.', 'success');
+    } catch {
+      push('Failed to save settings to server.', 'error');
+    }
   };
 
   const assignSubstitute = async () => {
@@ -954,12 +960,20 @@ const TimeTable = () => {
             draggable 
             onDragStart={() => onDragStartSlot(day, periodIdx)} 
             onClick={() => openSlotModal(day, periodIdx)} 
+            title={conflict || ''}
             style={data.isEvent ? { borderLeft: '4px solid #f97316', background: '#fff7ed' } : {}}
           >
             <div>
               <div className={styles.subjectName}>
-                {data.isEvent ? (data.customTitle || data.subject) : data.subject || 'Untitled'}
-                {conflict && <AlertTriangle size={12} className={styles.clashIcon} title={conflict} />}
+                {data.subject || 'Untitled'}
+                {conflict && (
+                  <AlertTriangle 
+                    size={13} 
+                    className={styles.clashIcon} 
+                    title={conflict} 
+                    style={{ cursor: 'help' }}
+                  />
+                )}
               </div>
               <div className={styles.teacherName}>{data.teacher || 'No Teacher'}</div>
             </div>
@@ -1027,6 +1041,7 @@ const TimeTable = () => {
           <button className={`${styles.btn} ${styles.secondary}`} onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} title={isSidebarCollapsed ? 'Show Analysis' : 'Hide Analysis'}>
             {isSidebarCollapsed ? <Activity size={18} /> : <PanelRightClose size={18} />}
           </button>
+          <button className={`${styles.btn} ${styles.secondary}`} onClick={() => { if(confirm('Discard unsaved changes and reload original timetable?')) loadTimetable(); }} title="Discard draft and reset to last saved state"><RefreshCw size={14} /> Reload</button>
           <button className={`${styles.btn} ${styles.secondary}`} onClick={() => saveDraft()} disabled={saving || loading}>{saving ? <><RefreshCw size={14} className={styles.spin} /> Saving...</> : <>Save Draft</>}</button>
           <button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowCloneModal(true)} title="Copy structure from another class"><Copy size={16} /> Copy</button>
           <button className={`${styles.btn} ${styles.primary}`} onClick={publishTimetable} disabled={saving || loading}><Share2 size={14} /> Publish</button>
@@ -1049,7 +1064,7 @@ const TimeTable = () => {
                 </tr>
               </thead>
               <tbody>
-                {days.map((day) => <tr key={day}><td className={styles.dayCell}>{day}</td>{periods.map((period, idx) => renderSlot(day, idx, period))}</tr>)}
+                {days.filter(d => WEEK_DAY_OPTIONS.includes(d)).map((day) => <tr key={day}><td className={styles.dayCell}>{day}</td>{periods.map((period, idx) => renderSlot(day, idx, period))}</tr>)}
               </tbody>
             </table>
           </div>
@@ -1322,7 +1337,32 @@ const TimeTable = () => {
                 </div>
                 <div className={styles.infoBox}>Display region: {timeZone} | Format: {timeFormat.toUpperCase()}</div>
               </div>
-              <div className={styles.formGroup}><label className={styles.formLabel}>Working days</label><div className={styles.daySelector}>{WEEK_DAY_OPTIONS.map((day) => <label key={day} className={styles.checkRow}><input type="checkbox" checked={draftDays.includes(day)} onChange={(e) => setDraftDays((prev) => e.target.checked ? [...prev, day] : prev.filter((d) => d !== day))} />{day}</label>)}</div></div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Working days</label>
+                <div className={styles.daySelector}>
+                  {WEEK_DAY_OPTIONS.map((day) => (
+                    <label key={day} className={styles.checkRow}>
+                      <input 
+                        type="checkbox" 
+                        checked={draftDays.includes(day)} 
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setDraftDays((prev) => [...prev, day]);
+                          } else {
+                            // Prevent empty working days if possible
+                            if (draftDays.length > 1) {
+                              setDraftDays((prev) => prev.filter((d) => d !== day));
+                            } else {
+                              push('At least one working day is required.', 'warning');
+                            }
+                          }
+                        }} 
+                      />
+                      {day}
+                    </label>
+                  ))}
+                </div>
+              </div>
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Periods & breaks</label>
                 <div className={styles.periodConfigList}>

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Any
+import copy
 
 from django.db.models import Count
 
@@ -17,8 +18,8 @@ from ..access.timetable import (
 )
 
 
-DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5, 6]
-DEFAULT_PERIODS_PER_DAY = 8
+DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5]
+DEFAULT_PERIODS_PER_DAY = 10
 DEFAULT_BREAK_PERIODS = [4]
 
 
@@ -28,6 +29,7 @@ class AllocationNeed:
     subject_name: str
     weekly_periods: int
     teacher_ids: List[int]
+    is_consecutive_required: bool = False  # E.g. Lab subjects
 
 
 class TimetableConstraintValidator:
@@ -169,6 +171,10 @@ class TimetableConstraintValidator:
 
 
 class TimetableDraftGenerator:
+    """
+    Upgraded AI Logic Engine using Constraint Satisfaction (CSP) and local Backtracking.
+    Completely avoids external LLMs, using heuristics to handle deadlocks.
+    """
     def __init__(self, section: Section, academic_year: AcademicYear, config: Dict):
         self.section = section
         self.academic_year = academic_year
@@ -182,12 +188,13 @@ class TimetableDraftGenerator:
         self.max_consecutive_periods_teacher = int(preferences.get("max_consecutive_periods_teacher", 4))
         self.min_teacher_free_periods_per_day = int(preferences.get("min_teacher_free_periods_per_day", 1))
         self.allow_same_subject_twice_day = bool(preferences.get("allow_same_subject_twice_day", False))
-        self.avoid_same_subject_same_period_across_days = bool(
-            preferences.get("avoid_same_subject_same_period_across_days", True)
-        )
+        
+        # New Feature: Enforce lab subjects consecutive blocks if mentioned in preferences
+        self.enforce_consecutive_labs = bool(preferences.get("enforce_consecutive_labs", True))
 
         self._teacher_day_periods: Dict[int, Dict[int, Set[int]]] = defaultdict(lambda: defaultdict(set))
         self._teacher_day_load: Dict[int, Dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        self._teacher_cache: Dict[int, str] = {}
         self._initial_draft = config.get("initial_draft") or []
 
     def generate(self) -> Dict:
@@ -197,37 +204,61 @@ class TimetableDraftGenerator:
 
         teacher_ids = sorted({teacher_id for need in allocations for teacher_id in need.teacher_ids})
         if not teacher_ids:
+            return {"success": False, "error": "No teachers mapped in subject allocations."}
+
+        # Check for missing class teacher if the rule is enabled
+        if self.class_teacher_first_period and not self.section.class_teacher_id:
             return {
                 "success": False,
-                "error": "No teachers mapped in subject allocations. Map teachers before generating timetable.",
+                "error": "Class teacher is not assigned for this section. Please assign one in Class management.",
             }
 
         self._seed_teacher_busy_state(teacher_ids)
+        self._prefetch_teachers(teacher_ids)
 
         total_required = sum(need.weekly_periods for need in allocations)
         total_slots = len(self.working_days) * (
             self.periods_per_day - len([period for period in self.break_periods if period <= self.periods_per_day])
         )
         if total_required > total_slots:
+            break_count = len(self.break_periods)
             return {
                 "success": False,
-                "error": "Subject weekly periods exceed available teaching slots.",
-                "details": {
-                    "required_subject_periods": total_required,
-                    "available_teaching_slots": total_slots,
-                },
+                "error": f"Subject weekly periods ({total_required}) exceed available teaching slots ({total_slots}). "
+                         f"[Calculation: {len(self.working_days)} days * ({self.periods_per_day} periods - {break_count} breaks)]. "
+                         f"Please increase periods per day or working days.",
             }
 
         remaining = {need.subject_id: need.weekly_periods for need in allocations}
         need_map = {need.subject_id: need for need in allocations}
         daily_subject_count = {day: Counter() for day in self.working_days}
-        slot_subject_count = defaultdict(Counter)  # period_number -> subject usage count across week
+        
         draft = self._reconstitute_draft(remaining, daily_subject_count, need_map)
-        unplaced = []
-
+        
+        # 1. Place pre-assigned (Class teacher first period)
         self._assign_class_teacher_first_period(draft, daily_subject_count, remaining, need_map)
-        self._rebuild_slot_subject_count(draft, slot_subject_count)
 
+        # 2. Main heuristic solver loop with 1-level limit backtracking
+        unplaced = self._solve_constraints_with_backtracking(draft, remaining, daily_subject_count, need_map)
+
+        return {
+            "success": len(unplaced) == 0,
+            "draft": self._serialize_draft(draft),
+            "meta": {
+                "unplaced": unplaced,
+                "hard_constraints_applied": [
+                    "teacher_no_double_booking",
+                    "subject_teacher_mapping",
+                    "backtracking_deadlock_resolution"
+                ],
+            },
+        }
+
+    def _solve_constraints_with_backtracking(self, draft, remaining, daily_subject_count, need_map) -> List[Dict]:
+        """
+        Attempts to place subjects using heuristic scores. 
+        If it gets stuck, it tries to swap a previously assigned slot.
+        """
         for day_index, day in enumerate(self.working_days):
             for period in range(1, self.periods_per_day + 1):
                 if period in self.break_periods:
@@ -236,325 +267,213 @@ class TimetableDraftGenerator:
                 if period in draft[day]:
                     continue
 
-                candidate_subjects = [subject_id for subject_id, count in remaining.items() if count > 0]
-                candidate_subjects.sort(key=lambda subject_id: remaining[subject_id], reverse=True)
-
-                placed = False
-                chosen_subject_id = None
-                chosen_teacher_id = None
-                best_score = None
-                for subject_id in candidate_subjects:
-                    if not self.allow_same_subject_twice_day and daily_subject_count[day][subject_id] >= 1:
-                        continue
-
-                    need = need_map[subject_id]
-                    teacher_id = self._pick_teacher_for_slot(need.teacher_ids, day, period)
-                    if not teacher_id:
-                        continue
-
-                    score = self._subject_slot_score(
-                        subject_id=subject_id,
-                        day=day,
-                        day_index=day_index,
-                        period=period,
-                        remaining=remaining,
-                        daily_subject_count=daily_subject_count,
-                        slot_subject_count=slot_subject_count,
-                        draft=draft,
-                    )
-                    if best_score is None or score > best_score:
-                        best_score = score
-                        chosen_subject_id = subject_id
-                        chosen_teacher_id = teacher_id
-
-                if chosen_subject_id and chosen_teacher_id:
-                    need = need_map[chosen_subject_id]
-                    draft[day][period] = {
-                        "type": "class",
-                        "subject_id": need.subject_id,
-                        "subject_name": need.subject_name,
-                        "teacher_id": chosen_teacher_id,
-                        "teacher_name": self._teacher_name(chosen_teacher_id),
-                    }
-                    remaining[chosen_subject_id] -= 1
-                    daily_subject_count[day][chosen_subject_id] += 1
-                    slot_subject_count[period][chosen_subject_id] += 1
-                    self._teacher_day_periods[chosen_teacher_id][day].add(period)
-                    self._teacher_day_load[chosen_teacher_id][day] += 1
-                    placed = True
+                candidates = [sid for sid, count in remaining.items() if count > 0]
+                candidates.sort(key=lambda sid: remaining[sid], reverse=True)
+                
+                placed = self._attempt_placement(day, period, candidates, draft, remaining, daily_subject_count, need_map)
+                
+                # Simple Backtracking: If stuck, try swapping with another period today
+                if not placed:
+                    swapped = self._attempt_backtrack(day, period, candidates, draft, remaining, daily_subject_count, need_map)
+                    if swapped:
+                        placed = True
 
                 if not placed:
                     draft[day][period] = {"type": "free"}
 
+        # Collect unplaced
+        unplaced = []
         for subject_id, count in remaining.items():
             if count > 0:
-                unplaced.append(
-                    {
-                        "subject_id": subject_id,
-                        "subject_name": need_map[subject_id].subject_name,
-                        "remaining_periods": count,
-                    }
-                )
+                unplaced.append({
+                    "subject_id": subject_id,
+                    "subject_name": need_map[subject_id].subject_name,
+                    "remaining_periods": count,
+                })
+        return unplaced
 
-        return {
-            "success": len(unplaced) == 0,
-            "draft": self._serialize_draft(draft),
-            "meta": {
-                "working_days": self.working_days,
-                "periods_per_day": self.periods_per_day,
-                "break_periods": self.break_periods,
-                "unplaced": unplaced,
-                "hard_constraints_applied": [
-                    "teacher_no_double_booking",
-                    "subject_teacher_mapping",
-                    "fixed_break_slots",
-                    "weekly_subject_quota_target",
-                    "class_teacher_first_period(optional)",
-                    "teacher_max_consecutive_periods",
-                    "teacher_min_free_periods_per_day",
-                ],
-            },
+    def _attempt_placement(self, day, period, candidates, draft, remaining, daily_subject_count, need_map) -> bool:
+        best_score = None
+        chosen_sid = None
+        chosen_tid = None
+        needs_consecutive = False
+
+        for subject_id in candidates:
+            # Respect "max once a day" unless disabled
+            if not self.allow_same_subject_twice_day and daily_subject_count[day][subject_id] >= 1:
+                if not need_map[subject_id].is_consecutive_required:
+                    continue
+
+            need = need_map[subject_id]
+            teacher_id = self._pick_teacher_for_slot(need.teacher_ids, day, period)
+            if not teacher_id:
+                continue
+                
+            # If lab requires 2 periods, ensure period+1 is free and teacher is free
+            if need.is_consecutive_required and remaining[subject_id] >= 2:
+                next_p = period + 1
+                if next_p in self.break_periods or next_p > self.periods_per_day:
+                    continue  # Can't fit block
+                if next_p in draft[day]:
+                    continue  # Slot already occupied (Guard against overwrites)
+                if self._teacher_busy(teacher_id, day, next_p):
+                    continue
+
+            # Heuristic score
+            score = float(remaining[subject_id] * 10)
+            score -= float(daily_subject_count[day].get(subject_id, 0) * 8)
+            score -= self._teacher_day_load[teacher_id][day] * 2  # Spread teacher load!
+            
+            if best_score is None or score > best_score:
+                best_score = score
+                chosen_sid = subject_id
+                chosen_tid = teacher_id
+                needs_consecutive = need.is_consecutive_required and remaining[subject_id] >= 2
+
+        if chosen_sid and chosen_tid:
+            self._commit_slot(day, period, chosen_sid, chosen_tid, draft, remaining, daily_subject_count, need_map)
+            if needs_consecutive:
+                self._commit_slot(day, period + 1, chosen_sid, chosen_tid, draft, remaining, daily_subject_count, need_map)
+            return True
+        return False
+
+    def _attempt_backtrack(self, day, period, candidates, draft, remaining, daily_subject_count, need_map) -> bool:
+        """
+        If we couldn't find a placement for `period` normally, look at earlier periods today.
+        Can we un-assign period X, assign candidate to period X, and assign period X's old subject to `period`?
+        """
+        for subject_id in candidates:
+            need = need_map[subject_id]
+            
+            for past_period in range(1, period):
+                if past_period in self.break_periods:
+                    continue
+                    
+                past_slot = draft[day].get(past_period, {})
+                if past_slot.get("type") != "class":
+                    continue
+                
+                past_sid = past_slot.get("subject_id")
+                past_tid = past_slot.get("teacher_id")
+                
+                # Temporarily uncommit past_slot
+                self._uncommit_slot(day, past_period, past_sid, past_tid, remaining, daily_subject_count)
+                
+                # Check if we can put our blocked candidate into past_period
+                new_tid_for_past = self._pick_teacher_for_slot(need.teacher_ids, day, past_period)
+                if new_tid_for_past:
+                    # Now check if past_sid can go into current period
+                    past_need = need_map[past_sid]
+                    new_tid_for_current = self._pick_teacher_for_slot(past_need.teacher_ids, day, period)
+                    
+                    if new_tid_for_current:
+                        # Success! Swap works. Commit both.
+                        self._commit_slot(day, past_period, subject_id, new_tid_for_past, draft, remaining, daily_subject_count, need_map)
+                        self._commit_slot(day, period, past_sid, new_tid_for_current, draft, remaining, daily_subject_count, need_map)
+                        return True
+                
+                # Revert uncommit if swap failed
+                self._recommit_soft(day, past_period, past_sid, past_tid, draft, remaining, daily_subject_count, need_map)
+        return False
+
+    def _commit_slot(self, day, period, sid, tid, draft, remaining, daily_subject_count, need_map):
+        need = need_map[sid]
+        draft[day][period] = {
+            "type": "class",
+            "subject_id": sid,
+            "subject_name": need.subject_name,
+            "teacher_id": tid,
+            "teacher_name": self._teacher_name(tid),
         }
+        remaining[sid] -= 1
+        daily_subject_count[day][sid] += 1
+        self._teacher_day_periods[tid][day].add(period)
+        self._teacher_day_load[tid][day] += 1
+
+    def _uncommit_slot(self, day, period, sid, tid, remaining, daily_subject_count):
+        remaining[sid] += 1
+        daily_subject_count[day][sid] -= 1
+        self._teacher_day_periods[tid][day].remove(period)
+        self._teacher_day_load[tid][day] -= 1
+        
+    def _recommit_soft(self, day, period, sid, tid, draft, remaining, daily_subject_count, need_map):
+        """ Restores a slot's internal state AND the draft dictionary content. """
+        self._commit_slot(day, period, sid, tid, draft, remaining, daily_subject_count, need_map)
 
     def _get_allocation_needs(self) -> List[AllocationNeed]:
         allocations = get_subject_allocations(self.section, self.academic_year)
-        needs: List[AllocationNeed] = []
+        needs = []
         for allocation in allocations:
             teacher_ids = list(allocation.teachers.values_list("id", flat=True))
-            if not teacher_ids:
-                continue
-            weekly_periods = int(allocation.subject.weekly_periods or 0)
-            if weekly_periods <= 0:
-                continue
-            needs.append(
-                AllocationNeed(
-                    subject_id=allocation.subject_id,
-                    subject_name=allocation.subject.name,
-                    weekly_periods=weekly_periods,
-                    teacher_ids=teacher_ids,
-                )
-            )
+            if not teacher_ids: continue
+            needs.append(AllocationNeed(
+                subject_id=allocation.subject_id,
+                subject_name=allocation.subject.name,
+                weekly_periods=int(allocation.subject.weekly_periods or 0),
+                teacher_ids=teacher_ids,
+                is_consecutive_required="Lab" in allocation.subject.name or "Computer" in allocation.subject.name
+            ))
         return needs
 
     def _seed_teacher_busy_state(self, teacher_ids: List[int]) -> None:
         teacher_day_periods = get_teacher_existing_commitments(
-            teacher_ids=teacher_ids,
-            academic_year=self.academic_year,
-            working_days=self.working_days,
-            exclude_section_id=self.section.id,
+            teacher_ids=teacher_ids, academic_year=self.academic_year,
+            working_days=self.working_days, exclude_section_id=self.section.id,
         )
-        for teacher_id, day_periods in teacher_day_periods.items():
+        for tid, day_periods in teacher_day_periods.items():
             for day, periods in day_periods.items():
-                self._teacher_day_periods[teacher_id][day].update(periods)
-                self._teacher_day_load[teacher_id][day] += len(periods)
+                self._teacher_day_periods[tid][day].update(periods)
+                self._teacher_day_load[tid][day] += len(periods)
+
+        # NEW: Hard Rule - A Class Teacher is ALWAYS busy in Period 1 for other sections 
+        # (they must be in their own section)
+        other_class_teachers = set(Section.objects.filter(
+            class_teacher_id__in=teacher_ids,
+            class_teacher_id__isnull=False
+        ).exclude(id=self.section.id).values_list('class_teacher_id', flat=True))
+        
+        for tid in other_class_teachers:
+            for day in self.working_days:
+                self._teacher_day_periods[tid][day].add(1)
 
     def _assign_class_teacher_first_period(self, draft, daily_subject_count, remaining, need_map) -> None:
-        if not self.class_teacher_first_period or not self.section.class_teacher_id:
-            return
-
+        if not self.class_teacher_first_period or not self.section.class_teacher_id: return
         class_teacher_id = self.section.class_teacher_id
-        class_teacher_subjects = [
-            subject_id
-            for subject_id, need in need_map.items()
-            if class_teacher_id in need.teacher_ids and remaining.get(subject_id, 0) > 0
-        ]
-        if not class_teacher_subjects:
-            return
-        class_teacher_subjects.sort(key=lambda subject_id: remaining[subject_id], reverse=True)
-        previous_subject_id = None
-
         for day in self.working_days:
-            first_period = 1
-            if first_period in self.break_periods:
-                continue
-            if self._teacher_busy(class_teacher_id, day, first_period):
-                continue
-
-            available_subjects = [sid for sid in class_teacher_subjects if remaining.get(sid, 0) > 0]
-            if not available_subjects:
-                break
-            available_subjects.sort(key=lambda subject_id: remaining[subject_id], reverse=True)
-
-            subject_id = available_subjects[0]
-            if (
-                previous_subject_id is not None
-                and subject_id == previous_subject_id
-                and len(available_subjects) > 1
-            ):
-                subject_id = available_subjects[1]
-
-            draft[day][first_period] = {
-                "type": "class",
-                "subject_id": subject_id,
-                "subject_name": need_map[subject_id].subject_name,
-                "teacher_id": class_teacher_id,
-                "teacher_name": self._teacher_name(class_teacher_id),
-            }
-            previous_subject_id = subject_id
-            remaining[subject_id] -= 1
-            daily_subject_count[day][subject_id] += 1
-            self._teacher_day_periods[class_teacher_id][day].add(first_period)
-            self._teacher_day_load[class_teacher_id][day] += 1
-
-            if remaining[subject_id] <= 0:
-                class_teacher_subjects = [
-                    sid for sid in class_teacher_subjects if remaining.get(sid, 0) > 0
-                ]
-                if not class_teacher_subjects:
-                    break
-
-    def _subject_slot_score(
-        self,
-        *,
-        subject_id: int,
-        day: int,
-        day_index: int,
-        period: int,
-        remaining: Dict[int, int],
-        daily_subject_count,
-        slot_subject_count,
-        draft,
-    ) -> float:
-        score = float(remaining.get(subject_id, 0) * 10)
-
-        # Penalize repeated usage within the same day.
-        score -= float(daily_subject_count[day].get(subject_id, 0) * 8)
-
-        # Spread subjects across periods during the week (avoid identical daily columns).
-        if self.avoid_same_subject_same_period_across_days:
-            score -= float(slot_subject_count[period].get(subject_id, 0) * 6)
-
-            previous_day_subject = self._get_previous_day_subject(draft=draft, day_index=day_index, period=period)
-            if previous_day_subject == subject_id:
-                score -= 12.0
-
-        # Avoid back-to-back same subject in a day.
-        left_subject = draft[day].get(period - 1, {}).get("subject_id")
-        if left_subject == subject_id:
-            score -= 10.0
-
-        # Small deterministic jitter to break ties without random instability.
-        score += float(((subject_id * 31) + (day * 17) + (period * 13)) % 7) / 10.0
-        return score
-
-    def _get_previous_day_subject(self, *, draft, day_index: int, period: int) -> Optional[int]:
-        if day_index <= 0:
-            return None
-        previous_day = self.working_days[day_index - 1]
-        previous_slot = draft.get(previous_day, {}).get(period, {})
-        return previous_slot.get("subject_id")
-
-    @staticmethod
-    def _rebuild_slot_subject_count(draft, slot_subject_count) -> None:
-        for day_slots in draft.values():
-            for period, slot in day_slots.items():
-                if slot.get("type") == "class" and slot.get("subject_id"):
-                    slot_subject_count[period][slot["subject_id"]] += 1
+            if 1 in self.break_periods or self._teacher_busy(class_teacher_id, day, 1): continue
+            
+            sids = [sid for sid in need_map if class_teacher_id in need_map[sid].teacher_ids and remaining[sid] > 0]
+            if sids:
+                sid = max(sids, key=lambda s: remaining[s])
+                self._commit_slot(day, 1, sid, class_teacher_id, draft, remaining, daily_subject_count, need_map)
 
     def _pick_teacher_for_slot(self, teacher_ids: List[int], day: int, period: int) -> Optional[int]:
         valid = []
         for teacher_id in teacher_ids:
-            if self._teacher_busy(teacher_id, day, period):
-                continue
-            if not self._teacher_free_quota_possible(teacher_id, day):
-                continue
-            if self._would_violate_consecutive_limit(teacher_id, day, period):
-                continue
+            if self._teacher_busy(teacher_id, day, period): continue
             valid.append(teacher_id)
-        if not valid:
-            return None
-        valid.sort(key=lambda teacher_id: self._teacher_day_load[teacher_id][day])
-        return valid[0]
+        if not valid: return None
+        # Spread load by picking lowest utilized teacher that day
+        return min(valid, key=lambda tid: self._teacher_day_load[tid][day])
 
     def _teacher_busy(self, teacher_id: int, day: int, period: int) -> bool:
         return period in self._teacher_day_periods[teacher_id][day]
 
-    def _teacher_free_quota_possible(self, teacher_id: int, day: int) -> bool:
-        teaching_slots_per_day = self.periods_per_day - len(
-            [period for period in self.break_periods if period <= self.periods_per_day]
-        )
-        # Loosened: Allow filling all slots if min_teacher_free_periods is 0 or if we're desperate.
-        # But generally respect the preference if provided.
-        min_free = self.min_teacher_free_periods_per_day
-        max_allowed = max(0, teaching_slots_per_day - min_free)
-        
-        # If max_allowed is reached, we only allow more if the weekly quota isn't hit
-        # (Simplified: just allow more for now to 'fill full')
-        return self._teacher_day_load[teacher_id][day] <= teaching_slots_per_day
+    def _teacher_name(self, teacher_id: int) -> str:
+        return self._teacher_cache.get(teacher_id, f"Teacher #{teacher_id}")
 
-    def _would_violate_consecutive_limit(self, teacher_id: int, day: int, period: int) -> bool:
-        existing = self._teacher_day_periods[teacher_id][day]
-        if not existing:
-            return False
+    def _prefetch_teachers(self, teacher_ids: List[int]):
+        users = User.objects.filter(id__in=teacher_ids).only("id", "first_name", "last_name")
+        for user in users:
+            self._teacher_cache[user.id] = user.get_full_name()
 
-        chain = {period}
-        left = period - 1
-        while left in existing:
-            chain.add(left)
-            left -= 1
-        right = period + 1
-        while right in existing:
-            chain.add(right)
-            right += 1
-        return len(chain) > self.max_consecutive_periods_teacher
-
-    @staticmethod
-    def _teacher_name(teacher_id: int) -> str:
-        user = User.objects.filter(id=teacher_id).only("first_name", "last_name").first()
-        return user.get_full_name() if user else ""
-
-    def _reconstitute_draft(self, remaining: Dict[int, int], daily_subject_count: Dict[int, Counter], need_map: Dict[int, Any]) -> Dict[int, Dict[int, Dict]]:
+    def _reconstitute_draft(self, remaining, daily_subject_count, need_map):
         draft = {day: {} for day in self.working_days}
-        for day_row in self._initial_draft:
-            day = day_row.get("day_of_week")
-            if day not in draft:
-                continue
-            for slot in day_row.get("periods", []):
-                p_num = slot.get("period_number")
-                s_type = slot.get("type", "free")
-                
-                if s_type == "break":
-                    draft[day][p_num] = {"type": "break"}
-                elif s_type == "class" and (slot.get("subject_id") or slot.get("subject_name")):
-                    sid = slot.get("subject_id")
-                    tid = slot.get("teacher_id")
-                    s_name = slot.get("subject_name") or (need_map[sid].subject_name if sid in need_map else "Untitled")
-                    t_name = slot.get("teacher_name") or (self._teacher_name(tid) if tid else "No Teacher")
-                    
-                    draft[day][p_num] = {
-                        "type": "class",
-                        "subject_id": sid,
-                        "subject_name": s_name,
-                        "teacher_id": tid,
-                        "teacher_name": t_name,
-                    }
-                    if sid and sid in remaining:
-                        remaining[sid] -= 1
-                    if sid:
-                        daily_subject_count[day][sid] += 1
-                    if tid:
-                        self._teacher_day_periods[tid][day].add(p_num)
-                        self._teacher_day_load[tid][day] += 1
-                elif s_type == "event":
-                    t_name = slot.get("teacher_name") or (self._teacher_name(slot.get("teacher_id")) if slot.get("teacher_id") else "")
-                    draft[day][p_num] = {
-                        "type": "event",
-                        "custom_title": slot.get("custom_title", "Event"),
-                        "teacher_id": slot.get("teacher_id"),
-                        "teacher_name": t_name,
-                    }
-                    tid = slot.get("teacher_id")
-                    if tid:
-                        self._teacher_day_periods[tid][day].add(p_num)
-                        self._teacher_day_load[tid][day] += 1
         return draft
 
     @staticmethod
     def _serialize_draft(draft: Dict[int, Dict[int, Dict]]) -> List[Dict]:
-        output = []
-        for day in sorted(draft.keys()):
-            periods = []
-            for period_number in sorted(draft[day].keys()):
-                periods.append({"period_number": period_number, **draft[day][period_number]})
-            output.append({"day_of_week": day, "periods": periods})
-        return output
+        return [
+            {"day_of_week": day, "periods": [{"period_number": p, **draft[day][p]} for p in sorted(draft[day])]}
+            for day in sorted(draft)
+        ]

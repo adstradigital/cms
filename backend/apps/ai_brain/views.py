@@ -85,6 +85,18 @@ def generate_report_card_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Security: Resolve student to check section-based access
+    from apps.students.models import Student
+    try:
+        student = Student.objects.get(id=student_id)
+        section = student.section
+    except Student.DoesNotExist:
+        return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    allowed, reason = has_ai_brain_access(request.user, section=section)
+    if not allowed:
+        return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
     result = engine.run_report_card_builder(
         student_id=student_id,
         exam_id=exam_id,

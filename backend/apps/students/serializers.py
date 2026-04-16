@@ -245,3 +245,16 @@ class StudentRegistrationSerializer(serializers.Serializer):
         instance.save()
 
         return instance
+
+
+class AdmissionInquirySerializer(serializers.ModelSerializer):
+    class_requested_name = serializers.CharField(source='class_requested.name', read_only=True)
+
+    class Meta:
+        model = __import__('apps.students.models', fromlist=['AdmissionInquiry']).AdmissionInquiry
+        fields = [
+            'id', 'school', 'guardian_name', 'contact_phone', 'contact_email',
+            'student_name', 'class_requested', 'class_requested_name',
+            'previous_school', 'status', 'notes', 'inquiry_date', 'last_updated'
+        ]
+        read_only_fields = ['school', 'inquiry_date', 'last_updated']

@@ -19,6 +19,19 @@ def save_timetable_draft(
     periods_per_day: int,
     break_periods: List[int],
 ) -> Dict:
+    skipped_days = []
+    from datetime import time, datetime, timedelta
+    
+    # Helper to calculate basic times (Standard 45m slots, 8:30 start)
+    # In a real app, this should come from AcademicYear settings
+    def get_times(p_num):
+        start = datetime.combine(datetime.today(), time(8, 30))
+        # Add 45 mins per period, plus maybe 45 for lunch
+        # (Simple logic: linear slots)
+        p_start = start + timedelta(minutes=(p_num - 1) * 45)
+        p_end = p_start + timedelta(minutes=45)
+        return p_start.time(), p_end.time()
+
     with transaction.atomic():
         for row in draft_rows:
             day = row["day_of_week"]
@@ -28,19 +41,22 @@ def save_timetable_draft(
                 day_of_week=day,
             )
             if timetable.is_published:
+                skipped_days.append(day)
                 continue
 
             timetable.periods.all().delete()
             for slot in row["periods"]:
                 period_number = slot["period_number"]
                 slot_type = slot.get("type", "free")
+                s_time, e_time = get_times(period_number)
+                
                 if slot_type == "break":
                     Period.objects.create(
                         timetable=timetable,
                         period_number=period_number,
                         period_type="break",
-                        start_time="00:00",
-                        end_time="00:00",
+                        start_time=s_time,
+                        end_time=e_time,
                     )
                     continue
                 if slot_type != "class":
@@ -53,13 +69,14 @@ def save_timetable_draft(
                     period_type="class",
                     subject=subject,
                     teacher_id=slot.get("teacher_id"),
-                    start_time="00:00",
-                    end_time="00:00",
+                    start_time=s_time,
+                    end_time=e_time,
                 )
 
     return {
         "success": True,
-        "saved_days": len(draft_rows),
+        "saved_count": len(draft_rows) - len(skipped_days),
+        "skipped_published_days": skipped_days,
         "periods_per_day": periods_per_day,
         "break_periods": break_periods,
     }

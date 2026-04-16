@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .engine import AIBrainEngine
+from .data_context import _parse_bool
 from .llm import merge_constraint_preferences
 from .permissions import has_ai_brain_access
 
@@ -84,6 +85,18 @@ def generate_report_card_view(request):
             {"error": "student_id and exam_id are required."},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    # Security: Resolve student to check section-based access
+    from apps.students.models import Student
+    try:
+        student = Student.objects.get(id=student_id)
+        section = student.section
+    except Student.DoesNotExist:
+        return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    allowed, reason = has_ai_brain_access(request.user, section=section)
+    if not allowed:
+        return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
 
     result = engine.run_report_card_builder(
         student_id=student_id,
@@ -166,4 +179,18 @@ def data_inventory_view(request):
     allowed, reason = has_ai_brain_access(request.user, section=None)
     if not allowed:
         return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
-    return Response(engine.get_data_inventory(), status=status.HTTP_200_OK)
+
+    qp = request.query_params
+    school_id = qp.get("school_id")
+    academic_year_id = qp.get("academic_year_id")
+
+    include_models = _parse_bool(qp.get("include_models"), default=True)
+    include_entity_counts = _parse_bool(qp.get("include_entity_counts"), default=True)
+
+    inventory = engine.get_data_inventory(
+        school_id=int(school_id) if school_id else None,
+        academic_year_id=int(academic_year_id) if academic_year_id else None,
+        include_models=include_models,
+        include_entity_counts=include_entity_counts,
+    )
+    return Response(inventory, status=status.HTTP_200_OK)

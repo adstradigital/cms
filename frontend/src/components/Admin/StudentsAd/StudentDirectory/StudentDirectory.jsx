@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import styles from './StudentDirectory.module.css';
 import ActionCards from '../ActionCards/ActionCards';
 import StudentList from '../StudentList/StudentList';
@@ -10,9 +11,21 @@ import StudentAdProfile from '../StudentAdProfile/StudentAdProfile';
 import PerformanceAd from '../PerfomanceAd/PerformanceAd';
 
 const StudentDirectory = () => {
+  const searchParams = useSearchParams();
+  const inquiryIdParam = searchParams ? searchParams.get('inquiry') : null;
+
   const [activeView, setActiveView] = useState('list'); // 'list' | 'profile' | 'form' | 'full_profile' | 'performance'
   const [selectedStudentId, setSelectedStudentId] = useState(null);
+  const [inquiryId, setInquiryId] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (inquiryIdParam) {
+      setInquiryId(inquiryIdParam);
+      setActiveView('form');
+    }
+  }, [inquiryIdParam]);
+
   const handleViewProfile = (id) => {
     setSelectedStudentId(id);
     setActiveView('full_profile');
@@ -43,10 +56,15 @@ const StudentDirectory = () => {
         {activeView === 'form' ? (
           <StudentForm
             studentId={selectedStudentId}
-            onCancel={() => setActiveView('list')}
+            inquiryId={inquiryId}
+            onCancel={() => {
+              setActiveView('list');
+              setInquiryId(null);
+            }}
             onSaved={() => {
               setRefreshKey((k) => k + 1);
               setActiveView('list');
+              setInquiryId(null);
             }}
           />
         ) : activeView === 'performance' ? (

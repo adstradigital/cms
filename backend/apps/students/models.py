@@ -19,7 +19,7 @@ class Class(models.Model):
 class Section(models.Model):
     school_class = models.ForeignKey(Class, on_delete=models.CASCADE, related_name="sections")
     name = models.CharField(max_length=50) # e.g. "A"
-    class_teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_sections")
+    class_teacher = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_section")
     room_number = models.CharField(max_length=50, blank=True)
     capacity = models.PositiveSmallIntegerField(default=40)
 
@@ -69,3 +69,32 @@ class StudentDocument(models.Model):
 
     class Meta:
         db_table = "student_documents"
+
+
+class AdmissionInquiry(models.Model):
+    STATUS_CHOICES = [
+        ("New", "New"),
+        ("Contacted", "Contacted"),
+        ("Under Review", "Under Review"),
+        ("Approved", "Approved"),
+        ("Rejected", "Rejected"),
+        ("Enrolled", "Enrolled"),
+    ]
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="admission_inquiries")
+    guardian_name = models.CharField(max_length=255)
+    contact_phone = models.CharField(max_length=20)
+    contact_email = models.EmailField(blank=True)
+    student_name = models.CharField(max_length=255)
+    class_requested = models.ForeignKey(Class, on_delete=models.SET_NULL, null=True, related_name="admission_inquiries")
+    previous_school = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="New")
+    notes = models.TextField(blank=True)
+    inquiry_date = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Inquiry: {self.student_name} ({self.status})"
+
+    class Meta:
+        db_table = "admission_inquiries"
+        ordering = ["-inquiry_date"]

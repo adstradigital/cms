@@ -283,10 +283,10 @@ const AdminSidebar = () => {
         />
         <NavItem 
           icon={<BookOpen size={18} />} 
-          label="Admissions" 
+          label="Lead Generation" 
           collapsed={isCollapsed}
-          active={pathname === '/admins/admissions'} 
-          href="/admins/admissions"
+          active={pathname === '/admins/leads'} 
+          href="/admins/leads"
           onClick={() => setExpandedMenu(null)}
         />
         <NavItem 
@@ -309,7 +309,7 @@ const AdminSidebar = () => {
           active={pathname === '/admins/settings'}
           href="/admins/settings"
         />
-        <NavItem icon={<HelpCircle size={18} />} label="Support" collapsed={isCollapsed} />
+        <NavItem icon={<HelpCircle size={18} />} label="Support" collapsed={isCollapsed} active={pathname === '/admins/support'} href="/admins/support" />
         <NavItem icon={<LogOut size={18} />} label="Log out" collapsed={isCollapsed} onClick={logout} />
       </div>
     </div>

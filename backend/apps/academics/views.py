@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -9,7 +9,8 @@ from rest_framework.response import Response
 from apps.accounts.models import User
 from .models import (
     Subject, SyllabusUnit, SyllabusChapter, SyllabusTopic, SubjectAllocation, LessonPlan,
-    Timetable, Period, Homework, HomeworkSubmission, SubstituteLog, Assignment, Material
+    Timetable, Period, Homework, HomeworkSubmission, SubstituteLog, Assignment, Material,
+    CourseSession,
 )
 from .serializers import (
     SubjectSerializer, SyllabusUnitSerializer, SyllabusChapterSerializer, SyllabusTopicSerializer,
@@ -17,6 +18,7 @@ from .serializers import (
     TimetableSerializer, PeriodSerializer,
     HomeworkSerializer, HomeworkSubmissionSerializer, SubstituteLogSerializer,
     AssignmentSerializer, MaterialSerializer,
+    CourseSessionSerializer,
 )
 from .generator_service import TimetableGenerator
 from apps.accounts.models import AcademicYear
@@ -917,6 +919,40 @@ def lesson_plan_list_view(request):
         print("PLAN SAVE ERROR:", str(e), "DATA:", data)
         return Response({"error": str(e)}, status=400)
 
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def timetable_settings_view(request):
+    """
+    Returns/Updates general timetable configuration.
+    """
+    ay = AcademicYear.objects.filter(is_active=True).first()
+    
+    if request.method == "POST":
+        if not ay:
+            return Response({"error": "No active academic year found."}, status=400)
+            
+        working_day_names = request.data.get("working_days", [])
+        day_map = {name: code for code, name in Timetable.DAY_CHOICES}
+        working_codes = [day_map[name] for name in working_day_names if name in day_map]
+        
+        ay.working_days = working_codes
+        ay.save()
+        return Response({"message": "Settings updated."}, status=200)
+
+    # GET
+    working_codes = ay.working_days if ay else [1, 2, 3, 4, 5]
+    day_name_map = {code: name for code, name in Timetable.DAY_CHOICES}
+    working_day_names = [day_name_map[code] for code in working_codes if code in day_name_map]
+
+    return Response({
+        "standard_periods": 10,
+        "period_duration_minutes": 45,
+        "lunch_break_period": 4,
+        "school_start_time": "08:30",
+        "school_end_time": "17:00",
+        "working_days": working_day_names
+    }, status=status.HTTP_200_OK)
+
 @api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
 def lesson_plan_detail_view(request, pk):
@@ -936,20 +972,6 @@ def lesson_plan_detail_view(request, pk):
     return Response(serializer.errors, status=400)
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def timetable_settings_view(request):
-    """
-    Returns general timetable configuration.
-    """
-    return Response({
-        "standard_periods": 8,
-        "period_duration_minutes": 45,
-        "lunch_break_period": 4,
-        "school_start_time": "08:30",
-        "school_end_time": "15:30",
-        "working_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    }, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])
@@ -1033,3 +1055,92 @@ def absence_status_view(request):
         "date": today.isoformat(),
         "periods": periods
     }, status=status.HTTP_200_OK)
+
+
+# ─── Course Sessions ──────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def course_session_list_view(request):
+    """
+    GET  — List course sessions with optional filters.
+    POST — Create a new course session.
+    """
+    try:
+        if request.method == "GET":
+            qs = CourseSession.objects.select_related(
+                "academic_year", "section", "section__school_class",
+                "subject", "teacher", "created_by"
+            ).all()
+
+            # Scope by school
+            user = request.user
+            if not user.is_superuser and user.school:
+                qs = qs.filter(section__school_class__school=user.school)
+
+            # Filters
+            ay_id      = request.query_params.get("academic_year")
+            section_id = request.query_params.get("section")
+            subject_id = request.query_params.get("subject")
+            teacher_id = request.query_params.get("teacher")
+            status_f   = request.query_params.get("status")
+            date_from  = request.query_params.get("date_from")
+            date_to    = request.query_params.get("date_to")
+            date_exact = request.query_params.get("date")
+
+            if ay_id:       qs = qs.filter(academic_year_id=ay_id)
+            if section_id:  qs = qs.filter(section_id=section_id)
+            if subject_id:  qs = qs.filter(subject_id=subject_id)
+            if teacher_id:  qs = qs.filter(teacher_id=teacher_id)
+            if status_f:    qs = qs.filter(status=status_f)
+            if date_exact:  qs = qs.filter(date=date_exact)
+            if date_from:   qs = qs.filter(date__gte=date_from)
+            if date_to:     qs = qs.filter(date__lte=date_to)
+
+            serializer = CourseSessionSerializer(qs, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # POST — Create
+        data = request.data.copy()
+        serializer = CourseSessionSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        session = serializer.save(created_by=request.user)
+        return Response(CourseSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def course_session_detail_view(request, pk):
+    """
+    GET    — Retrieve a single session.
+    PATCH  — Partial update (e.g. change status).
+    DELETE — Remove the session.
+    """
+    try:
+        try:
+            session = CourseSession.objects.select_related(
+                "academic_year", "section", "section__school_class",
+                "subject", "teacher", "created_by"
+            ).get(pk=pk)
+        except CourseSession.DoesNotExist:
+            return Response({"error": "Course session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(CourseSessionSerializer(session).data, status=status.HTTP_200_OK)
+
+        if request.method == "PATCH":
+            serializer = CourseSessionSerializer(session, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        session.delete()
+        return Response({"message": "Session deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

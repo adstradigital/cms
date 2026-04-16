@@ -159,8 +159,20 @@ class AIBrainEngine:
             return {"success": False, "error": reason}
         return apply_timetable_preview(draft=draft, actor=actor, manual_override_payload=manual_override_payload)
 
-    def get_data_inventory(self) -> Dict:
-        return get_database_inventory()
+    def get_data_inventory(
+        self,
+        *,
+        school_id: Optional[int] = None,
+        academic_year_id: Optional[int] = None,
+        include_models: bool = True,
+        include_entity_counts: bool = True,
+    ) -> Dict:
+        return get_database_inventory(
+            school_id=school_id,
+            academic_year_id=academic_year_id,
+            include_models=include_models,
+            include_entity_counts=include_entity_counts,
+        )
 
     @staticmethod
     def _resolve_academic_year(section: Section, academic_year_id: Optional[int] = None):

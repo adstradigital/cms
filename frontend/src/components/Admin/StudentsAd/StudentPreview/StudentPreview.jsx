@@ -36,9 +36,10 @@ const StudentPreview = ({ studentId, onViewFullProfile }) => {
   if (!student) return <div className={styles.previewContainer}><div className={styles.error}>Not found</div></div>;
 
   const photoPath = student.user?.profile?.photo;
+  const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
   const displayAvatar = photoPath
     ? (photoPath.startsWith('http') ? photoPath : `http://127.0.0.1:8000${photoPath}`)
-    : `https://i.pravatar.cc/150?u=${student.id}`;
+    : DEFAULT_AVATAR;
 
   return (
     <div className={styles.previewContainer}>

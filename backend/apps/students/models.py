@@ -19,7 +19,7 @@ class Class(models.Model):
 class Section(models.Model):
     school_class = models.ForeignKey(Class, on_delete=models.CASCADE, related_name="sections")
     name = models.CharField(max_length=50) # e.g. "A"
-    class_teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_sections")
+    class_teacher = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_section")
     room_number = models.CharField(max_length=50, blank=True)
     capacity = models.PositiveSmallIntegerField(default=40)
 

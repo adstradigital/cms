@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -919,6 +919,40 @@ def lesson_plan_list_view(request):
         print("PLAN SAVE ERROR:", str(e), "DATA:", data)
         return Response({"error": str(e)}, status=400)
 
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def timetable_settings_view(request):
+    """
+    Returns/Updates general timetable configuration.
+    """
+    ay = AcademicYear.objects.filter(is_active=True).first()
+    
+    if request.method == "POST":
+        if not ay:
+            return Response({"error": "No active academic year found."}, status=400)
+            
+        working_day_names = request.data.get("working_days", [])
+        day_map = {name: code for code, name in Timetable.DAY_CHOICES}
+        working_codes = [day_map[name] for name in working_day_names if name in day_map]
+        
+        ay.working_days = working_codes
+        ay.save()
+        return Response({"message": "Settings updated."}, status=200)
+
+    # GET
+    working_codes = ay.working_days if ay else [1, 2, 3, 4, 5]
+    day_name_map = {code: name for code, name in Timetable.DAY_CHOICES}
+    working_day_names = [day_name_map[code] for code in working_codes if code in day_name_map]
+
+    return Response({
+        "standard_periods": 10,
+        "period_duration_minutes": 45,
+        "lunch_break_period": 4,
+        "school_start_time": "08:30",
+        "school_end_time": "17:00",
+        "working_days": working_day_names
+    }, status=status.HTTP_200_OK)
+
 @api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
 def lesson_plan_detail_view(request, pk):
@@ -938,20 +972,6 @@ def lesson_plan_detail_view(request, pk):
     return Response(serializer.errors, status=400)
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def timetable_settings_view(request):
-    """
-    Returns general timetable configuration.
-    """
-    return Response({
-        "standard_periods": 8,
-        "period_duration_minutes": 45,
-        "lunch_break_period": 4,
-        "school_start_time": "08:30",
-        "school_end_time": "15:30",
-        "working_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    }, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])

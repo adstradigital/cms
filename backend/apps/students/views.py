@@ -44,56 +44,73 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Base queryset with necessary joins
         qs = Student.objects.select_related(
             "user", "user__profile", "section",
             "section__school_class", "academic_year"
-        ).prefetch_related("documents").order_by("-admission_number")
+        ).prefetch_related("documents")
 
-        # ── Query param filters ──
-        # Filter by school
+        # Create a debug log for the current request
+        debug_info = [f"--- GET_QUERYSET TRIGGERED ---"]
+        debug_info.append(f"User: {user.username} (Superuser: {user.is_superuser})")
+        debug_info.append(f"QueryParams: {dict(self.request.query_params)}")
+
+        # ── 1. School Scoping ──
         if not user.is_superuser and user.school:
             qs = qs.filter(user__school=user.school)
+            debug_info.append(f"Filtered by school: {user.school.name}")
 
-        # Query Parameters Filtering
+        # ── 2. Query Parameters Filtering ──
         section_id = self.request.query_params.get("section")
-        class_id = self.request.query_params.get("class")
-        academic_year_ref = self.request.query_params.get("academic_year")
-        is_active = self.request.query_params.get("is_active", "true")
+        class_id   = self.request.query_params.get("class")
+        ay_ref     = self.request.query_params.get("academic_year")
+        is_active  = self.request.query_params.get("is_active")
 
         if section_id:
             qs = qs.filter(section_id=section_id)
+            debug_info.append(f"Filtered by section: {section_id}")
         if class_id:
             qs = qs.filter(section__school_class_id=class_id)
+            debug_info.append(f"Filtered by class: {class_id}")
         
-        if academic_year_ref:
-            if academic_year_ref.isdigit():
-                qs = qs.filter(academic_year_id=academic_year_ref)
+        if ay_ref:
+            if ay_ref.isdigit():
+                qs = qs.filter(academic_year_id=ay_ref)
             else:
-                qs = qs.filter(academic_year__name=academic_year_ref)
+                # Use iexact and strip to handle common frontend mismatches
+                qs = qs.filter(academic_year__name__iexact=ay_ref.strip())
         
-        if is_active.lower() == "true":
+        # Default to showing only active if not specified, but flexible
+        if not is_active or is_active.lower() == "true":
             qs = qs.filter(is_active=True)
         elif is_active.lower() == "false":
             qs = qs.filter(is_active=False)
+        # if 'all', we skip this filter
 
-        # ── Contextual Row-Level Security ──
+        # ── 3. Role-Based Access Control (RBAC) ──
         if user.is_superuser or (user.role and user.role.scope == 'school'):
-            return qs
+            return qs.order_by("roll_number", "user__last_name")
 
-        # Build a union of accessible section IDs
+        # Row Level Security for Teachers
         accessible = user.get_accessible_section_ids()
+        debug_info.append(f"Accessible sections output: {accessible}")
         if accessible:
+            # If a section was requested, it must be in the accessible list
             qs = qs.filter(section_id__in=accessible)
+            debug_info.append(f"Applied RLS filter using section_in={accessible}")
         else:
+            # No accessible sections found for this teacher
             qs = qs.none()
+            debug_info.append(f"Warning: Teacher has no accessible sections. Result will be empty.")
 
-        # Apply Row Level Security (RLS) from Mixin if applicable
-        # (Though super().get_queryset() would do this, we've already manually applied it here to be safe)
-        if hasattr(user, 'assigned_class') and user.assigned_class and not user.is_superuser:
-            qs = qs.filter(**user.get_class_filter())
+        debug_info.append(f"FINAL Query output count: {qs.count()}")
+        try:
+            import datetime
+            with open("student_query_debug.txt", "a") as f:
+                f.write(f"\n[{datetime.datetime.now()}]\n" + "\n".join(debug_info) + "\n---------------------\n")
+        except Exception:
+            pass
             
-        return qs
+        return qs.order_by("roll_number", "user__last_name")
 
     def perform_create(self, serializer):
         """Restrict student creation to class-teacher sections or admin."""
@@ -568,6 +585,14 @@ def section_list_view(request):
             if not request.user.is_superuser and request.user.school:
                 qs = qs.filter(school_class__school=request.user.school)
                 
+            # Apply Row-Level Security: Hide sections the teacher cannot access
+            if not request.user.is_superuser and not (request.user.role and request.user.role.scope == 'school'):
+                accessible = request.user.get_accessible_section_ids()
+                if accessible:
+                    qs = qs.filter(id__in=accessible)
+                else:
+                    qs = qs.none()
+
             if class_id:
                 qs = qs.filter(school_class_id=class_id)
             return Response(SectionSerializer(qs, many=True).data, status=status.HTTP_200_OK)

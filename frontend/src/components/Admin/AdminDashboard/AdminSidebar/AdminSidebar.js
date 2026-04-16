@@ -19,7 +19,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Bed,
-  Utensils
+  Utensils,
+  Library
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import styles from './AdminSidebar.module.css';
@@ -37,17 +38,20 @@ const AdminSidebar = () => {
     else if (pathname?.startsWith('/admins/classes')) setExpandedMenu('Classes');
     else if (pathname?.startsWith('/admins/staff')) setExpandedMenu('Staff');
     else if (pathname?.startsWith('/admins/hostel')) setExpandedMenu('Hostel');
+    else if (pathname?.startsWith('/admins/library')) setExpandedMenu('Library');
   }, [pathname]);
   
   const isStudentsPath = pathname?.startsWith('/admins/students');
   const isClassesPath = pathname?.startsWith('/admins/classes');
   const isStaffPath = pathname?.startsWith('/admins/staff');
   const isHostelPath = pathname?.startsWith('/admins/hostel');
+  const isLibraryPath = pathname?.startsWith('/admins/library');
   
   const isStudentsExpanded = expandedMenu === 'Students';
   const isClassesExpanded = expandedMenu === 'Classes';
   const isStaffExpanded = expandedMenu === 'Staff';
   const isHostelExpanded = expandedMenu === 'Hostel';
+  const isLibraryExpanded = expandedMenu === 'Library';
 
   return (
     <div className={`${styles.sidebar} ${isCollapsed ? styles.sidebarCollapsed : ''}`}>
@@ -98,7 +102,7 @@ const AdminSidebar = () => {
         ) : (
           <div className={styles.expandableMenuContainer}>
             <div 
-              onClick={() => setExpandedMenu(expandedMenu === 'Staff' ? null : 'Staff')}
+              onClick={() => setExpandedMenu(isStaffExpanded ? null : 'Staff')}
               className={`${styles.expandableMenu} ${isStaffExpanded ? styles.expanded : styles.collapsed}`}
             >
               <div className={styles.expandableMenuContent}>
@@ -121,6 +125,7 @@ const AdminSidebar = () => {
           </div>
         )}
 
+        {/* Students Section */}
         {isCollapsed ? (
           <NavItem
             icon={<GraduationCap size={18} />}
@@ -132,7 +137,7 @@ const AdminSidebar = () => {
         ) : (
           <div className={styles.expandableMenuContainer}>
             <div 
-              onClick={() => setExpandedMenu(expandedMenu === 'Students' ? null : 'Students')}
+              onClick={() => setExpandedMenu(isStudentsExpanded ? null : 'Students')}
               className={`${styles.expandableMenu} ${isStudentsExpanded ? styles.expanded : styles.collapsed}`}
             >
               <div className={styles.expandableMenuContent}>
@@ -152,6 +157,7 @@ const AdminSidebar = () => {
           </div>
         )}
 
+        {/* Classes Section */}
         {isCollapsed ? (
           <NavItem 
             icon={<LayoutGrid size={18} />} 
@@ -163,7 +169,7 @@ const AdminSidebar = () => {
         ) : (
           <div className={styles.expandableMenuContainer}>
             <div 
-              onClick={() => setExpandedMenu(expandedMenu === 'Classes' ? null : 'Classes')}
+              onClick={() => setExpandedMenu(isClassesExpanded ? null : 'Classes')}
               className={`${styles.expandableMenu} ${isClassesExpanded ? styles.expanded : styles.collapsed}`}
             >
               <div className={styles.expandableMenuContent}>
@@ -184,7 +190,7 @@ const AdminSidebar = () => {
           </div>
         )}
 
-                {/* Canteen Section */}
+        {/* Canteen Section */}
         <NavItem 
           icon={<Utensils size={18} />} 
           label="Canteen" 
@@ -195,7 +201,6 @@ const AdminSidebar = () => {
         />
 
         {/* Hostel Section */}
-
         {isCollapsed ? (
           <NavItem 
             icon={<Bed size={18} />} 
@@ -207,7 +212,7 @@ const AdminSidebar = () => {
         ) : (
           <div className={styles.expandableMenuContainer}>
             <div 
-              onClick={() => setExpandedMenu(expandedMenu === 'Hostel' ? null : 'Hostel')}
+              onClick={() => setExpandedMenu(isHostelExpanded ? null : 'Hostel')}
               className={`${styles.expandableMenu} ${isHostelExpanded ? styles.expanded : styles.collapsed}`}
             >
               <div className={styles.expandableMenuContent}>
@@ -232,6 +237,42 @@ const AdminSidebar = () => {
             </div>
           </div>
         )}
+        
+        {/* Library Section */}
+        {isCollapsed ? (
+          <NavItem 
+            icon={<Library size={18} />} 
+            label="Library" 
+            collapsed={isCollapsed}
+            active={isLibraryPath} 
+            href="/admins/library/overview"
+          />
+        ) : (
+          <div className={styles.expandableMenuContainer}>
+            <div 
+              onClick={() => setExpandedMenu(isLibraryExpanded ? null : 'Library')}
+              className={`${styles.expandableMenu} ${isLibraryExpanded ? styles.expanded : styles.collapsed}`}
+            >
+              <div className={styles.expandableMenuContent}>
+                <div className={`${styles.expandableMenuIcon} ${isLibraryExpanded ? styles.expanded : styles.collapsed}`}>
+                  <Library size={18} />
+                </div>
+                <span>Library</span>
+              </div>
+              <ChevronDown size={14} className={`${styles.expandableChevron} ${isLibraryExpanded ? styles.rotated : ''}`} />
+            </div>
+
+            <div className={`${styles.subItemsContainer} ${isLibraryExpanded ? styles.expanded : styles.collapsed}`}>
+              <SubNavItem label="Overview" active={pathname === '/admins/library/overview'} href="/admins/library/overview" />
+              <SubNavItem label="Book Management" active={pathname === '/admins/library/management'} href="/admins/library/management" />
+              <SubNavItem label="Shelf Management" active={pathname === '/admins/library/shelves'} href="/admins/library/shelves" />
+              <SubNavItem label="Issue System" active={pathname === '/admins/library/issue'} href="/admins/library/issue" />
+              <SubNavItem label="Fine Management" active={pathname === '/admins/library/fines'} href="/admins/library/fines" />
+              <SubNavItem label="Reports" active={pathname === '/admins/library/reports'} href="/admins/library/reports" />
+            </div>
+          </div>
+        )}
+
         <NavItem 
           icon={<Calendar size={18} />} 
           label="Course Sessions" 

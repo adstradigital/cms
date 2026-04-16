@@ -49,6 +49,7 @@ urlpatterns = [
     path("mess/menus/bulk/", views.mess_menu_bulk_upsert_view, name="mess-menu-bulk"),
     path("mess/attendance/", views.mess_attendance_list_view, name="mess-attendance-list"),
     path("mess/diet-profiles/", views.mess_diet_profile_list_view, name="mess-diet-profile-list"),
+    path("mess/diet-profiles/<int:pk>/", views.mess_diet_profile_detail_view, name="mess-diet-profile-detail"),
     path("mess/feedback/", views.mess_feedback_list_view, name="mess-feedback-list"),
     path("mess/feedback/<int:pk>/", views.mess_feedback_detail_view, name="mess-feedback-detail"),
     path("mess/inventory/items/", views.mess_inventory_item_list_view, name="mess-inventory-item-list"),

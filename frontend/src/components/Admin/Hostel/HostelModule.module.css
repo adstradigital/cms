@@ -495,6 +495,106 @@ label.checkboxOption span {
   background: #fcfdfe;
 }
 
+.dietOverview {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  border: 1px solid #dde7f1;
+  background: linear-gradient(135deg, #f8fbff 0%, #f3f7fc 100%);
+}
+
+.dietOverview h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.dietOverview p {
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 13px;
+  max-width: 540px;
+}
+
+.dietOverviewStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 10px;
+  width: 100%;
+  max-width: 460px;
+}
+
+.dietOverviewStat {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.dietOverviewStat span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dietOverviewStat strong {
+  display: block;
+  margin-top: 2px;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.dietPreferenceSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dietFormHeader {
+  margin-bottom: 14px;
+}
+
+.dietFormHeader h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.dietFormHeader p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.dietInlineHint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 9px 11px;
+}
+
+.dietRestrictionCell {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.5;
+}
+
 /* Modern Progress Bar */
 .progressWrapper {
   display: flex;
@@ -652,6 +752,15 @@ label.checkboxOption span {
 
   .formGrid {
     grid-template-columns: 1fr;
+  }
+
+  .dietOverview {
+    flex-direction: column;
+  }
+
+  .dietOverviewStats {
+    max-width: none;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
 }
 

@@ -222,10 +222,55 @@ class MessMealAttendanceSerializer(serializers.ModelSerializer):
 class MessDietProfileSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
     student_admission = serializers.CharField(source="student.admission_number", read_only=True)
+    hostel_name = serializers.SerializerMethodField()
+    hostel_id = serializers.SerializerMethodField()
+    room_number = serializers.SerializerMethodField()
 
     class Meta:
         model = MessDietProfile
         fields = "__all__"
+
+    def _get_active_allotment(self, obj):
+        if hasattr(obj, "_active_allotment"):
+            return obj._active_allotment
+
+        active_allotment = None
+        student = getattr(obj, "student", None)
+        if student is not None:
+            try:
+                candidate = student.hostel_allotment
+                if candidate.is_active:
+                    active_allotment = candidate
+            except RoomAllotment.DoesNotExist:
+                active_allotment = None
+
+        if active_allotment is None and student is not None:
+            active_allotment = (
+                RoomAllotment.objects.select_related("room", "room__hostel")
+                .filter(student=student, is_active=True)
+                .first()
+            )
+
+        obj._active_allotment = active_allotment
+        return obj._active_allotment
+
+    def get_hostel_name(self, obj):
+        allotment = self._get_active_allotment(obj)
+        if not allotment or not allotment.room or not allotment.room.hostel:
+            return ""
+        return allotment.room.hostel.name
+
+    def get_hostel_id(self, obj):
+        allotment = self._get_active_allotment(obj)
+        if not allotment or not allotment.room or not allotment.room.hostel:
+            return None
+        return allotment.room.hostel.id
+
+    def get_room_number(self, obj):
+        allotment = self._get_active_allotment(obj)
+        if not allotment or not allotment.room:
+            return ""
+        return allotment.room.room_number
 
 
 class MessFeedbackSerializer(serializers.ModelSerializer):

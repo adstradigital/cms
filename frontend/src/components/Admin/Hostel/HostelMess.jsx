@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3,
   Boxes,
+  Calendar,
+  CheckCircle2,
   ClipboardCheck,
+  Clock,
   Loader2,
   MessageSquareWarning,
   RefreshCw,
@@ -12,7 +15,9 @@ import {
   Search,
   Trash2,
   Truck,
+  Users,
   UtensilsCrossed,
+  XCircle,
 } from 'lucide-react';
 import styles from './HostelModule.module.css';
 import hostelApi from '@/api/hostelApi';
@@ -32,6 +37,7 @@ const SECTIONS = [
 const MEAL_TYPES = ['breakfast', 'lunch', 'snacks', 'dinner'];
 const ATTENDANCE_STATUS = ['ate', 'skipped'];
 const DIET_TYPES = ['veg', 'non_veg', 'eggetarian', 'vegan'];
+const DIET_FORM_DEFAULT = { student: '', preference: 'veg', allergies: '' };
 const FEEDBACK_STATUS = ['open', 'in_progress', 'resolved'];
 const MESS_UNIT_SIZE_OPTIONS = ['100g', '200g', '250g', '500g', '1kg', '5kg', '10kg', '25kg', '50kg', '100mL', '200mL', '250mL', '500mL', '1L', '2L'];
 
@@ -108,6 +114,11 @@ const getApiErrorMessage = (error, fallback) => {
   return Array.isArray(value) ? value[0] : value || fallback;
 };
 
+const formatEnumLabel = (value) =>
+  String(value || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
 const pad2 = (value) => String(value).padStart(2, '0');
 
 const today = () => {
@@ -126,11 +137,47 @@ const formatDate = (value) => {
   return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString();
 };
 
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+};
+
 const formatMoney = (value) => `Rs. ${Number(value || 0).toFixed(2)}`;
 
 const parseAmount = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCompactNumber = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return '0';
+  return Number.isInteger(parsed) ? String(parsed) : String(parsed);
+};
+
+const parseUnitSize = (unitValue) => {
+  const raw = String(unitValue || '').trim();
+  if (!raw) return null;
+  const tail = raw.includes('x') ? raw.split('x').pop().trim() : raw;
+  const match = tail.match(/^(\d+(?:\.\d+)?)(?:\s*)([a-zA-Z]+)$/);
+  if (!match) return null;
+  const size = Number(match[1]);
+  if (!Number.isFinite(size)) return null;
+  return { size, symbol: match[2] };
+};
+
+const formatInventoryStockDisplay = (stockValue, unitValue) => {
+  const stock = Number(stockValue);
+  const stockLabel = Number.isFinite(stock) ? formatCompactNumber(stock) : String(stockValue || '0');
+  const parsedUnit = parseUnitSize(unitValue);
+
+  if (!parsedUnit || !Number.isFinite(stock)) {
+    return unitValue ? `${stockLabel} ${unitValue}` : stockLabel;
+  }
+
+  const total = stock * parsedUnit.size;
+  return `${formatCompactNumber(total)}${parsedUnit.symbol}`;
 };
 
 const getYearMonth = (dateValue) => {
@@ -163,6 +210,74 @@ const getYearMonth = (dateValue) => {
   const year = parsed.getFullYear();
   const month = String(parsed.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
+};
+
+/**
+ * Normalizes a date string to YYYY-MM-DD.
+ * Handles YYYY-MM-DD, DD-MM-YYYY, and various JS Date formats defensively.
+ */
+const toIsoDate = (val) => {
+  if (!val) return '';
+  try {
+    const raw = String(val).trim();
+    // 1. Handle YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+    // 2. Handle DD-MM-YYYY or DD/MM/YYYY
+    if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(raw)) {
+      const parts = raw.split(/[-/]/);
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    // 3. Fallback to JS Date parsing
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    }
+  } catch (e) {
+    // console.error('toIsoDate error:', e);
+  }
+  return String(val);
+};
+
+const shiftIsoDate = (isoDate, dayDelta) => {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return '';
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  d.setDate(d.getDate() + dayDelta);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const normalizeMealType = (value) => String(value || '').trim().toLowerCase();
+
+const getMenuHostelId = (menuRow, hostelList) => {
+  const direct = menuRow?.hostel?.id || menuRow?.hostel_id || menuRow?.hostel;
+  if (direct !== undefined && direct !== null && String(direct).trim() !== '') return String(direct);
+
+  const byName = String(menuRow?.hostel_name || '').trim().toLowerCase();
+  if (!byName) return '';
+  const match = (hostelList || []).find((h) => String(h?.name || '').trim().toLowerCase() === byName);
+  return match ? String(match.id) : '';
+};
+
+const findMenuDish = ({ rows, hostelId, dateValue, mealType, hostelList }) => {
+  const targetHostel = String(hostelId || '');
+  const targetDate = toIsoDate(dateValue);
+  const legacyShiftedDate = shiftIsoDate(targetDate, -1);
+  const dateCandidates = legacyShiftedDate && legacyShiftedDate !== targetDate
+    ? [targetDate, legacyShiftedDate]
+    : [targetDate];
+  const targetMeal = normalizeMealType(mealType);
+  if (!targetHostel || !targetDate || !targetMeal) return '';
+
+  const match = (rows || []).find((menuRow) => {
+    const rowHostel = getMenuHostelId(menuRow, hostelList);
+    const rowDate = toIsoDate(menuRow?.plan_date);
+    const rowMeal = normalizeMealType(menuRow?.meal_type);
+    return rowHostel === targetHostel && dateCandidates.includes(rowDate) && rowMeal === targetMeal;
+  });
+
+  if (!match) return '';
+  const unpacked = unpackMenuItems(match.items);
+  return String(unpacked.dish_name || unpacked.items || '').trim();
 };
 
 const inSelectedMonth = (dateValue, monthValue) => {
@@ -284,6 +399,7 @@ const getWeekDates = (monday) => {
   return dates;
 };
 
+
 const HostelMess = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
@@ -316,7 +432,9 @@ const HostelMess = () => {
 
   const [menuForm, setMenuForm] = useState({ hostel: '', plan_date: today(), meal_type: 'breakfast', dish_name: '', items: '' });
   const [attendanceForm, setAttendanceForm] = useState({ student: '', hostel: '', date: today(), meal_type: 'breakfast', status: 'ate' });
-  const [dietForm, setDietForm] = useState({ student: '', preference: 'veg', allergies: '' });
+  const [dietForm, setDietForm] = useState({ ...DIET_FORM_DEFAULT });
+  const [editingDiet, setEditingDiet] = useState(null);
+  const [deletingDietId, setDeletingDietId] = useState(null);
   const [feedbackForm, setFeedbackForm] = useState({ student: '', hostel: '', date: today(), meal_type: 'lunch', rating: '5', complaint: '' });
   const [inventoryForm, setInventoryForm] = useState({ hostel: '', name: '', qty_count: '1', unit_size: '1kg', current_stock: '', minimum_stock: '' });
   const [vendorForm, setVendorForm] = useState({ hostel: '', name: '', phone: '', categories: [] });
@@ -424,7 +542,9 @@ const HostelMess = () => {
       }
 
       if (activeSection === 'diet') {
-        const res = await hostelApi.getMessDietProfiles();
+        const params = {};
+        if (selectedHostel) params.hostel = selectedHostel;
+        const res = await hostelApi.getMessDietProfiles(params);
         setDiets(normalizeListPayload(res.data));
         return;
       }
@@ -475,21 +595,27 @@ const HostelMess = () => {
       }
 
       if (activeSection === 'logs') {
-        const params = {};
+        const params = monthRange(selectedMonth);
         if (selectedHostel) params.hostel = selectedHostel;
-        const [wastageRes, consumptionRes] = await Promise.all([
+        const [wastageRes, consumptionRes, menuRes] = await Promise.allSettled([
           hostelApi.getMessWastage(params),
           hostelApi.getMessConsumption(params),
+          hostelApi.getMessMenus(params),
         ]);
-        setWastage(normalizeListPayload(wastageRes.data));
-        setConsumption(normalizeListPayload(consumptionRes.data));
+
+        setWastage(wastageRes.status === 'fulfilled' ? normalizeListPayload(wastageRes.value.data) : []);
+        setConsumption(consumptionRes.status === 'fulfilled' ? normalizeListPayload(consumptionRes.value.data) : []);
+        if (menuRes.status === 'fulfilled') {
+          setMenus(normalizeListPayload(menuRes.value.data));
+        }
+        return;
       }
     } catch (error) {
       alert(getApiErrorMessage(error, 'Failed to load mess data.'));
     } finally {
       setLoading(false);
     }
-  }, [activeSection, selectedHostel, selectedMonth, selectedDateFilter]);
+  }, [activeSection, selectedHostel, selectedMonth, selectedDateFilter, selectedWeekStart]);
 
   useEffect(() => {
     fetchLookups();
@@ -498,6 +624,76 @@ const HostelMess = () => {
   useEffect(() => {
     fetchSectionData();
   }, [fetchSectionData]);
+
+  const autoFillRequestRef = useRef({ wastage: 0, consumption: 0 });
+
+  const setFormItemName = useCallback((formType, value) => {
+    const nextValue = String(value || '');
+    if (formType === 'wastage') {
+      setWastageForm((prev) => (prev.item_name === nextValue ? prev : { ...prev, item_name: nextValue }));
+      return;
+    }
+    if (formType === 'consumption') {
+      setConsumptionForm((prev) => (prev.item_name === nextValue ? prev : { ...prev, item_name: nextValue }));
+    }
+  }, []);
+
+  // Auto-fill item using selected hostel + date + meal from Menu.
+  const autoFillItemName = useCallback(async (formType, hostel, date, meal_type) => {
+    if (formType !== 'wastage' && formType !== 'consumption') return;
+    autoFillRequestRef.current[formType] = (autoFillRequestRef.current[formType] || 0) + 1;
+    const requestId = autoFillRequestRef.current[formType];
+
+    if (activeSection !== 'logs' || !hostel || !date || !meal_type) {
+      setFormItemName(formType, '');
+      return;
+    }
+
+    const localDish = findMenuDish({
+      rows: menus,
+      hostelId: hostel,
+      dateValue: date,
+      mealType: meal_type,
+      hostelList: hostels,
+    });
+
+    if (requestId !== autoFillRequestRef.current[formType]) return;
+    if (localDish) {
+      setFormItemName(formType, localDish);
+      return;
+    }
+
+    // Clear stale value while resolving from API.
+    setFormItemName(formType, '');
+
+    try {
+      const iso = toIsoDate(date);
+      const res = await hostelApi.getMessMenus({ start_date: iso, end_date: iso, hostel });
+      if (requestId !== autoFillRequestRef.current[formType]) return;
+      const fetchedRows = normalizeListPayload(res.data);
+      const fetchedDish = findMenuDish({
+        rows: fetchedRows,
+        hostelId: hostel,
+        dateValue: date,
+        mealType: meal_type,
+        hostelList: hostels,
+      });
+      setFormItemName(formType, fetchedDish || '');
+    } catch (_) {
+      if (requestId !== autoFillRequestRef.current[formType]) return;
+      setFormItemName(formType, '');
+    }
+  }, [activeSection, menus, hostels, setFormItemName]);
+
+  // Wastage auto-fill trigger
+  useEffect(() => {
+    autoFillItemName('wastage', wastageForm.hostel, wastageForm.date, wastageForm.meal_type);
+  }, [wastageForm.hostel, wastageForm.date, wastageForm.meal_type, autoFillItemName]);
+
+  // Consumption auto-fill trigger
+  useEffect(() => {
+    autoFillItemName('consumption', consumptionForm.hostel, consumptionForm.date, consumptionForm.meal_type);
+  }, [consumptionForm.hostel, consumptionForm.date, consumptionForm.meal_type, autoFillItemName]);
 
   useEffect(() => {
     const unitSizeStr = supplyItem.unit_size || '';
@@ -537,21 +733,79 @@ const HostelMess = () => {
     [searchTerm]
   );
 
-  const filteredAttendance = useMemo(
-    () => attendance.filter((item) => item.date === selectedDateFilter && matchesSearch(item.student_name, item.meal_type, item.status)),
-    [attendance, selectedDateFilter, matchesSearch]
-  );
-
-  const filteredDiets = useMemo(() => {
-    return diets.filter((item) => {
-      if (!matchesSearch(item.student_name, item.preference, item.allergies)) return false;
-      if (selectedHostel) {
-        const allotment = activeAllotments.find((a) => String(a.student) === String(item.student));
-        if (!allotment || String(allotment.hostel_id || allotment.hostel) !== String(selectedHostel)) return false;
-      }
-      return true;
+  const filteredAttendance = useMemo(() => {
+    // Standard table view data
+    return attendance.filter((item) => {
+      const matchesDate = item.date === selectedDateFilter;
+      const matchesHostel = !selectedHostel || String(item.hostel) === String(selectedHostel);
+      return matchesDate && matchesHostel && matchesSearch(item.student_name, item.meal_type, item.status);
     });
-  }, [diets, selectedHostel, activeAllotments, matchesSearch]);
+  }, [attendance, selectedDateFilter, selectedHostel, matchesSearch]);
+
+  // Bulk attendance logic
+  const [activeMeal, setActiveMeal] = useState('breakfast');
+  const residentsForAttendance = useMemo(() => {
+    if (!selectedHostel) return [];
+    return activeAllotments.filter(a => String(a.hostel_id) === String(selectedHostel));
+  }, [activeAllotments, selectedHostel]);
+
+  const bulkAttendanceState = useMemo(() => {
+    const map = {};
+    attendance.forEach(record => {
+      if (record.date === selectedDateFilter && record.meal_type === activeMeal) {
+        map[record.student] = record.status;
+      }
+    });
+    return map;
+  }, [attendance, selectedDateFilter, activeMeal]);
+
+  const toggleStudentAttendance = async (studentId, status) => {
+    try {
+      const record = {
+        student: studentId,
+        date: selectedDateFilter,
+        meal_type: activeMeal,
+        status: status,
+        hostel: selectedHostel
+      };
+      await hostelApi.markMessAttendance(record);
+      // Refresh data
+      fetchSectionData();
+    } catch (err) {
+      alert('Failed to mark attendance');
+    }
+  };
+
+  const filteredDiets = useMemo(
+    () =>
+      diets.filter((item) =>
+        matchesSearch(
+          item.student_name,
+          item.preference,
+          item.allergies,
+          item.restrictions,
+          item.hostel_name,
+          item.room_number
+        )
+      ),
+    [diets, matchesSearch]
+  );
+  const markAllAttendance = async (status) => {
+    try {
+      if (residentsForAttendance.length === 0) return;
+      const records = residentsForAttendance.map(a => ({
+        student: a.student,
+        date: selectedDateFilter,
+        meal_type: activeMeal,
+        status: status,
+        hostel: selectedHostel
+      }));
+      await hostelApi.markMessAttendance(records);
+      fetchSectionData();
+    } catch (err) {
+      alert('Failed to mark all attendance');
+    }
+  };
 
   const filteredFeedback = useMemo(
     () => feedback.filter((item) => inSelectedMonth(item.date, selectedMonth) && matchesSearch(item.student_name, item.complaint, item.status)),
@@ -577,6 +831,59 @@ const HostelMess = () => {
     () => [...students].sort((a, b) => getStudentLabel(a).localeCompare(getStudentLabel(b))),
     [students]
   );
+
+  const dietStudentOptions = useMemo(() => {
+    const items = activeAllotments.filter(
+      (allotment) =>
+        !selectedHostel ||
+        String(allotment.hostel_id || allotment.hostel || '') === String(selectedHostel)
+    );
+    return [...items].sort((a, b) => {
+      const left = `${a.student_name || ''} ${a.student_admission || ''}`.trim();
+      const right = `${b.student_name || ''} ${b.student_admission || ''}`.trim();
+      return left.localeCompare(right);
+    });
+  }, [activeAllotments, selectedHostel]);
+
+  const dietRestrictionCount = useMemo(
+    () =>
+      filteredDiets.filter((item) => String(item.allergies || item.restrictions || '').trim()).length,
+    [filteredDiets]
+  );
+
+  const dietPreferenceSummary = useMemo(
+    () =>
+      DIET_TYPES.map((type) => ({
+        type,
+        count: filteredDiets.filter((item) => item.preference === type).length,
+      })).filter((item) => item.count > 0),
+    [filteredDiets]
+  );
+
+  const resetDietEditor = useCallback(() => {
+    setEditingDiet(null);
+    setDietForm({ ...DIET_FORM_DEFAULT });
+  }, []);
+
+  useEffect(() => {
+    setDietForm((prev) => {
+      if (!prev.student) return prev;
+      const exists = dietStudentOptions.some(
+        (allotment) => String(allotment.student) === String(prev.student)
+      );
+      return exists ? prev : { ...prev, student: '' };
+    });
+  }, [dietStudentOptions]);
+
+  useEffect(() => {
+    if (!editingDiet) return;
+    const exists = dietStudentOptions.some(
+      (allotment) => String(allotment.student) === String(editingDiet.student)
+    );
+    if (!exists) {
+      resetDietEditor();
+    }
+  }, [editingDiet, dietStudentOptions, resetDietEditor]);
 
   const vendorOptionsForSupply = useMemo(
     () => vendors.filter((vendor) => !supplyMeta.hostel || String(vendor.hostel) === String(supplyMeta.hostel)),
@@ -610,6 +917,61 @@ const HostelMess = () => {
       fetchSectionData();
     } catch (error) {
       alert(getApiErrorMessage(error, 'Action failed.'));
+    }
+  };
+
+  const startDietEdit = useCallback((row) => {
+    setEditingDiet(row);
+    setDietForm({
+      student: String(row.student || ''),
+      preference: row.preference || 'veg',
+      allergies: row.allergies || row.restrictions || '',
+    });
+  }, []);
+
+  const saveDietProfile = async (event) => {
+    event.preventDefault();
+
+    try {
+      if (editingDiet) {
+        await hostelApi.updateMessDietProfile(editingDiet.id, {
+          preference: dietForm.preference,
+          allergies: dietForm.allergies,
+        });
+        alert('Diet profile updated.');
+      } else {
+        await hostelApi.saveMessDietProfile({
+          student: Number(dietForm.student),
+          preference: dietForm.preference,
+          allergies: dietForm.allergies,
+        });
+        alert('Diet profile saved.');
+      }
+
+      resetDietEditor();
+      fetchSectionData();
+    } catch (error) {
+      alert(getApiErrorMessage(error, editingDiet ? 'Failed to update diet profile.' : 'Failed to save diet profile.'));
+    }
+  };
+
+  const deleteDietProfile = async (row) => {
+    if (!row?.id) return;
+    const studentLabel = row.student_name ? ` for ${row.student_name}` : '';
+    if (!window.confirm(`Delete this diet profile${studentLabel}?`)) return;
+
+    try {
+      setDeletingDietId(row.id);
+      await hostelApi.deleteMessDietProfile(row.id);
+      setDiets((prev) => prev.filter((item) => String(item.id) !== String(row.id)));
+      if (editingDiet && String(editingDiet.id) === String(row.id)) {
+        resetDietEditor();
+      }
+      alert('Diet profile deleted.');
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Failed to delete diet profile.'));
+    } finally {
+      setDeletingDietId(null);
     }
   };
 
@@ -1420,45 +1782,247 @@ const HostelMess = () => {
 
 
       {activeSection === 'attendance' && (
+        <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
+          {/* Stats Bar */}
+          <div className={styles.statsGrid} style={{ marginBottom: '20px' }}>
+            <div className={styles.statCard}>
+              <div className={styles.statIcon} style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' }}>
+                <Users size={24} />
+              </div>
+              <div className={styles.statInfo}>
+                <h3>Total Residents</h3>
+                <p>{residentsForAttendance.length}</p>
+              </div>
+            </div>
+            <div className={styles.statCard}>
+              <div className={styles.statIcon} style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#059669' }}>
+                <CheckCircle2 size={24} />
+              </div>
+              <div className={styles.statInfo}>
+                <h3>Marked "Ate"</h3>
+                <p>{Object.values(bulkAttendanceState).filter(v => v === 'ate').length}</p>
+              </div>
+            </div>
+            <div className={styles.statCard}>
+              <div className={styles.statIcon} style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#d97706' }}>
+                <Clock size={24} />
+              </div>
+              <div className={styles.statInfo}>
+                <h3>Remaining</h3>
+                <p>{residentsForAttendance.length - Object.keys(bulkAttendanceState).length}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Control Bar */}
+          <div className={styles.tableContainer} style={{ padding: '20px', marginBottom: '24px', background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)' }}>
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className={styles.formGroup} style={{ flex: 1, minWidth: '200px' }}>
+                <label style={{ fontSize: '11px', color: '#64748b' }}>SELECT MEAL SESSION</label>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  {MEAL_TYPES.map(m => (
+                    <button
+                      key={m}
+                      className={styles.tabButton}
+                      style={{ 
+                        padding: '8px 16px',
+                        background: activeMeal === m ? '#1e293b' : '#fff',
+                        color: activeMeal === m ? '#fff' : '#64748b',
+                        border: '1px solid ' + (activeMeal === m ? '#1e293b' : '#e2e8f0'),
+                        borderRadius: '10px',
+                        textTransform: 'capitalize',
+                        fontSize: '13px',
+                        fontWeight: 600
+                      }}
+                      onClick={() => setActiveMeal(m)}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className={styles.formGroup} style={{ width: '200px' }}>
+                <label style={{ fontSize: '11px', color: '#64748b' }}>ATTENDANCE DATE</label>
+                <div className={styles.searchWrapper} style={{ marginTop: '4px' }}>
+                  <Calendar size={16} />
+                  <input 
+                    type="date" 
+                    className={styles.formControl} 
+                    value={selectedDateFilter} 
+                    onChange={(e) => setSelectedDateFilter(e.target.value)}
+                    style={{ border: 'none', background: 'transparent' }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.tableContainer}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>
+                  Member List - {activeMeal.toUpperCase()}
+                </h3>
+                <p style={{ fontSize: '12px', color: '#64748b' }}>Quickly mark meal consumption for all hostel residents.</p>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  className={styles.btnSecondary}
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
+                  onClick={() => markAllAttendance('ate')}
+                >
+                  <CheckCircle2 size={14} style={{ marginRight: '4px' }} /> Mark All Ate
+                </button>
+                <div className={styles.searchWrapper} style={{ width: '250px' }}>
+                  <Search size={16} />
+                  <input 
+                    placeholder="Search by name..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th style={{ width: '40%' }}>Student Detail</th>
+                  <th style={{ width: '30%' }}>Room / Hostel</th>
+                  <th style={{ width: '30%', textAlign: 'right' }}>Attendance Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {residentsForAttendance.length === 0 ? (
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
+                      <Users size={48} style={{ opacity: 0.2, marginBottom: '16px' }} />
+                      <p>No active residents found in the current hostel.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  residentsForAttendance
+                    .filter(a => matchesSearch(a.student_name, a.student_admission, a.room_number))
+                    .map((item) => {
+                      const status = bulkAttendanceState[item.student];
+                      return (
+                        <tr key={item.student}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div style={{ 
+                                width: '36px', height: '36px', borderRadius: '10px', 
+                                background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontWeight: 700, color: '#475569', fontSize: '14px'
+                              }}>
+                                {item.student_name?.[0]}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px' }}>{item.student_name}</div>
+                                <div style={{ fontSize: '12px', color: '#64748b' }}>{item.student_admission}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 500, fontSize: '13px' }}>Room {item.room_number}</div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.hostel_name}</div>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                              <button
+                                className={styles.btnSecondary}
+                                style={{ 
+                                  padding: '6px 14px', fontSize: '12px', borderRadius: '8px',
+                                  background: status === 'ate' ? '#10b981' : '#fff',
+                                  color: status === 'ate' ? '#fff' : '#64748b',
+                                  borderColor: status === 'ate' ? '#10b981' : '#e2e8f0',
+                                }}
+                                onClick={() => toggleStudentAttendance(item.student, 'ate')}
+                              >
+                                <CheckCircle2 size={14} style={{ marginRight: '4px' }} /> Ate
+                              </button>
+                              <button
+                                className={styles.btnSecondary}
+                                style={{ 
+                                  padding: '6px 14px', fontSize: '12px', borderRadius: '8px',
+                                  background: status === 'skipped' ? '#f59e0b' : '#fff',
+                                  color: status === 'skipped' ? '#fff' : '#64748b',
+                                  borderColor: status === 'skipped' ? '#f59e0b' : '#e2e8f0',
+                                }}
+                                onClick={() => toggleStudentAttendance(item.student, 'skipped')}
+                              >
+                                <XCircle size={14} style={{ marginRight: '4px' }} /> Skipped
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeSection === 'diet' && (
         <>
-          <div className={styles.tableContainer} style={{ padding: '14px', marginBottom: '12px' }}>
+          <div className={styles.dietOverview}>
+            <div>
+              <h3>Diet & Allergy Profiles</h3>
+              <p>Maintain student food preferences and medical restrictions for safe, hostel-wise meal planning.</p>
+            </div>
+            <div className={styles.dietOverviewStats}>
+              <div className={styles.dietOverviewStat}>
+                <span>Profiles</span>
+                <strong>{filteredDiets.length}</strong>
+              </div>
+              <div className={styles.dietOverviewStat}>
+                <span>With Restrictions</span>
+                <strong>{dietRestrictionCount}</strong>
+              </div>
+              <div className={styles.dietOverviewStat}>
+                <span>Students in Scope</span>
+                <strong>{dietStudentOptions.length}</strong>
+              </div>
+            </div>
+          </div>
+
+          {dietPreferenceSummary.length > 0 && (
+            <div className={styles.dietPreferenceSummary}>
+              {dietPreferenceSummary.map((item) => (
+                <span key={item.type} className={`${styles.badge} ${styles.badgeInfo}`}>
+                  {formatEnumLabel(item.type)}: {item.count}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className={styles.tableContainer} style={{ padding: '18px', marginBottom: '12px' }}>
+            <div className={styles.dietFormHeader}>
+              <h4>{editingDiet ? 'Edit Diet Profile' : 'Create / Update Profile'}</h4>
+              <p>
+                {editingDiet
+                  ? `Updating profile for ${editingDiet.student_name || 'selected student'}.`
+                  : 'Pick a resident and record the latest dietary instruction.'}
+              </p>
+            </div>
             <form
               className={styles.modalForm}
-              onSubmit={(event) =>
-                onSubmit(
-                  event,
-                  hostelApi.markMessAttendance,
-                  () => ({
-                    student: Number(attendanceForm.student),
-                    hostel: attendanceForm.hostel ? Number(attendanceForm.hostel) : undefined,
-                    date: attendanceForm.date,
-                    meal_type: attendanceForm.meal_type,
-                    status: attendanceForm.status,
-                  }),
-                  'Meal attendance saved.',
-                  () => setAttendanceForm((prev) => ({ ...prev, student: '' }))
-                )
-              }
+              onSubmit={saveDietProfile}
             >
               <div className={styles.formGrid}>
                 <div className={styles.formGroup}>
                   <label>Student</label>
-                  <select 
-                    className={styles.formControl} 
-                    value={attendanceForm.student} 
-                    onChange={(event) => {
-                      const studentId = event.target.value;
-                      const allotment = activeAllotments.find((a) => String(a.student) === String(studentId));
-                      setAttendanceForm((prev) => ({ 
-                        ...prev, 
-                        student: studentId,
-                        hostel: allotment ? String(allotment.hostel_id || '') : prev.hostel
-                      }));
-                    }} 
+                  <select
+                    className={styles.formControl}
+                    value={dietForm.student}
+                    onChange={(event) => setDietForm((prev) => ({ ...prev, student: event.target.value }))}
                     required
+                    disabled={Boolean(editingDiet)}
                   >
                     <option value="">Select Student</option>
-                    {activeAllotments.map((alloc) => (
+                    {dietStudentOptions.map((alloc) => (
                       <option key={alloc.student} value={alloc.student}>
                         {`${alloc.student_name} (${alloc.student_admission}) - ${alloc.hostel_name}`}
                       </option>
@@ -1466,106 +2030,88 @@ const HostelMess = () => {
                   </select>
                 </div>
                 <div className={styles.formGroup}>
-                  <label>Date</label>
-                  <input className={styles.formControl} type="date" value={attendanceForm.date} onChange={(event) => setAttendanceForm((prev) => ({ ...prev, date: event.target.value }))} />
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Meal</label>
-                  <select className={styles.formControl} value={attendanceForm.meal_type} onChange={(event) => setAttendanceForm((prev) => ({ ...prev, meal_type: event.target.value }))}>
-                    {MEAL_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-                  </select>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Status</label>
-                  <select className={styles.formControl} value={attendanceForm.status} onChange={(event) => setAttendanceForm((prev) => ({ ...prev, status: event.target.value }))}>
-                    {ATTENDANCE_STATUS.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className={styles.modalActions}><button className={styles.btnPrimary} type="submit">Save Attendance</button></div>
-            </form>
-          </div>
-
-          <div className={styles.tableContainer}>
-            <table className={styles.table}>
-              <thead><tr><th>Student</th><th>Date</th><th>Meal</th><th>Status</th><th>Hostel</th></tr></thead>
-              <tbody>
-                {filteredAttendance.length === 0
-                  ? loadingRow(5, 'No attendance rows found.')
-                  : filteredAttendance.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{row.student_name || '-'}</div>
-                          <div style={{ fontSize: '11px', color: '#64748b' }}>{row.student_admission || '-'}</div>
-                        </td>
-                        <td>{formatDate(row.date)}</td>
-                        <td style={{ textTransform: 'capitalize' }}>{row.meal_type}</td>
-                        <td><span className={`${styles.badge} ${row.status === 'ate' ? styles.badgeSuccess : styles.badgeWarning}`}>{row.status}</span></td>
-                        <td>{row.hostel_name || '-'}</td>
-                      </tr>
+                  <label>Diet Preference</label>
+                  <select
+                    className={styles.formControl}
+                    value={dietForm.preference}
+                    onChange={(event) => setDietForm((prev) => ({ ...prev, preference: event.target.value }))}
+                  >
+                    {DIET_TYPES.map((item) => (
+                      <option key={item} value={item}>
+                        {formatEnumLabel(item)}
+                      </option>
                     ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
-      {activeSection === 'diet' && (
-        <>
-          <div className={styles.tableContainer} style={{ padding: '14px', marginBottom: '12px' }}>
-            <form
-              className={styles.modalForm}
-              onSubmit={(event) =>
-                onSubmit(
-                  event,
-                  hostelApi.saveMessDietProfile,
-                  () => ({
-                    student: Number(dietForm.student),
-                    preference: dietForm.preference,
-                    allergies: dietForm.allergies,
-                  }),
-                  'Diet profile saved.',
-                  () => setDietForm((prev) => ({ ...prev, student: '', allergies: '' }))
-                )
-              }
-            >
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
-                  <label>Student</label>
-                  <select className={styles.formControl} value={dietForm.student} onChange={(event) => setDietForm((prev) => ({ ...prev, student: event.target.value }))} required>
-                    <option value="">Select Student</option>
-                    {activeAllotments.map((alloc) => <option key={alloc.student} value={alloc.student}>{`${alloc.student_name} (${alloc.student_admission}) - ${alloc.hostel_name}`}</option>)}
-                  </select>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Preference</label>
-                  <select className={styles.formControl} value={dietForm.preference} onChange={(event) => setDietForm((prev) => ({ ...prev, preference: event.target.value }))}>
-                    {DIET_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
                   </select>
                 </div>
                 <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                  <label>Allergy / Restriction</label>
-                  <textarea className={styles.formControl} value={dietForm.allergies} onChange={(event) => setDietForm((prev) => ({ ...prev, allergies: event.target.value }))} />
+                  <label>Allergies / Restrictions</label>
+                  <textarea
+                    className={styles.formControl}
+                    value={dietForm.allergies}
+                    onChange={(event) => setDietForm((prev) => ({ ...prev, allergies: event.target.value }))}
+                    placeholder="Example: Peanut allergy, lactose intolerance, no shellfish"
+                  />
                 </div>
               </div>
-              <div className={styles.modalActions}><button className={styles.btnPrimary} type="submit">Save Profile</button></div>
+              <div className={styles.modalActions}>
+                <button className={styles.btnPrimary} type="submit" disabled={dietStudentOptions.length === 0}>
+                  {editingDiet ? 'Update Profile' : 'Save Profile'}
+                </button>
+                {editingDiet && (
+                  <button className={styles.btnSecondary} type="button" onClick={resetDietEditor}>
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+              {dietStudentOptions.length === 0 && (
+                <div className={styles.dietInlineHint}>
+                  No active resident found in the selected hostel. Change hostel filter to add a profile.
+                </div>
+              )}
             </form>
           </div>
 
           <div className={styles.tableContainer}>
             <table className={styles.table}>
-              <thead><tr><th>Student</th><th>Preference</th><th>Allergies/Restrictions</th></tr></thead>
+              <thead><tr><th>Student</th><th>Hostel / Room</th><th>Preference</th><th>Allergies/Restrictions</th><th>Updated</th><th>Actions</th></tr></thead>
               <tbody>
                 {filteredDiets.length === 0
-                  ? loadingRow(3, 'No diet profiles found.')
+                  ? loadingRow(6, 'No diet profiles found.')
                   : filteredDiets.map((row) => (
                       <tr key={row.id}>
                         <td>
                           <div style={{ fontWeight: 600 }}>{row.student_name || '-'}</div>
                           <div style={{ fontSize: '11px', color: '#64748b' }}>{row.student_admission || '-'}</div>
                         </td>
-                        <td style={{ textTransform: 'capitalize' }}>{row.preference}</td>
-                        <td style={{ whiteSpace: 'normal' }}>{row.allergies || '-'}</td>
+                        <td>
+                          <div>{row.hostel_name || '-'}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>{row.room_number ? `Room ${row.room_number}` : '-'}</div>
+                        </td>
+                        <td><span className={`${styles.badge} ${styles.badgeInfo}`}>{formatEnumLabel(row.preference)}</span></td>
+                        <td className={styles.dietRestrictionCell}>{row.allergies || row.restrictions || '-'}</td>
+                        <td>{formatDateTime(row.updated_at)}</td>
+                        <td className={styles.actionCell}>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button
+                              className={styles.btnSecondary}
+                              style={{ minHeight: '34px', fontSize: '12px', padding: '6px 10px' }}
+                              type="button"
+                              onClick={() => startDietEdit(row)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className={`${styles.btnSecondary} ${styles.btnDanger}`}
+                              style={{ minHeight: '34px', fontSize: '12px', padding: '6px 10px' }}
+                              type="button"
+                              onClick={() => deleteDietProfile(row)}
+                              disabled={deletingDietId === row.id}
+                            >
+                              {deletingDietId === row.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                              Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
               </tbody>
@@ -1721,8 +2267,8 @@ const HostelMess = () => {
                       <tr key={row.id}>
                         <td style={{ fontWeight: 600 }}>{row.name}</td>
                         <td>{row.hostel_name || '-'}</td>
-                        <td>{row.current_stock} {row.unit}</td>
-                        <td>{row.minimum_stock} {row.unit}</td>
+                        <td>{formatInventoryStockDisplay(row.current_stock, row.unit)}</td>
+                        <td>{formatInventoryStockDisplay(row.minimum_stock, row.unit)}</td>
                         <td><span className={`${styles.badge} ${row.low_stock ? styles.badgeWarning : styles.badgeSuccess}`}>{row.low_stock ? 'Low Stock' : 'Healthy'}</span></td>
                       </tr>
                     ))}
@@ -2022,7 +2568,16 @@ const HostelMess = () => {
                 <div className={styles.formGroup}><label>Wastage Hostel</label><select className={styles.formControl} value={wastageForm.hostel} onChange={(event) => setWastageForm((prev) => ({ ...prev, hostel: event.target.value }))} required><option value="">Select Hostel</option>{hostels.map((hostel) => <option key={hostel.id} value={hostel.id}>{hostel.name}</option>)}</select></div>
                 <div className={styles.formGroup}><label>Date</label><input className={styles.formControl} type="date" value={wastageForm.date} onChange={(event) => setWastageForm((prev) => ({ ...prev, date: event.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Meal</label><select className={styles.formControl} value={wastageForm.meal_type} onChange={(event) => setWastageForm((prev) => ({ ...prev, meal_type: event.target.value }))}>{MEAL_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></div>
-                <div className={styles.formGroup}><label>Item</label><input className={styles.formControl} value={wastageForm.item_name} onChange={(event) => setWastageForm((prev) => ({ ...prev, item_name: event.target.value }))} required /></div>
+                <div className={styles.formGroup}>
+                  <label>Item</label>
+                  <input
+                    className={styles.formControl}
+                    value={wastageForm.item_name}
+                    onChange={(event) => setWastageForm((prev) => ({ ...prev, item_name: event.target.value }))}
+                    placeholder={wastageForm.hostel && wastageForm.date ? 'Auto-filled from menu...' : 'Enter item name'}
+                    required
+                  />
+                </div>
                 <div className={styles.formGroup}>
                   <label>Qty</label>
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -2042,7 +2597,16 @@ const HostelMess = () => {
                 <div className={styles.formGroup}><label>Consumption Hostel</label><select className={styles.formControl} value={consumptionForm.hostel} onChange={(event) => setConsumptionForm((prev) => ({ ...prev, hostel: event.target.value }))} required><option value="">Select Hostel</option>{hostels.map((hostel) => <option key={hostel.id} value={hostel.id}>{hostel.name}</option>)}</select></div>
                 <div className={styles.formGroup}><label>Date</label><input className={styles.formControl} type="date" value={consumptionForm.date} onChange={(event) => setConsumptionForm((prev) => ({ ...prev, date: event.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Meal</label><select className={styles.formControl} value={consumptionForm.meal_type} onChange={(event) => setConsumptionForm((prev) => ({ ...prev, meal_type: event.target.value }))}>{MEAL_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></div>
-                <div className={styles.formGroup}><label>Item</label><input className={styles.formControl} value={consumptionForm.item_name} onChange={(event) => setConsumptionForm((prev) => ({ ...prev, item_name: event.target.value }))} required /></div>
+                <div className={styles.formGroup}>
+                  <label>Item</label>
+                  <input
+                    className={styles.formControl}
+                    value={consumptionForm.item_name}
+                    onChange={(event) => setConsumptionForm((prev) => ({ ...prev, item_name: event.target.value }))}
+                    placeholder={consumptionForm.hostel && consumptionForm.date ? 'Auto-filled from menu...' : 'Enter item name'}
+                    required
+                  />
+                </div>
                 <div className={styles.formGroup}>
                   <label>Qty</label>
                   <div style={{ display: 'flex', gap: '6px' }}>

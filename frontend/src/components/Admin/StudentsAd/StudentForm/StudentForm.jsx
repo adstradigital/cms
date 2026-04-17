@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Save, UploadCloud, Check, ChevronRight, ChevronLeft, Plus, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Save, UploadCloud, Check, ChevronRight, ChevronLeft, Plus, X, CheckCircle2 } from 'lucide-react';
 import styles from './StudentForm.module.css';
 
 const steps = [
-  { id: 1, title: 'Basic Info', desc: 'Name, DOB, gender' },
-  { id: 2, title: 'Academic', desc: 'Grade, section, IDs' },
-  { id: 3, title: 'Parents', desc: 'Guardian details' },
-  { id: 4, title: 'Address', desc: 'Contact & location' },
-  { id: 5, title: 'Health', desc: 'Medical history' },
-  { id: 6, title: 'Transport', desc: 'Bus & hostel info' },
-  { id: 7, title: 'Documents', desc: 'KYC & files' },
-  { id: 8, title: 'Review', desc: 'Final check before save' }
+  { id: 1, title: 'Basic Info', desc: 'Name, DOB, gender', requiredFields: ['first_name', 'last_name', 'username', 'password', 'date_of_birth', 'gender'] },
+  { id: 2, title: 'Academic', desc: 'Grade, section, IDs', requiredFields: ['grade', 'section', 'admission_number'] },
+  { id: 3, title: 'Parents', desc: 'Guardian details', requiredFields: ['father_name', 'mother_name'] },
+  { id: 4, title: 'Address', desc: 'Contact & location', requiredFields: ['address'] },
+  { id: 5, title: 'Health', desc: 'Medical history', requiredFields: [] },
+  { id: 6, title: 'Transport', desc: 'Bus & hostel info', requiredFields: [] },
+  { id: 7, title: 'Documents', desc: 'KYC & files', requiredFields: [] },
+  { id: 8, title: 'Review', desc: 'Final check', requiredFields: [] }
 ];
 
 const DOCUMENT_TYPE_OPTIONS = [
@@ -30,6 +30,7 @@ const createDocumentEntry = () => ({
 
 const StudentForm = ({ onCancel, onSaved, studentId = null, inquiryId = null }) => {
   const [activeStep, setActiveStep] = useState(1);
+  const [visitedSteps, setVisitedSteps] = useState(new Set([1]));
   const [grades, setGrades] = useState([]);
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -125,12 +126,11 @@ const StudentForm = ({ onCancel, onSaved, studentId = null, inquiryId = null }) 
   };
 
   const handleNext = () => {
-    // Generate username if not set (first + last)
-    if (activeStep === 1 && !formData.username) {
-       const genUsername = (formData.first_name + formData.last_name).toLowerCase().replace(/\s/g, '') + Math.floor(Math.random() * 100);
-       setFormData(prev => ({ ...prev, username: genUsername }));
-    }
-    setActiveStep(prev => Math.min(prev + 1, 8));
+    // Mark current step as visited before moving
+    setVisitedSteps(prev => new Set(prev).add(activeStep));
+    const next = Math.min(activeStep + 1, 8);
+    setVisitedSteps(prev => new Set(prev).add(next));
+    setActiveStep(next);
   };
   const handlePrev = () => setActiveStep(prev => Math.max(prev - 1, 1));
   useEffect(() => {
@@ -267,9 +267,46 @@ const StudentForm = ({ onCancel, onSaved, studentId = null, inquiryId = null }) 
   }, [inquiryId, isEditMode]);
 
   const handleStepClick = (id) => {
-    // Optionally allow jumping to previous steps only
-    if (id < activeStep) setActiveStep(id);
+    setVisitedSteps(prev => new Set(prev).add(id));
+    setActiveStep(id);
   };
+
+  // Check completion status of each step
+  const getStepCompletion = useMemo(() => {
+    const result = {};
+    for (const step of steps) {
+      if (step.id === 8) {
+        // Review is complete only if all other steps are complete
+        result[8] = steps.filter(s => s.id < 8).every(s => result[s.id]);
+        continue;
+      }
+      if (!step.requiredFields || step.requiredFields.length === 0) {
+        // Optional steps: only mark complete if actual data is entered
+        let hasData = false;
+        if (step.id === 5) {
+          hasData = !!(formData.health_notes || formData.allergies || formData.emergency_contact_name || formData.emergency_contact_phone);
+        } else if (step.id === 6) {
+          hasData = !!(formData.transport_user || formData.hostel_resident);
+        } else if (step.id === 7) {
+          // Photo is top-level state, documents is from state, signature is top-level
+          hasData = documents.some(d => d.file !== null);
+        }
+        result[step.id] = hasData;
+        continue;
+      }
+      result[step.id] = step.requiredFields.every(field => {
+        const val = formData[field];
+        if (typeof val === 'boolean') return true;
+        return val !== undefined && val !== null && String(val).trim() !== '';
+      });
+    }
+    return result;
+  }, [formData, visitedSteps, activeStep]);
+
+  const completedCount = useMemo(() => {
+    return steps.filter(s => s.id < 8 && getStepCompletion[s.id]).length;
+  }, [getStepCompletion]);
+  const progressPct = Math.round((completedCount / 7) * 100);
 
   const renderStepContent = () => {
     switch (activeStep) {
@@ -301,6 +338,31 @@ const StudentForm = ({ onCancel, onSaved, studentId = null, inquiryId = null }) 
                   className={styles.formInput} 
                   placeholder="e.g. Sanchez" 
                   value={formData.last_name}
+                  onChange={handleChange}
+                />
+              </div>
+            </div>
+
+            <div className={styles.grid2}>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Portal Username</label>
+                <input 
+                  type="text" 
+                  name="username"
+                  className={styles.formInput} 
+                  placeholder="e.g. k.sanchez" 
+                  value={formData.username}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Portal Password</label>
+                <input 
+                  type="text" 
+                  name="password"
+                  className={styles.formInput} 
+                  placeholder="Password" 
+                  value={formData.password}
                   onChange={handleChange}
                 />
               </div>
@@ -1001,12 +1063,18 @@ const StudentForm = ({ onCancel, onSaved, studentId = null, inquiryId = null }) 
       {loading && <div className={styles.loadingOverlay}>Saving...</div>}
       {/* Sidebar Stepper */}
       <div className={styles.stepperSidebar}>
-        <h3 className={styles.stepperTitle}>{isEditMode ? 'Edit Student' : 'Add Student'}</h3>
+        <h3 className={styles.stepperTitle}>{isEditMode ? 'Edit Student' : 'Register Student'}</h3>
+        <p className={styles.stepperSubtitle}>{completedCount} of 7 sections complete</p>
+
+        {/* Progress Bar */}
+        <div className={styles.progressBarWrap}>
+          <div className={styles.progressBar} style={{ width: `${progressPct}%` }} />
+        </div>
         
         <div className={styles.stepList}>
           {steps.map((step) => {
             const isActive = step.id === activeStep;
-            const isCompleted = step.id < activeStep;
+            const isFilled = getStepCompletion[step.id];
             
             return (
               <div 
@@ -1014,16 +1082,18 @@ const StudentForm = ({ onCancel, onSaved, studentId = null, inquiryId = null }) 
                 className={`
                   ${styles.stepItem} 
                   ${isActive ? styles.stepItemActive : ''} 
-                  ${isCompleted ? styles.stepItemCompleted : ''}
+                  ${isFilled ? styles.stepItemCompleted : ''}
                 `}
                 onClick={() => handleStepClick(step.id)}
               >
                 <div className={styles.stepCircle}>
-                  {isCompleted ? <Check size={16} strokeWidth={3} /> : step.id}
+                  {isFilled ? <Check size={16} strokeWidth={3} /> : step.id}
                 </div>
                 <div className={styles.stepLabel}>
                   <span className={styles.stepName}>{step.title}</span>
-                  <span className={styles.stepDesc}>{step.desc}</span>
+                  <span className={styles.stepDesc}>
+                    {isFilled && step.id !== 8 ? '✓ Complete' : step.desc}
+                  </span>
                 </div>
               </div>
             );

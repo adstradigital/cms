@@ -11,10 +11,10 @@
 
 /* Stepper Sidebar */
 .stepperSidebar {
-  width: 260px;
+  width: 270px;
   background-color: var(--theme-bg);
-  border-right: 1px dashed var(--theme-border);
-  padding: 32px 24px;
+  border-right: 1px solid var(--theme-border);
+  padding: 28px 22px;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -22,16 +22,39 @@
 }
 
 .stepperTitle {
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   color: var(--theme-text);
-  margin-bottom: 32px;
+  margin: 0 0 4px 0;
+}
+
+.stepperSubtitle {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+  margin: 0 0 16px 0;
+  font-weight: 500;
+}
+
+/* Progress Bar */
+.progressBarWrap {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--theme-border);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .stepList {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 4px;
   position: relative;
 }
 
@@ -39,9 +62,9 @@
 .stepList::before {
   content: '';
   position: absolute;
-  top: 10px;
-  bottom: 30px;
-  left: 14px;
+  top: 16px;
+  bottom: 16px;
+  left: 15px;
   width: 2px;
   background-color: var(--theme-border);
   z-index: 0;
@@ -50,26 +73,28 @@
 .stepItem {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   position: relative;
   z-index: 1;
   cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.2s ease;
+  padding: 8px 10px;
+  border-radius: 10px;
+  transition: all 0.2s ease;
 }
 
 .stepItem:hover {
-  opacity: 1;
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .stepItemActive {
-  opacity: 1;
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 .stepItemCompleted .stepCircle {
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #10b981;
   color: #fff;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
 }
 
 .stepCircle {
@@ -81,7 +106,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--theme-text-secondary);
   transition: all 0.3s ease;
@@ -91,7 +116,7 @@
 .stepItemActive .stepCircle {
   border-color: var(--color-primary);
   color: var(--color-primary);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 15%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .stepLabel {
@@ -100,18 +125,25 @@
 }
 
 .stepName {
-  font-size: 0.875rem;
+  font-size: 0.84rem;
   font-weight: 600;
   color: var(--theme-text);
 }
 
 .stepDesc {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--theme-text-muted);
+  margin-top: 1px;
+}
+
+.stepItemCompleted .stepDesc {
+  color: #10b981;
+  font-weight: 600;
 }
 
 .stepItemActive .stepName {
   color: var(--color-primary);
+  font-weight: 700;
 }
 
 

@@ -139,6 +139,132 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
                 )
         serializer.save()
 
+    # ─── Portal Access Management ──────────────────────────────────────────────
+
+    @action(detail=True, methods=['GET'], url_path='portal-info')
+    def portal_info(self, request, pk=None):
+        """
+        Returns the student's portal login info for admin viewing.
+        Only admins/superusers can access this.
+        """
+        user = request.user
+        if not (user.is_superuser or (user.role and user.role.scope == 'school')):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        student = self.get_object()
+        su = student.user
+        return Response({
+            "student_id": student.id,
+            "user_id": su.id,
+            "username": su.username,
+            "email": su.email or "",
+            "phone": su.phone or "",
+            "portal": su.portal,
+            "is_active": su.is_active,
+            "is_verified": su.is_verified,
+            "role_name": su.role.name if su.role else "",
+            "date_joined": su.date_joined,
+            "last_login": su.last_login,
+            "full_name": su.get_full_name(),
+            "admission_number": student.admission_number,
+        })
+
+    @action(detail=True, methods=['POST'], url_path='reset-password')
+    def reset_password(self, request, pk=None):
+        """
+        Reset a student's portal password.
+        Accepts optional `new_password`; if omitted, auto-generates a secure one.
+        Only admins/superusers can access this.
+        """
+        import secrets
+        import string
+
+        user = request.user
+        if not (user.is_superuser or (user.role and user.role.scope == 'school')):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        student = self.get_object()
+        su = student.user
+
+        new_password = request.data.get('new_password', '').strip()
+        if not new_password:
+            # Auto-generate: 3 uppercase + 4 lowercase + 2 digits + 1 special
+            alphabet = string.ascii_letters + string.digits
+            new_password = ''.join(secrets.choice(alphabet) for _ in range(8))
+            new_password += secrets.choice('!@#$%&')
+            new_password += str(secrets.randbelow(100)).zfill(2)
+
+        su.set_password(new_password)
+        su.save(update_fields=['password'])
+
+        return Response({
+            "success": True,
+            "username": su.username,
+            "new_password": new_password,
+            "message": f"Password reset for {su.get_full_name()}. Share these credentials securely."
+        })
+
+    @action(detail=True, methods=['POST'], url_path='toggle-access')
+    def toggle_access(self, request, pk=None):
+        """
+        Toggle a student's portal access (activate/deactivate their user account).
+        Accepts optional `is_active` boolean; if omitted, toggles the current state.
+        Only admins/superusers can access this.
+        """
+        user = request.user
+        if not (user.is_superuser or (user.role and user.role.scope == 'school')):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        student = self.get_object()
+        su = student.user
+
+        # Accept explicit value or toggle
+        new_state = request.data.get('is_active')
+        if new_state is not None:
+            su.is_active = bool(new_state)
+        else:
+            su.is_active = not su.is_active
+        su.save(update_fields=['is_active'])
+
+        return Response({
+            "success": True,
+            "is_active": su.is_active,
+            "message": f"Portal access {'enabled' if su.is_active else 'disabled'} for {su.get_full_name()}."
+        })
+
+    @action(detail=True, methods=['POST'], url_path='update-username')
+    def update_username(self, request, pk=None):
+        """
+        Update a student's portal username.
+        Only admins/superusers can access this.
+        """
+        user = request.user
+        if not (user.is_superuser or (user.role and user.role.scope == 'school')):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        student = self.get_object()
+        su = student.user
+
+        new_username = request.data.get('new_username', '').strip()
+        if not new_username:
+            return Response({"error": "New username is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Check if username exists (excluding current user)
+        if User.objects.exclude(pk=su.id).filter(username=new_username).exists():
+            return Response({"error": "Username already exists."}, status=status.HTTP_400_BAD_REQUEST)
+
+        su.username = new_username
+        su.save(update_fields=['username'])
+
+        return Response({
+            "success": True,
+            "username": su.username,
+            "message": f"Username updated successfully."
+        })
+
     @action(detail=False, methods=['GET'])
     def leaderboard(self, request):
         """

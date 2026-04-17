@@ -118,10 +118,21 @@
   padding-top: 0.5rem; /* py-2 */
   padding-bottom: 0.5rem;
   -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 .nav::-webkit-scrollbar {
-  display: none;
+  width: 5px;
+}
+.nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+.nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .bottomNav {
@@ -299,7 +310,7 @@
   transition: all 0.3s ease;
 }
 .subItemsContainer.expanded {
-  max-height: 20rem; /* Increased to fit more items */
+  max-height: 40rem; /* Increased to fit more items */
   margin-top: 0.25rem; /* mt-1 */
   margin-bottom: 0.5rem; /* mb-2 */
 }

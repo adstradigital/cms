@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   CalendarDays, MapPin, User, Clock, 
   Printer, AlertTriangle, ChevronDown, CheckCircle2,
-  Plus, Loader2, X, Search, Trash2, Upload, FileText
+  Plus, Loader2, X, Search, Trash2, Upload, FileText, BookOpen
 } from 'lucide-react';
 import adminApi from '@/api/adminApi';
 import styles from './ScheduleExams.module.css';
@@ -144,11 +144,54 @@ export default function ScheduleExamsTab() {
         ...scheduleFormData,
         subject: '',
         date: '',
+        start_time: '',
+        end_time: '',
         venue: '',
         invigilator: ''
       });
     } catch (error) {
       alert("Error creating schedule: " + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleAutoPopulateSchedules = async () => {
+    if (!subjects.length) return alert("No subjects found for this class.");
+    if (!window.confirm(`Are you sure you want to add all ${subjects.length} subjects to this exam?`)) return;
+
+    setScheduleLoading(true);
+    try {
+      const existingSubjectIds = examSchedules.map(s => parseInt(s.subject));
+      const subjectsToPopulate = subjects.filter(s => !existingSubjectIds.includes(s.id));
+
+      if (subjectsToPopulate.length === 0) {
+        alert("All subjects are already scheduled.");
+        return;
+      }
+
+      const defaultDate = selectedExamForSchedule.start_date || new Date().toISOString().split('T')[0];
+
+      await Promise.all(subjectsToPopulate.map(s => 
+        adminApi.createExamSchedule(selectedExamForSchedule.id, {
+          subject: s.id,
+          date: defaultDate,
+          start_time: '09:30',
+          end_time: '12:30',
+          max_theory_marks: 80,
+          max_internal_marks: 20,
+          pass_marks: 35,
+          venue: '',
+          invigilator: null
+        })
+      ));
+
+      const res = await adminApi.getExamSchedules(selectedExamForSchedule.id);
+      setExamSchedules(res.data);
+      alert(`Successfully added ${subjectsToPopulate.length} subjects. Please update their dates and times.`);
+    } catch (error) {
+      console.error(error);
+      alert("Error auto-populating subjects. Some might already be scheduled.");
+    } finally {
+      setScheduleLoading(false);
     }
   };
 
@@ -210,6 +253,11 @@ export default function ScheduleExamsTab() {
               body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
               * { box-sizing: border-box; }
               
+              @page {
+                size: A4;
+                margin: 5mm;
+              }
+
               /* Overwrite overlay styles so it prints cleanly */
               div[class*="hallTicketCard"] {
                 box-shadow: none !important;
@@ -218,10 +266,11 @@ export default function ScheduleExamsTab() {
                 max-width: none !important;
                 page-break-after: always;
                 margin: 0 !important;
-                padding: 15mm !important;
+                padding: 8mm !important;
                 box-sizing: border-box;
-                min-height: 297mm; /* Full A4 */
+                min-height: 285mm; /* Slightly less than A4 to allow for safe printing */
                 position: relative;
+                overflow: hidden;
               }
 
               /* Ensure table borders print */
@@ -230,6 +279,7 @@ export default function ScheduleExamsTab() {
               }
               table[class*="htTable"] th, table[class*="htTable"] td {
                 border: 1px solid #1e293b !important;
+                padding: 6px !important; /* Tighter cells */
               }
             }
           </style>
@@ -439,6 +489,7 @@ export default function ScheduleExamsTab() {
                   <thead style={{ background: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
                     <tr>
                       <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569' }}>Subject</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'center', color: '#475569' }}>Code</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569' }}>Date</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569' }}>Time</th>
                       <th style={{ padding: '10px 16px', textAlign: 'center', color: '#475569' }}>Marks (Th/Int)</th>
@@ -450,13 +501,15 @@ export default function ScheduleExamsTab() {
                   <tbody>
                     {scheduleLoading ? (
                       <tr>
-                        <td colSpan={7} style={{ padding: '20px', textAlign: 'center' }}><Loader2 className="animate-spin" size={20} /></td>
+                        <td colSpan={8} style={{ padding: '20px', textAlign: 'center' }}><Loader2 className="animate-spin" size={20} /></td>
                       </tr>
                     ) : examSchedules.length > 0 ? examSchedules.map(s => {
                       const invigilatorName = teachers.find(t => t.user === s.invigilator)?.full_name || 'Not assigned';
+                      const subjectCode = subjects.find(sub => sub.id === s.subject)?.code || '---';
                       return (
                       <tr key={s.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                         <td style={{ padding: '10px 16px', fontWeight: 500 }}>{s.subject_name}</td>
+                        <td style={{ padding: '10px 16px', textAlign: 'center', color: '#64748b' }}>{subjectCode}</td>
                         <td style={{ padding: '10px 16px' }}>{s.date}</td>
                         <td style={{ padding: '10px 16px' }}>{s.start_time.slice(0,5)} - {s.end_time.slice(0,5)}</td>
                         <td style={{ padding: '10px 16px', textAlign: 'center' }}>{s.max_theory_marks} / {s.max_internal_marks}</td>
@@ -489,7 +542,18 @@ export default function ScheduleExamsTab() {
 
               {/* Add New Schedule Form */}
               <div style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px' }}>
-                <h4 style={{ margin: '0 0 12px 0', color: '#1e293b' }}>Add Subject Schedule</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, color: '#1e293b' }}>Add Subject Schedule</h4>
+                  <button 
+                    onClick={handleAutoPopulateSchedules}
+                    className={styles.btnSm}
+                    style={{ background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    title="Load all subjects studied by this class"
+                  >
+                    <BookOpen size={14} />
+                    Auto-Load Class Subjects
+                  </button>
+                </div>
                 <form onSubmit={handleCreateSchedule} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div className={styles.formRow} style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
                     <div className={styles.formGroup}>
@@ -706,18 +770,18 @@ export default function ScheduleExamsTab() {
                  }}>MOCK TICKET</div>
 
                  <div className={styles.htHeader} style={{ position: 'relative', zIndex: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
-                      <div style={{ width: '60px', height: '60px', background: '#1e293b', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-                        <CalendarDays size={32} />
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginBottom: '8px' }}>
+                      <div style={{ width: '50px', height: '50px', background: '#1e293b', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                        <CalendarDays size={28} />
                       </div>
                       <div style={{ textAlign: 'left' }}>
-                        <h2 className={styles.htSchoolName} style={{ margin: 0, fontSize: '1.8rem' }}>Campus Management System</h2>
-                        <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Main Academic Campus, Educational District</p>
+                        <h2 className={styles.htSchoolName} style={{ margin: 0, fontSize: '1.6rem' }}>Campus Management System</h2>
+                        <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}>Main Academic Campus, Educational District</p>
                       </div>
                     </div>
-                    <div style={{ borderTop: '2px solid #1e293b', marginTop: '10px', paddingTop: '10px' }}>
-                      <h3 className={styles.htExamName} style={{ fontSize: '1.4rem', color: '#1e293b' }}>{mockTicketsData.exam.name} - ADMIT CARD</h3>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '1rem', fontWeight: 600 }}>Academic Session: {mockTicketsData.exam.academic_year_name || '2025-2026'}</p>
+                    <div style={{ borderTop: '2px solid #1e293b', marginTop: '8px', paddingTop: '8px' }}>
+                      <h3 className={styles.htExamName} style={{ fontSize: '1.3rem', color: '#1e293b' }}>{mockTicketsData.exam.name} - ADMIT CARD</h3>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '0.95rem', fontWeight: 600 }}>Academic Session: {mockTicketsData.exam.academic_year_name || '2025-2026'}</p>
                     </div>
                  </div>
 
@@ -733,7 +797,7 @@ export default function ScheduleExamsTab() {
                        </div>
                        <div className={styles.htDetailRow}>
                          <strong>Class & Div:</strong> 
-                         <span>{mockTicketsData.exam.class_name}</span>
+                         <span>{student.section_name || mockTicketsData.exam.class_name}</span>
                        </div>
                        <div className={styles.htDetailRow}>
                          <strong>Admission No:</strong> 
@@ -793,9 +857,9 @@ export default function ScheduleExamsTab() {
                     </tbody>
                  </table>
 
-                 <div style={{ marginTop: '20px', padding: '15px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc', position: 'relative', zIndex: 1 }}>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: '#1e293b', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>INSTRUCTIONS FOR THE CANDIDATE</h4>
-                    <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.75rem', color: '#475569', lineHeight: '1.5' }}>
+                 <div style={{ marginTop: '15px', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc', position: 'relative', zIndex: 1 }}>
+                    <h4 style={{ margin: '0 0 6px 0', fontSize: '0.85rem', color: '#1e293b', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>INSTRUCTIONS FOR THE CANDIDATE</h4>
+                    <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.7rem', color: '#475569', lineHeight: '1.4' }}>
                       <li>Candidates must bring this Admit Card to the examination hall without fail.</li>
                       <li>Please report to the examination center at least 30 minutes before the commencement of the exam.</li>
                       <li>Electronic gadgets, mobile phones, and calculators are strictly prohibited unless specified otherwise.</li>
@@ -805,16 +869,16 @@ export default function ScheduleExamsTab() {
                     </ul>
                  </div>
 
-                 <div className={styles.htFooter} style={{ position: 'relative', zIndex: 1, marginTop: '50px' }}>
+                 <div className={styles.htFooter} style={{ position: 'relative', zIndex: 1, marginTop: '35px' }}>
                     <div style={{ textAlign: 'center' }}>
-                       <div style={{ width: '180px', height: '40px', borderBottom: '1px solid #1e293b', marginBottom: '8px' }}></div>
-                       <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#334155' }}>Candidate's Signature</div>
+                       <div style={{ width: '160px', height: '35px', borderBottom: '1px solid #1e293b', marginBottom: '6px' }}></div>
+                       <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155' }}>Candidate's Signature</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                       <div style={{ width: '180px', height: '40px', borderBottom: '1px solid #1e293b', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                         <span style={{ fontStyle: 'italic', color: '#94a3b8', fontSize: '0.8rem' }}>Seal & Signature</span>
+                       <div style={{ width: '160px', height: '35px', borderBottom: '1px solid #1e293b', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                         <span style={{ fontStyle: 'italic', color: '#94a3b8', fontSize: '0.75rem' }}>Seal & Signature</span>
                        </div>
-                       <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#334155' }}>Controller of Examinations</div>
+                       <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155' }}>Controller of Examinations</div>
                     </div>
                  </div>
 

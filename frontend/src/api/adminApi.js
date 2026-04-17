@@ -21,6 +21,7 @@ const adminApi = {
   // Academics - Subjects & Syllabus
   getSubjects: (params) => instance.get('/academics/subjects/', { params }),
   createSubject: (data) => instance.post('/academics/subjects/', data),
+  deleteSubject: (id) => instance.delete(`/academics/subjects/${id}/`),
   getSyllabusUnits: (params) => instance.get('/academics/syllabus/units/', { params }),
   createSyllabusUnit: (data) => instance.post('/academics/syllabus/units/', data),
   updateSyllabusUnit: (id, data) => instance.patch(`/academics/syllabus/units/${id}/`, data),

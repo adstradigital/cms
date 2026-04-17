@@ -12,12 +12,19 @@ import {
   Search,
   Trash2,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import styles from './Subjects.module.css';
 import adminApi from '@/api/adminApi';
 import LessonPlanner from './LessonPlanner';
+import { useAuth } from '@/context/AuthContext';
 
 const SubjectCenter = ({ section = null }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const isClassTeacher = user?.role === 'teacher' && section?.class_teacher === user?.id;
+  const canDeleteSubject = isAdmin || isClassTeacher;
+
   const sectionId = section?.id ? Number(section.id) : null;
   const forcedClassId = section?.school_class ? String(section.school_class) : '';
   const isSectionScoped = Boolean(sectionId);
@@ -249,6 +256,19 @@ const SubjectCenter = ({ section = null }) => {
     }
   };
 
+  const handleDeleteSubject = async (id) => {
+    if (!window.confirm('WARNING: Deleting a subject will permanently remove all associated lesson plans, units, and chapters. Are you sure you want to proceed?')) return;
+    
+    try {
+      await adminApi.deleteSubject(id);
+      setSubjects(prev => prev.filter(s => s.id !== id));
+      // Also cleanup allocations related to this subject
+      setAllocations(prev => prev.filter(a => a.subject !== id));
+    } catch (err) {
+      alert('Failed to delete subject: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   const renderGridView = () => (
     <div className={styles.gridView}>
       {filteredSubjects.map((subject) => {
@@ -265,7 +285,19 @@ const SubjectCenter = ({ section = null }) => {
                 <h3>{subject.name}</h3>
                 <span>{subject.code}</span>
               </div>
-              <button className={styles.iconBtn} onClick={() => openAllocationModal(subject.id)}><Plus size={16} /></button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button className={styles.iconBtn} onClick={() => openAllocationModal(subject.id)} title="Assign to Class"><Plus size={16} /></button>
+                {canDeleteSubject && (
+                  <button 
+                    className={styles.iconBtn} 
+                    onClick={() => handleDeleteSubject(subject.id)} 
+                    style={{ color: '#ef4444' }}
+                    title="Delete Subject Master"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className={styles.teacherBox}>
@@ -359,6 +391,16 @@ const SubjectCenter = ({ section = null }) => {
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className={styles.iconBtn} title="Lesson Plan" onClick={() => { setSelectedSubject(subject); setSelectedAllocation(subjectAllocations[0] || null); }}><BookOpen size={16} /></button>
                     <button className={styles.iconBtn} title="Assign to Class" onClick={() => openAllocationModal(subject.id)}><Plus size={16} /></button>
+                    {canDeleteSubject && (
+                      <button 
+                        className={styles.iconBtn} 
+                        style={{ color: '#ef4444' }} 
+                        title="Delete Subject Master" 
+                        onClick={() => handleDeleteSubject(subject.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

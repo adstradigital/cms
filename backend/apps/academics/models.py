@@ -66,7 +66,7 @@ class Subject(models.Model):
     syllabus_master = models.ForeignKey(SyllabusMaster, on_delete=models.SET_NULL, null=True, blank=True, related_name="subject_instances")
     
     name = models.CharField(max_length=100) # Instance name (can override global name)
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20) # No longer globally unique
     description = models.TextField(blank=True)
     weekly_periods = models.PositiveSmallIntegerField(default=5, help_text="Number of periods per week for this subject.")
     color_code = models.CharField(max_length=20, default="#3b82f6")
@@ -78,6 +78,10 @@ class Subject(models.Model):
 
     class Meta:
         db_table = "subjects"
+        unique_together = [
+            ("school_class", "name"),
+            ("school_class", "code")
+        ]
 
 
 class SyllabusUnit(models.Model):

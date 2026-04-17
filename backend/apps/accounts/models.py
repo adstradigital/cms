@@ -32,6 +32,7 @@ class AcademicYear(models.Model):
     end_date = models.DateField()
     is_active = models.BooleanField(default=False)
     working_days = models.JSONField(default=list, help_text="List of working day indices (1=Mon, 7=Sun)")
+    timetable_config = models.JSONField(default=dict, blank=True, help_text="Stores periods, breaks, and time settings")
 
     def save(self, *args, **kwargs):
         if not self.working_days:

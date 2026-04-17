@@ -20,6 +20,7 @@ urlpatterns = [
 
     path("question-bank/", views.question_bank_list_view, name="question_bank_list"),
     path("question-papers/", views.question_paper_list_view, name="question_paper_list"),
+    path("question-papers/<int:pk>/", views.question_paper_detail_view, name="question_paper_detail"),
     
     path("analytics/", views.exam_analytics_view, name="exam_analytics"),
     path("schedules/", views.exam_schedule_global_list_view, name="exam_schedule_global_list"),

@@ -857,9 +857,19 @@ def subject_allocation_list_view(request):
         teacher_id = request.query_params.get("teacher")
         subject_id = request.query_params.get("subject")
         qs = SubjectAllocation.objects.select_related("subject", "section").prefetch_related("teachers").all()
+        
+        user = request.user
+        # Strict filtering: if not a school admin, only show allocations where this user is assigned
+        if not user.is_superuser and not (user.role and user.role.scope == 'school'):
+            qs = qs.filter(teachers=user)
+
         if section_id: qs = qs.filter(section_id=section_id)
         if teacher_id: qs = qs.filter(teachers__id=teacher_id)
         if subject_id: qs = qs.filter(subject_id=subject_id)
+        
+        # Add distinct() because filtering by M2M (teachers=user) can cause duplicates if combined
+        qs = qs.distinct()
+        
         return Response(SubjectAllocationSerializer(qs, many=True).data)
     
     serializer = SubjectAllocationSerializer(data=request.data)

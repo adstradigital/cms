@@ -1,10 +1,12 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Database, FileText, CheckCircle, Search, Plus, Loader2, X, ArrowUp, ArrowDown, Bold, Italic, Underline, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Printer, Download, Save, Eye, Layers, GitBranch, BarChart3, Space, Type } from 'lucide-react';
+import { Database, FileText, CheckCircle, Search, Plus, Loader2, X, ArrowUp, ArrowDown, Bold, Italic, Underline, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Printer, Download, Save, Eye, Layers, GitBranch, BarChart3, Space, Type, Trash2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import adminApi from '@/api/adminApi';
+import authApi from '@/api/authApi';
 import styles from './QuestionPaper.module.css';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
 
 export default function QuestionPaperTab() {
   const [questions, setQuestions] = useState([]);
@@ -18,6 +20,10 @@ export default function QuestionPaperTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [paginationInfo, setPaginationInfo] = useState({ count: 0, next: null, previous: null });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isWipeModalOpen, setIsWipeModalOpen] = useState(false);
+  const [wipeReason, setWipeReason] = useState('');
+  const [wiping, setWiping] = useState(false);
   
   // Builder State
   const [isBuildingPaper, setIsBuildingPaper] = useState(false);
@@ -57,6 +63,22 @@ export default function QuestionPaperTab() {
     bloom_level: 'Apply',
     options: {}
   });
+
+  useEffect(() => {
+    const fetchInitial = async () => {
+      try {
+        const [profileRes] = await Promise.all([authApi.getProfile()]);
+        setCurrentUser(profileRes.data);
+        fetchData();
+      } catch (e) {
+        console.error("Error fetching profile:", e);
+        fetchData();
+      }
+    };
+    fetchInitial();
+  }, []);
+
+  const isAdmin = currentUser?.portal === 'admin' || currentUser?.is_superuser;
 
   const fetchData = async () => {
     setLoading(true);
@@ -103,6 +125,26 @@ export default function QuestionPaperTab() {
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, selectedSubject, currentPage]); // We don't fetch differently by selectedClass, we filter locally.
+
+  const handleDeleteQuestion = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this question from the bank?")) return;
+    try {
+      await adminApi.deleteQuestion(id);
+      fetchData();
+    } catch (error) {
+      alert("Error deleting question: " + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleDeletePaper = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this question paper?")) return;
+    try {
+      await adminApi.deleteQuestionPaper(id);
+      fetchData();
+    } catch (error) {
+      alert("Error deleting paper: " + (error.response?.data?.error || error.message));
+    }
+  };
 
   const filteredSubjects = selectedClass
     ? subjects.filter(s => s.school_class === parseInt(selectedClass))
@@ -1158,25 +1200,36 @@ export default function QuestionPaperTab() {
 
                    return (
                      <>
-                       {sections.map(sec => {
+                       {sections.map((sec, idx) => {
                          const secQuestions = (sec.questionIds || []).map(id => selectedQuestions.find(q => getQId(q) === id)).filter(Boolean);
                          return (
                            <div key={sec.id}>
-                             <div className={styles.sectionDivider}>
+                             <div className={styles.sectionDivider} style={idx === 0 ? { borderTop: 'none', marginTop: 0, paddingTop: 0 } : {}}>
                                <div className={styles.sectionLabel}>{sec.title}</div>
                                {isPreviewMode ? (
-                                 <div className={styles.sectionInstruction}>{sec.instruction}</div>
+                                 <div className={styles.sectionInstruction} style={{flex: 1, textAlign: 'center'}}>{sec.instruction}</div>
                                ) : (
                                  <input 
                                    className={styles.sectionInstructionInput}
+                                   style={{flex: 1, textAlign: 'center'}}
                                    value={sec.instruction}
                                    onChange={e => handleUpdateSection(sec.id, 'instruction', e.target.value)}
                                    placeholder="Section instruction..."
                                  />
                                )}
-                               {!isPreviewMode && (
-                                 <button className={styles.btnRemove} onClick={() => handleRemoveSection(sec.id)} title="Remove Section"><X size={14}/></button>
-                               )}
+                               <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                 <span style={{fontWeight: 'bold', fontSize: '0.9rem', color: '#1e293b'}}>
+                                   [ {secQuestions.reduce((sum, q) => {
+                                     const qId = q.id || q.tempId;
+                                     const isOrSecond = orLinks.some(l => l[1] === qId);
+                                     if (isOrSecond || q.isTextBlock) return sum;
+                                     return sum + (parseFloat(q.marks) || 0);
+                                   }, 0)} Marks ]
+                                 </span>
+                                 {!isPreviewMode && (
+                                   <button className={styles.btnRemove} onClick={() => handleRemoveSection(sec.id)} title="Remove Section"><X size={14}/></button>
+                                 )}
+                               </div>
                              </div>
                              {secQuestions.map(sq => {
                                const gi = selectedQuestions.indexOf(sq);
@@ -1384,9 +1437,20 @@ export default function QuestionPaperTab() {
           <h3 className={styles.panelTitle}>
             <Database size={18}/> Question Bank
           </h3>
-          <button className={styles.btnIcon} onClick={() => setIsModalOpen(true)} title="Add to Bank">
-            <Plus size={18}/>
-          </button>
+          <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+            {isAdmin && (
+              <button 
+                className={styles.btnWipe} 
+                onClick={() => setIsWipeModalOpen(true)}
+                title="Wipe Question Bank for Subject"
+              >
+                <RotateCcw size={14}/> Wipe Subject
+              </button>
+            )}
+            <button className={styles.btnIcon} onClick={() => setIsModalOpen(true)} title="Add to Bank">
+              <Plus size={18}/>
+            </button>
+          </div>
         </div>
         
         <div className={styles.panelBody}>
@@ -1428,13 +1492,20 @@ export default function QuestionPaperTab() {
               <div style={{padding: '20px', textAlign: 'center'}}><Loader2 className="animate-spin" size={24} style={{margin:'0 auto'}}/></div>
             ) : questions.length > 0 ? questions.map(q => (
               <div key={q.id} className={styles.qBankItem}>
-                <div className={styles.qText}>{q.question_text || q.text}</div>
-                <div className={styles.qMeta}>
-                  <div style={{display: 'flex', gap: '6px'}}>
-                    <span className={`${styles.badge} ${(q.difficulty || 'Medium') === 'Hard' ? styles.badgeHard : (q.difficulty || 'Medium') === 'Easy' ? styles.badgeMemory : ''}`}>{q.difficulty || 'Medium'}</span>
-                    <span className={`${styles.badge} ${styles.badgeApply}`}>{q.question_type || 'Descriptive'}</span>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px'}}>
+                  <div style={{flex: 1}}>
+                    <div className={styles.qText}>{q.question_text || q.text}</div>
+                    <div className={styles.qMeta}>
+                      <div style={{display: 'flex', gap: '6px'}}>
+                        <span className={`${styles.badge} ${(q.difficulty || 'Medium') === 'Hard' ? styles.badgeHard : (q.difficulty || 'Medium') === 'Easy' ? styles.badgeMemory : ''}`}>{q.difficulty || 'Medium'}</span>
+                        <span className={`${styles.badge} ${styles.badgeApply}`}>{q.question_type || 'Descriptive'}</span>
+                      </div>
+                      <span style={{fontWeight: 600}}>{q.marks} Marks</span>
+                    </div>
                   </div>
-                  <span style={{fontWeight: 600}}>{q.marks} Marks</span>
+                  <button className={styles.btnDeleteIcon} onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(q.id); }} title="Delete Question">
+                    <Trash2 size={16}/>
+                  </button>
                 </div>
               </div>
             )) : (
@@ -1487,6 +1558,7 @@ export default function QuestionPaperTab() {
                 <div className={styles.pActions}>
                   <button className={styles.btnSm} onClick={() => handlePreviewPaper(p.id)}>Preview</button>
                   <button className={styles.btnSm} style={{background: 'var(--color-primary)', color: '#fff'}} onClick={() => handleEditPaper(p.id)}>Edit</button>
+                  <button className={styles.btnSm} style={{background: '#fee2e2', color: '#ef4444', border: '1px solid #fecaca'}} onClick={() => handleDeletePaper(p.id)} title="Delete Paper"><Trash2 size={14}/></button>
                 </div>
               </div>
             ))}
@@ -1557,6 +1629,68 @@ export default function QuestionPaperTab() {
                 <button type="submit" className={styles.btnPrimary}>Save Question</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Wipe Bank Confirmation Modal */}
+      {isWipeModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={`${styles.modal} ${styles.wipeModal}`}>
+            <div className={styles.modalHeader}>
+              <h3 style={{color: '#ef4444', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                <AlertTriangle size={20}/> Wipe Question Bank?
+              </h3>
+              <button onClick={() => setIsWipeModalOpen(false)}><X size={20}/></button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.warningBox}>
+                <AlertTriangle size={24} style={{flexShrink: 0}}/>
+                <div>
+                  <strong>CRITICAL ACTION:</strong> This will permanently delete ALL questions currently in the bank for the filtered subject. This cannot be undone.
+                </div>
+              </div>
+              
+              <div className={styles.formGroup}>
+                <label>Reason for Wiping (Min 10 chars)</label>
+                <textarea 
+                  className={styles.textarea}
+                  placeholder="Explain why you are deleting these questions..."
+                  value={wipeReason}
+                  onChange={e => setWipeReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              
+              <p style={{fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '8px'}}>
+                * This action is restricted to Admins only.
+              </p>
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.btnSecondary} onClick={() => setIsWipeModalOpen(false)}>Cancel</button>
+              <button 
+                className={styles.btnPrimary} 
+                style={{background: '#ef4444', borderColor: '#ef4444'}}
+                disabled={wiping || wipeReason.length < 10 || !selectedSubject}
+                onClick={async () => {
+                  setWiping(true);
+                  try {
+                    await adminApi.bulkDeleteQuestions({ 
+                      subject: selectedSubject, 
+                      reason: wipeReason 
+                    });
+                    setIsWipeModalOpen(false);
+                    setWipeReason('');
+                    fetchData();
+                  } catch (e) {
+                    alert(e.response?.data?.error || "Error wiping bank");
+                  } finally {
+                    setWiping(false);
+                  }
+                }}
+              >
+                {wiping ? <Loader2 className="animate-spin" size={16}/> : 'CONFIRM WIPE'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -25,6 +25,10 @@ urlpatterns = [
     path("academic-years/", views.academic_year_list_view, name="academic_year_list"),
     path("academic-years/<int:pk>/", views.academic_year_detail_view, name="academic_year_detail"),
     
+    # Terms
+    path("terms/", views.term_list_view, name="term_list"),
+    path("terms/<int:pk>/", views.term_detail_view, name="term_detail"),
+    
     # Roles
     path("roles/", views.role_list_view, name="role_list"),
     

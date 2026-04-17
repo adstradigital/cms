@@ -137,6 +137,31 @@ def exam_schedule_global_list_view(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def exam_schedule_detail_view(request, pk):
+    try:
+        try:
+            schedule = ExamSchedule.objects.get(pk=pk)
+        except ExamSchedule.DoesNotExist:
+            return Response({"error": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(ExamScheduleSerializer(schedule).data, status=status.HTTP_200_OK)
+
+        if request.method == "PATCH":
+            serializer = ExamScheduleSerializer(schedule, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        schedule.delete()
+        return Response({"message": "Schedule deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # ─── Question Bank & Papers ───────────────────────────────────────────────────
 
 from rest_framework.pagination import PageNumberPagination
@@ -173,6 +198,31 @@ def question_bank_list_view(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def question_bank_detail_view(request, pk):
+    try:
+        try:
+            question = QuestionBank.objects.get(pk=pk)
+        except QuestionBank.DoesNotExist:
+            return Response({"error": "Question not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(QuestionBankSerializer(question).data, status=status.HTTP_200_OK)
+
+        if request.method == "PATCH":
+            serializer = QuestionBankSerializer(question, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        question.delete()
+        return Response({"message": "Question deleted."}, status=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -215,6 +265,35 @@ def question_paper_detail_view(request, pk):
 
         paper.delete()
         return Response({"message": "Question paper deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def question_bank_bulk_delete_view(request):
+    try:
+        # Check if user is admin (portal == 'admin' or is_superuser)
+        if request.user.portal != "admin" and not request.user.is_superuser:
+             return Response({"error": "Only admins can perform bulk deletion."}, status=status.HTTP_403_FORBIDDEN)
+        
+        subject_id = request.data.get("subject")
+        reason = request.data.get("reason")
+        
+        if not subject_id:
+            return Response({"error": "Subject ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not reason or len(reason) < 10:
+            return Response({"error": "A valid reason (min 10 characters) is required to wipe the question bank."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        questions = QuestionBank.objects.filter(subject_id=subject_id)
+        count = questions.count()
+        questions.delete()
+        
+        return Response({
+            "message": f"Successfully wiped {count} questions for the selected subject.",
+            "count": count
+        }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

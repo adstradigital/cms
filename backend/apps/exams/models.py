@@ -22,6 +22,8 @@ class ExamType(models.Model):
     academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="exam_types", null=True, blank=True)
     weightage_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=100.00)
     passing_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=35.00)
+    max_theory_marks = models.PositiveSmallIntegerField(default=80)
+    max_internal_marks = models.PositiveSmallIntegerField(default=20)
     grading_scale = models.ForeignKey(GradingScale, on_delete=models.SET_NULL, null=True, blank=True, related_name="exam_types")
     is_online = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

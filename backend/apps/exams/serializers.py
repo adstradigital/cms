@@ -88,11 +88,16 @@ class ReportCardSerializer(serializers.ModelSerializer):
         return "Unknown"
 
 class QuestionBankSerializer(serializers.ModelSerializer):
+    question_text = serializers.CharField(source="text")
     subject_name = serializers.CharField(source="subject.name", read_only=True)
 
     class Meta:
         model = QuestionBank
-        fields = "__all__"
+        fields = [
+            "id", "subject", "subject_name", "academic_year", "question_text", 
+            "question_type", "options", "correct_answer", "marks", 
+            "difficulty", "bloom_level", "created_by", "created_at"
+        ]
 
 class QuestionPaperSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source="subject.name", read_only=True)

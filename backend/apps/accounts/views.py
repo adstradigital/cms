@@ -336,6 +336,57 @@ def academic_year_detail_view(request, pk):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def term_list_view(request):
+    from .models import Term
+    from .serializers import TermSerializer
+    try:
+        if request.method == "GET":
+            academic_year_id = request.query_params.get("academic_year")
+            qs = Term.objects.all()
+            if academic_year_id:
+                qs = qs.filter(academic_year_id=academic_year_id)
+            return Response(TermSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+        serializer = TermSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def term_detail_view(request, pk):
+    from .models import Term
+    from .serializers import TermSerializer
+    try:
+        try:
+            term = Term.objects.get(pk=pk)
+        except Term.DoesNotExist:
+            return Response({"error": "Term not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(TermSerializer(term).data, status=status.HTTP_200_OK)
+
+        if request.method == "PATCH":
+            serializer = TermSerializer(term, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        term.delete()
+        return Response({"message": "Term deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def role_list_view(request):

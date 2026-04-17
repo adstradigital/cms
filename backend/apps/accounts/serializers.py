@@ -1,9 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import User, School, AcademicYear, UserProfile, Parent
+from .models import User, School, AcademicYear, UserProfile, Parent, Term
 from apps.permissions.models import Role
 from apps.permissions.serializers import RoleSerializer
-
 
 class SchoolSerializer(serializers.ModelSerializer):
     class Meta:
@@ -14,15 +13,17 @@ class SchoolSerializer(serializers.ModelSerializer):
             "is_active", "created_at"
         ]
 
+class TermSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Term
+        fields = "__all__"
 
 class AcademicYearSerializer(serializers.ModelSerializer):
+    terms = TermSerializer(many=True, read_only=True)
+
     class Meta:
         model = AcademicYear
         fields = "__all__"
-
-
-
-
 
 
 

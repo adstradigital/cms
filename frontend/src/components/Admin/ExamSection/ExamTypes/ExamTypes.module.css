@@ -1,0 +1,335 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl, 1.25rem);
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.cardTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--theme-text);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btnSm {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  background: var(--color-surface-hover, #334155);
+  color: var(--theme-text);
+  border: 1px solid var(--theme-border, #475569);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+.btnSm:hover {
+  background: var(--color-primary, #3B82F6);
+  color: white;
+  border-color: var(--color-primary, #3B82F6);
+}
+
+.termList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.termItem {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--theme-border, #334155);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.termHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.termName {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.termDates {
+  font-size: 0.75rem;
+  color: var(--theme-text-secondary, #94A3B8);
+}
+
+/* Exam Types Table */
+.typeTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.typeTable th {
+  text-align: left;
+  padding: 12px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--theme-text-secondary, #94A3B8);
+  border-bottom: 1px solid var(--theme-border, #334155);
+}
+
+.typeTable td {
+  padding: 16px 12px;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--theme-border, #334155);
+  color: var(--theme-text);
+  vertical-align: middle;
+}
+
+.typeNameCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.iconBox {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--color-primary, #3B82F6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconBoxOnline {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10B981;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: #334155;
+  color: #F8FAFC;
+}
+
+.badgeOnline {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+}
+
+.badgeOffline {
+  background: rgba(245, 158, 11, 0.2);
+  color: #F59E0B;
+}
+
+.progressBar {
+  width: 100%;
+  height: 6px;
+  background: var(--theme-border, #334155);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-primary, #3B82F6);
+  border-radius: 999px;
+}
+
+.actionBtns {
+  display: flex;
+  gap: 8px;
+}
+
+.iconBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--theme-text-secondary, #94A3B8);
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.iconBtn:hover {
+  color: var(--color-primary, #3B82F6);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Modal Styles */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl, 1.25rem);
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  animation: modalEnter 0.3s ease-out;
+}
+
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modalHeader {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--theme-border, #334155);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.modalHeader button {
+  background: transparent;
+  border: none;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+}
+
+.modalBody {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formGroup label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+}
+
+.formGroup input, .formGroup select {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--theme-border, #334155);
+  color: var(--theme-text);
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.formGroup input:focus, .formGroup select:focus {
+  border-color: var(--color-primary, #3B82F6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.checkboxGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkboxGroup label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.checkboxGroup input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.btnSecondary {
+  background: transparent;
+  border: 1px solid var(--theme-border, #334155);
+  color: var(--theme-text);
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btnPrimary {
+  background: var(--color-primary, #3B82F6);
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}

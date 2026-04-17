@@ -37,17 +37,20 @@ const AdminSidebar = () => {
     else if (pathname?.startsWith('/admins/classes')) setExpandedMenu('Classes');
     else if (pathname?.startsWith('/admins/staff')) setExpandedMenu('Staff');
     else if (pathname?.startsWith('/admins/hostel')) setExpandedMenu('Hostel');
+    else if (pathname?.startsWith('/admins/examinations')) setExpandedMenu('Examinations');
   }, [pathname]);
   
   const isStudentsPath = pathname?.startsWith('/admins/students');
   const isClassesPath = pathname?.startsWith('/admins/classes');
   const isStaffPath = pathname?.startsWith('/admins/staff');
   const isHostelPath = pathname?.startsWith('/admins/hostel');
+  const isExaminationsPath = pathname?.startsWith('/admins/examinations');
   
   const isStudentsExpanded = expandedMenu === 'Students';
   const isClassesExpanded = expandedMenu === 'Classes';
   const isStaffExpanded = expandedMenu === 'Staff';
   const isHostelExpanded = expandedMenu === 'Hostel';
+  const isExaminationsExpanded = expandedMenu === 'Examinations';
 
   return (
     <div className={`${styles.sidebar} ${isCollapsed ? styles.sidebarCollapsed : ''}`}>
@@ -248,14 +251,42 @@ const AdminSidebar = () => {
           href="/admins/leads"
           onClick={() => setExpandedMenu(null)}
         />
-        <NavItem 
-          icon={<FileText size={18} />} 
-          label="Examinations" 
-          collapsed={isCollapsed}
-          active={pathname === '/admins/examinations'} 
-          href="/admins/examinations"
-          onClick={() => setExpandedMenu(null)}
-        />
+        {isCollapsed ? (
+          <NavItem 
+            icon={<FileText size={18} />} 
+            label="Examinations" 
+            collapsed={isCollapsed}
+            active={isExaminationsPath} 
+            href="/admins/examinations/types"
+          />
+        ) : (
+          <div className={styles.expandableMenuContainer}>
+            <div 
+              onClick={() => setExpandedMenu(expandedMenu === 'Examinations' ? null : 'Examinations')}
+              className={`${styles.expandableMenu} ${isExaminationsExpanded ? styles.expanded : styles.collapsed}`}
+            >
+              <div className={styles.expandableMenuContent}>
+                <div className={`${styles.expandableMenuIcon} ${isExaminationsExpanded ? styles.expanded : styles.collapsed}`}>
+                  <FileText size={18} />
+                </div>
+                <span>Examinations</span>
+              </div>
+              <ChevronDown size={14} className={`${styles.expandableChevron} ${isExaminationsExpanded ? styles.rotated : ''}`} />
+            </div>
+
+            <div className={`${styles.subItemsContainer} ${isExaminationsExpanded ? styles.expanded : styles.collapsed}`}>
+              <SubNavItem label="Exam Types" active={pathname === '/admins/examinations/types'} href="/admins/examinations/types" />
+              <SubNavItem label="Schedule" active={pathname === '/admins/examinations/schedule'} href="/admins/examinations/schedule" />
+              <SubNavItem label="Timetable" active={pathname === '/admins/examinations/timetable'} href="/admins/examinations/timetable" />
+              <SubNavItem label="Question Paper" active={pathname === '/admins/examinations/question-paper'} href="/admins/examinations/question-paper" />
+              <SubNavItem label="Marks Entry" active={pathname === '/admins/examinations/marks'} href="/admins/examinations/marks" />
+              <SubNavItem label="Result" active={pathname === '/admins/examinations/results'} href="/admins/examinations/results" />
+              <SubNavItem label="Report Card" active={pathname === '/admins/examinations/report-card'} href="/admins/examinations/report-card" />
+              <SubNavItem label="Online Test" active={pathname === '/admins/examinations/online-test'} href="/admins/examinations/online-test" />
+              <SubNavItem label="Analytics" active={pathname === '/admins/examinations/analytics'} href="/admins/examinations/analytics" />
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Bottom Navigation */}

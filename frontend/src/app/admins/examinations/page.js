@@ -1,4 +1,4 @@
-import ExaminationsDashboard from '@/components/Admin/Examinations/ExaminationsDashboard';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Examinations | CMS Admin',
@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function ExaminationsPage() {
-  return <ExaminationsDashboard />;
+  redirect('/admins/examinations/types');
 }

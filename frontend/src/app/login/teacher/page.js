@@ -5,10 +5,10 @@ export default function TeacherLoginPage() {
   return (
     <Login 
       role="staff"
-      title="Staff Sign In"
-      subtitle="Admin & Staff access only. This URL is confidential."
-      brandingTitle={"CMS\nStaff & Admin\nPortal"}
-      brandingSubtitle="Restricted access. Authorized personnel only. Do not share this link."
+      title="Faculty Portal"
+      subtitle="Exclusively for educators. Manage your classes, attendance, and student performance."
+      brandingTitle={"Teacher\nAcademic\nDashboard"}
+      brandingSubtitle="Empowering educators with real-time class data, smart attendance tools, and digital lesson planning."
     />
   );
 }

@@ -60,10 +60,13 @@ class UserSerializer(serializers.ModelSerializer):
         return list(result) if result else []
 
     def get_managed_sections(self, obj):
-        return [
-            {"id": s.id, "name": f"{s.school_class.name} - {s.name}"} 
-            for s in obj.managed_sections.all()
-        ]
+        try:
+            section = getattr(obj, "managed_section", None)
+            if section:
+                return [{"id": section.id, "name": f"{section.school_class.name} - {section.name}"}]
+            return []
+        except Exception:
+            return []
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

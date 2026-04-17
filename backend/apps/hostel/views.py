@@ -1231,8 +1231,18 @@ def mess_attendance_list_view(request):
 def mess_diet_profile_list_view(request):
     try:
         if request.method == "GET":
-            qs = MessDietProfile.objects.select_related("student", "student__user").all()
+            qs = MessDietProfile.objects.select_related(
+                "student",
+                "student__user",
+                "student__hostel_allotment__room__hostel",
+            ).all()
+            hostel_id = request.query_params.get("hostel")
             student_id = request.query_params.get("student")
+            if hostel_id:
+                qs = qs.filter(
+                    student__hostel_allotment__room__hostel_id=hostel_id,
+                    student__hostel_allotment__is_active=True,
+                )
             if student_id:
                 qs = qs.filter(student_id=student_id)
             return Response(MessDietProfileSerializer(qs, many=True).data)
@@ -1249,6 +1259,31 @@ def mess_diet_profile_list_view(request):
         obj = serializer.save()
         status_code = status.HTTP_200_OK if existing else status.HTTP_201_CREATED
         return Response(MessDietProfileSerializer(obj).data, status=status_code)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def mess_diet_profile_detail_view(request, pk):
+    try:
+        try:
+            profile = MessDietProfile.objects.select_related("student", "student__user").get(pk=pk)
+        except MessDietProfile.DoesNotExist:
+            return Response({"error": "Diet profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(MessDietProfileSerializer(profile).data)
+
+        if request.method == "PATCH":
+            serializer = MessDietProfileSerializer(profile, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data)
+
+        profile.delete()
+        return Response({"message": "Diet profile deleted."}, status=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

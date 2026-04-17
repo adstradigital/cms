@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import (
-    Subject, SyllabusUnit, SyllabusChapter, SyllabusTopic, SubjectAllocation, LessonPlan,
+    Subject, GlobalSubject, SyllabusMaster, SubjectBundle,
+    SyllabusUnit, SyllabusChapter, SyllabusTopic, SubjectAllocation, LessonPlan,
     Timetable, Period, Homework, HomeworkSubmission, SubstituteLog, Assignment, Material,
     CourseSession,
 )
@@ -11,6 +12,12 @@ class LessonPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = LessonPlan
         fields = ["id", "allocation", "topic", "status", "planned_date", "actual_date", "description"]
+
+
+class GlobalSubjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalSubject
+        fields = "__all__"
 
 
 class SyllabusTopicSerializer(serializers.ModelSerializer):
@@ -32,17 +39,44 @@ class SyllabusUnitSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SyllabusUnit
+        fields = ["id", "master", "title", "order", "chapters"]
+
+
+class SyllabusMasterSerializer(serializers.ModelSerializer):
+    units = SyllabusUnitSerializer(many=True, read_only=True)
+    global_subject_name = serializers.CharField(source="global_subject.name", read_only=True)
+
+    class Meta:
+        model = SyllabusMaster
+        fields = ["id", "name", "global_subject", "global_subject_name", "description", "version", "is_active", "units"]
+
+
+class SubjectBundleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubjectBundle
         fields = "__all__"
 
 
 class SubjectSerializer(serializers.ModelSerializer):
-    units = SyllabusUnitSerializer(many=True, read_only=True)
+    units = serializers.SerializerMethodField()
+    global_subject_details = GlobalSubjectSerializer(source="global_subject", read_only=True)
+    syllabus_master_details = SyllabusMasterSerializer(source="syllabus_master", read_only=True)
     allocation_count = serializers.IntegerField(source="allocations.count", read_only=True)
 
     class Meta:
         model = Subject
-        fields = "__all__"
+        fields = [
+            "id", "school", "school_class", "global_subject", "global_subject_details",
+            "syllabus_master", "syllabus_master_details", "name", "code", "description",
+            "weekly_periods", "color_code", "term_type", "created_at", "units", "allocation_count"
+        ]
 
+    def get_units(self, obj):
+        # If this instance is linked to a master syllabus, return those units
+        if obj.syllabus_master:
+            return SyllabusUnitSerializer(obj.syllabus_master.units.all(), many=True).data
+        # Fallback for legacy data (migrated units still have subject_id)
+        return SyllabusUnitSerializer(obj.units.all(), many=True).data
 
 class SubjectAllocationSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source="subject.name", read_only=True)

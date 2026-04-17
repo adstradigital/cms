@@ -11,6 +11,9 @@
   --theme-sidebar-text: #ffffff;
   --theme-sidebar-active: #ffffff;
   --theme-sidebar-active-text: var(--color-primary);
+  --theme-primary: var(--color-primary);
+  --theme-bg-subtle: #f1f5f9;
+  --theme-bg-white: #ffffff;
 }
 
 /* Multi-color Theme Overrides */

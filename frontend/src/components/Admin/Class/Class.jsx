@@ -22,6 +22,8 @@ import Events from './Events/Events';
 import Fees from './Fees/Fees';
 import ReportCards from './ReportCards/ReportCards';
 import SubjectCenter from './Subjects/SubjectCenter';
+import PerformanceTab from './Performance/PerformanceTab';
+import MarkEntryModal from './Marks/MarkEntryModal';
 import adminApi from '@/api/adminApi';
 import { useAuth } from '@/context/AuthContext';
 
@@ -150,6 +152,11 @@ const Class = () => {
   const [leaderboardPreviousExamId, setLeaderboardPreviousExamId] = useState('all');
   const [leaderboardSubjects, setLeaderboardSubjects] = useState([]);
   const [leaderboardExams, setLeaderboardExams] = useState([]);
+
+  const [isMarkEntryModalOpen, setIsMarkEntryModalOpen] = useState(false);
+  const [markEntryStudentId, setMarkEntryStudentId] = useState(null);
+  const [classExams, setClassExams] = useState([]);
+  const [classSubjects, setClassSubjects] = useState([]);
 
   const handleUpdateRollNumber = async () => {
     if (!profileDrawerStudent) return;
@@ -303,18 +310,22 @@ const Class = () => {
 
   React.useEffect(() => {
     const loadRankingFilters = async () => {
-      if (activeView !== 'ranking' || !selectedSection?.school_class) return;
+      if (!selectedSection?.school_class) return;
       try {
         const [subjRes, examsRes] = await Promise.all([
           adminApi.getSubjects({ class: selectedSection.school_class }).catch(() => null),
           adminApi.getExams({ class: selectedSection.school_class }).catch(() => null),
         ]);
-        setLeaderboardSubjects(Array.isArray(subjRes?.data) ? subjRes.data : []);
-        setLeaderboardExams(Array.isArray(examsRes?.data) ? examsRes.data : []);
+        const subjList = Array.isArray(subjRes?.data) ? subjRes.data : [];
+        const examsList = Array.isArray(examsRes?.data) ? examsRes.data : [];
+        setLeaderboardSubjects(subjList);
+        setLeaderboardExams(examsList);
+        setClassSubjects(subjList);
+        setClassExams(examsList);
       } catch { }
     };
     loadRankingFilters();
-  }, [activeView, selectedSection?.school_class]);
+  }, [selectedSection?.school_class]);
 
   const filteredSections = useMemo(() => {
     return sections.filter(s =>
@@ -1019,6 +1030,17 @@ const Class = () => {
                 </td>
                 <td className={styles.td}>
                   <div style={{ display: 'flex', gap: 8 }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className={`${styles.btn} ${styles.btnOutline}`}
+                      style={{ padding: 6, borderRadius: 8, color: 'var(--color-primary)' }}
+                      onClick={() => {
+                        setMarkEntryStudentId(student.id);
+                        setIsMarkEntryModalOpen(true);
+                      }}
+                      title="Add subject mark"
+                    >
+                      <Plus size={14} />
+                    </button>
                     <button
                       className={`${styles.btn} ${styles.btnOutline}`}
                       style={{ padding: 6, borderRadius: 8 }}
@@ -1884,7 +1906,8 @@ const Class = () => {
           Students
         </div>
         <div className={`${styles.tab} ${activeView === 'attendance' ? styles.tabActive : ''}`} onClick={() => setActiveView('attendance')}>Attendance</div>
-        <div className={`${styles.tab} ${activeView === 'marks' ? styles.tabActive : ''}`} onClick={() => setActiveView('marks')}>Marks / Exams</div>
+        <div className={`${styles.tab} ${activeView === 'performance' ? styles.tabActive : ''}`} onClick={() => setActiveView('performance')}>Performance</div>
+        <div className={`${styles.tab} ${activeView === 'marks' ? styles.tabActive : ''}`} onClick={() => setActiveView('marks')}>Marks / Exams / Results</div>
         <div className={`${styles.tab} ${activeView === 'notice' ? styles.tabActive : ''}`} onClick={() => setActiveView('notice')}>Notice Board</div>
         {canManageSection(selectedSection) && (
           <div className={`${styles.tab} ${activeView === 'promotion' ? styles.tabActive : ''}`} onClick={() => setActiveView('promotion')}>Promotion System</div>
@@ -1942,6 +1965,11 @@ const Class = () => {
         {activeView === 'materials' && <Materials section={selectedSection} />}
         {activeView === 'subjects' && selectedSection && <SubjectCenter section={selectedSection} />}
         {activeView === 'attendance' && <Attendance section={selectedSection} />}
+        {activeView === 'performance' && (
+          selectedSection 
+            ? <PerformanceTab section={selectedSection} />
+            : renderSectionPlaceholder('Performance Analytics', 'Track class progress and subject performance metrics.')
+        )}
         {activeView === 'marks' && <Marks section={selectedSection} />}
         {activeView === 'notice' && <NoticeBoard section={selectedSection} />}
         {activeView === 'reportcards' && <ReportCards section={selectedSection} />}
@@ -1949,6 +1977,16 @@ const Class = () => {
         {activeView === 'fees' && <Fees section={selectedSection} />}
         {activeView === 'events' && <Events section={selectedSection} />}
       </div>
+
+      <MarkEntryModal 
+        isOpen={isMarkEntryModalOpen}
+        onClose={() => setIsMarkEntryModalOpen(false)}
+        section={selectedSection}
+        initialStudentId={markEntryStudentId}
+        exams={classExams}
+        subjects={classSubjects}
+        students={students}
+      />
     </div>
   );
 };

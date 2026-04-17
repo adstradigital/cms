@@ -1,0 +1,183 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.filters {
+  display: flex;
+  gap: 16px;
+  background: var(--theme-surface, #1E293B);
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--theme-border, #334155);
+}
+
+.select {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--theme-bg, #0B0E14);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: 8px;
+  color: var(--theme-text);
+  font-size: 0.875rem;
+}
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.kpiCard {
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kpiHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--theme-text-secondary, #94A3B8);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.kpiValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--theme-text);
+}
+
+.kpiTrend {
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.trendUp { color: #10B981; }
+.trendDown { color: #EF4444; }
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+.chartCard {
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+}
+
+.chartTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Heatmap Mock */
+.heatmapContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hmRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hmLabel {
+  width: 80px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--theme-text-secondary, #94A3B8);
+  text-align: right;
+}
+
+.hmCells {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+}
+
+.hmCell {
+  flex: 1;
+  height: 36px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.hmCell:hover {
+  transform: scale(1.05);
+}
+
+.heat1 { background: #10B981; } /* Excellent */
+.heat2 { background: #34D399; } /* Good */
+.heat3 { background: #FBBF24; } /* Average */
+.heat4 { background: #EF4444; } /* Poor */
+.heatBg { background: var(--theme-border, #334155); color: transparent; text-shadow: none;} /* Null */
+
+/* Bloom Chart Mock */
+.bloomRing {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #3B82F6 0% 40%, 
+    #10B981 40% 70%, 
+    #F59E0B 70% 90%, 
+    #EF4444 90% 100%
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.bloomInner {
+  width: 140px;
+  height: 140px;
+  background: var(--theme-surface, #1E293B);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.bloomLegend {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+.blItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.blDot {
+  width: 12px; height: 12px; border-radius: 50%;
+  margin-right: 8px; display: inline-block;
+}

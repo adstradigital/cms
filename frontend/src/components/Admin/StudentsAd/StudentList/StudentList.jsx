@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Plus, MoreVertical, Eye, Edit3, Trash2 } from 'lucide-react';
+import { Search, Filter, Plus, MoreVertical, Eye, Edit3, Trash2, KeyRound } from 'lucide-react';
 import styles from './StudentList.module.css';
 import instance from '@/api/instance';
+import PortalAccessModal from './PortalAccessModal';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -21,6 +22,7 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
   const [selectedPerformance, setSelectedPerformance] = useState('all');
   const [selectedAlphabet, setSelectedAlphabet] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [portalAccessStudentId, setPortalAccessStudentId] = useState(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -200,19 +202,16 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
             ) : pageStudents.map((student) => {
               const fullName = `${student.user?.first_name || ''} ${student.user?.last_name || ''}`;
               const photoPath = student.user?.profile?.photo;
+              const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
               const avatar = photoPath
                 ? (photoPath.startsWith('http') ? photoPath : `http://127.0.0.1:8000${photoPath}`)
-                : `https://i.pravatar.cc/150?u=${student.id}`;
+                : DEFAULT_AVATAR;
               
               return (
                 <tr 
                   key={student.id} 
                   className={`${styles.tableRow} ${activeDropdown === student.id ? styles.tableRowActiveDropdown : ''}`}
                   onClick={() => onViewProfile(student.id)}
-                  style={{ 
-                    position: 'relative', 
-                    zIndex: activeDropdown === student.id ? 100 : 1 
-                  }}
                 >
                   <td>
                     <div className={styles.studentNameCol}>
@@ -263,6 +262,12 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
                           <Edit3 size={14} /> Edit student data
                         </button>
                         <button 
+                          className={styles.dropdownItem} 
+                          onClick={() => { setActiveDropdown(null); setPortalAccessStudentId(student.id); }}
+                        >
+                          <KeyRound size={14} /> Manage Access
+                        </button>
+                        <button 
                           className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`}
                           onClick={() => { setActiveDropdown(null); if(confirm('Are you sure you want to remove this student?')) alert('Delete action triggered for ' + fullName); }}
                         >
@@ -308,6 +313,14 @@ const StudentList = ({ onAddClick, onViewProfile, onEditProfile, refreshKey = 0 
           </button>
         </div>
       </div>
+
+      {/* Portal Access Modal */}
+      {portalAccessStudentId && (
+        <PortalAccessModal
+          studentId={portalAccessStudentId}
+          onClose={() => setPortalAccessStudentId(null)}
+        />
+      )}
     </div>
   );
 };

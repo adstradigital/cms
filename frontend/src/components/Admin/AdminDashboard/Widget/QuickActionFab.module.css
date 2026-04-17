@@ -14,7 +14,6 @@
   right: 30px;
   bottom: 30px;
   z-index: 999;
-  transform: translate(50%, 50%);
   touch-action: none;
 }
 

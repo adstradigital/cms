@@ -1,0 +1,95 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.viewTabs {
+  display: flex;
+  background: var(--theme-surface, #1E293B);
+  padding: 6px;
+  border-radius: 12px;
+  width: fit-content;
+  border: 1px solid var(--theme-border, #334155);
+}
+
+.viewTab {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--theme-text-secondary, #94A3B8);
+  border-radius: 8px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.viewTabActive {
+  background: var(--color-surface-hover, #334155);
+  color: var(--theme-text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  background: var(--theme-surface, #1E293B);
+  padding: 24px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--theme-border, #334155);
+}
+
+.dayHeader {
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--theme-text-secondary, #94A3B8);
+  padding-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.dayCell {
+  min-height: 120px;
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--theme-bg, #0B0E14);
+}
+
+.dayCellEmpty {
+  opacity: 0.3;
+}
+
+.dayNumber {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--theme-text-secondary, #94A3B8);
+  margin-bottom: 4px;
+}
+
+.dayNumberActive {
+  color: var(--theme-text);
+}
+
+.examPill {
+  font-size: 0.65rem;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pillBlue { background: rgba(59, 130, 246, 0.15); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.3); }
+.pillPurple { background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3); }
+.pillGreen { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }

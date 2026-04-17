@@ -7,30 +7,90 @@ from apps.students.models import Class, Section
 
 
 
-class Subject(models.Model):
-    school = models.ForeignKey("accounts.School", on_delete=models.CASCADE, related_name="subjects", null=True, blank=True)
-    school_class = models.ForeignKey("students.Class", on_delete=models.CASCADE, related_name="subjects", null=True, blank=True)
+class GlobalSubject(models.Model):
+    """A master library of all possible subjects across all campuses."""
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20, unique=True)
+    category = models.CharField(max_length=50, blank=True) # e.g. "Scholastic", "Co-Scholastic"
     description = models.TextField(blank=True)
-    weekly_periods = models.PositiveSmallIntegerField(default=5, help_text="Number of periods per week for this subject.")
-    color_code = models.CharField(max_length=20, default="#3b82f6", help_text="Hex color for timetable display.")
+    global_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.name} ({self.code})"
+        return self.name
+
+    class Meta:
+        db_table = "global_subjects"
+
+
+class SyllabusMaster(models.Model):
+    """A shareable curriculum blueprint that can be linked to multiple classes/campuses."""
+    name = models.CharField(max_length=255)
+    global_subject = models.ForeignKey(GlobalSubject, on_delete=models.CASCADE, related_name="syllabi")
+    description = models.TextField(blank=True)
+    version = models.CharField(max_length=20, default="1.0")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} (v{self.version})"
+
+    class Meta:
+        db_table = "syllabus_masters"
+
+
+class SubjectBundle(models.Model):
+    """A template of subjects (e.g. 'Science Stream') that can be applied in bulk to classes."""
+    school = models.ForeignKey("accounts.School", on_delete=models.CASCADE, related_name="subject_bundles", null=True, blank=True)
+    name = models.CharField(max_length=100)
+    subjects = models.ManyToManyField(GlobalSubject, related_name="bundles")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "subject_bundles"
+
+
+class Subject(models.Model):
+    TERM_CHOICES = [
+        ("annual", "Annual"),
+        ("semester", "Semester"),
+        ("quarter", "Quarter"),
+    ]
+    school = models.ForeignKey("accounts.School", on_delete=models.CASCADE, related_name="subjects", null=True, blank=True)
+    school_class = models.ForeignKey("students.Class", on_delete=models.CASCADE, related_name="subjects", null=True, blank=True)
+    
+    # Linked to the library
+    global_subject = models.ForeignKey(GlobalSubject, on_delete=models.SET_NULL, null=True, blank=True, related_name="subject_instances")
+    syllabus_master = models.ForeignKey(SyllabusMaster, on_delete=models.SET_NULL, null=True, blank=True, related_name="subject_instances")
+    
+    name = models.CharField(max_length=100) # Instance name (can override global name)
+    code = models.CharField(max_length=20, unique=True)
+    description = models.TextField(blank=True)
+    weekly_periods = models.PositiveSmallIntegerField(default=5, help_text="Number of periods per week for this subject.")
+    color_code = models.CharField(max_length=20, default="#3b82f6")
+    term_type = models.CharField(max_length=20, choices=TERM_CHOICES, default="annual")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} — {self.school_class.name if self.school_class else 'N/A'}"
 
     class Meta:
         db_table = "subjects"
 
 
 class SyllabusUnit(models.Model):
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="units")
+    # Repointed from Subject to SyllabusMaster
+    master = models.ForeignKey(SyllabusMaster, on_delete=models.CASCADE, related_name="units", null=True, blank=True)
+    # Temporary fallback to keep existing data visible during migration
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="units", null=True, blank=True)
+    
     title = models.CharField(max_length=255)
     order = models.PositiveSmallIntegerField(default=1)
 
     def __str__(self):
-        return f"{self.subject.name} - Unit {self.order}: {self.title}"
+        return f"Unit {self.order}: {self.title}"
 
     class Meta:
         db_table = "syllabus_units"
@@ -105,7 +165,7 @@ class LessonPlan(models.Model):
 class Timetable(models.Model):
     DAY_CHOICES = [
         (1, "Monday"), (2, "Tuesday"), (3, "Wednesday"),
-        (4, "Thursday"), (5, "Friday"), (6, "Saturday"),
+        (4, "Thursday"), (5, "Friday"), (6, "Saturday"), (7, "Sunday"),
     ]
     section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="timetable_entries")
     academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="timetable_entries")

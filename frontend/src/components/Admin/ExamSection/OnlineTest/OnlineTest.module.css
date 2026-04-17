@@ -1,0 +1,219 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: calc(100vh - 240px);
+}
+
+.subTabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--theme-border, #334155);
+  padding-bottom: 12px;
+}
+
+.subTab {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--theme-text-secondary, #94A3B8);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subTab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--theme-text);
+}
+
+.subTabActive {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--color-primary, #3B82F6);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.viewArea {
+  flex: 1;
+  display: flex;
+  gap: 24px;
+  overflow: hidden;
+}
+
+/* Builder styles */
+.palette {
+  width: 250px;
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.paletteItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--theme-bg, #0B0E14);
+  border: 1px dashed var(--theme-border, #334155);
+  border-radius: 8px;
+  cursor: grab;
+  font-size: 0.875rem;
+  color: var(--theme-text);
+  transition: all 0.2s;
+}
+
+.paletteItem:hover {
+  border-color: var(--color-primary, #3B82F6);
+  color: var(--color-primary, #3B82F6);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.canvas {
+  flex: 1;
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* Attempt View (Student) */
+.studentView {
+  flex: 1;
+  background: #FFFFFF;
+  border-radius: var(--radius-xl);
+  color: #1E293B;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.svHeader {
+  padding: 16px 24px;
+  background: #F8FAFC;
+  border-bottom: 1px solid #E2E8F0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.svBody {
+  flex: 1;
+  display: flex;
+}
+.svMain {
+  flex: 1;
+  padding: 40px;
+  overflow-y: auto;
+}
+.svSidebar {
+  width: 200px;
+  background: #F1F5F9;
+  border-left: 1px solid #E2E8F0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qBox {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.qBoxAnswered {
+  background: #10B981;
+  color: white;
+  border-color: #10B981;
+}
+
+.attemptQuestion {
+  font-size: 1.125rem;
+  margin-bottom: 24px;
+}
+
+.optionLabel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+/* Grading Queue */
+.gradingGrid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 24px;
+}
+
+.queueList {
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.qItem {
+  padding: 12px;
+  border-bottom: 1px solid var(--theme-border, #334155);
+  cursor: pointer;
+}
+
+.qItemActive {
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 8px;
+  border-bottom: none;
+}
+
+.gradeWorkspace {
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+}
+
+.studentAnswerBox {
+  background: var(--theme-bg, #0B0E14);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--theme-border, #334155);
+  margin-bottom: 24px;
+  color: var(--theme-text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.markInput {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 2rem;
+  font-weight: 700;
+  width: 60px;
+  text-align: center;
+  border-bottom: 2px solid var(--color-primary, #3B82F6);
+  outline: none;
+}

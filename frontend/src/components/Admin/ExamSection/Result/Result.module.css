@@ -1,0 +1,234 @@
+.container {
+  display: flex;
+  gap: 24px;
+  min-height: calc(100vh - var(--navbar-height, 64px));
+}
+
+.leftPanel {
+  flex: 1;
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rightPanel {
+  flex: 2;
+  background: var(--theme-bg, #0B0E14);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.panelHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--theme-border, #334155);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--theme-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.listBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.studentCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+}
+
+.studentCard:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: var(--theme-border, #334155);
+}
+
+.scActive {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.scInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-primary, #3B82F6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.name {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.roll {
+  font-size: 0.75rem;
+  color: var(--theme-text-secondary, #94A3B8);
+}
+
+.rank {
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #334155;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: white;
+}
+
+.rank1 {
+  background: rgba(245, 158, 11, 0.2);
+  color: #F59E0B;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.detailBody {
+  padding: 24px;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.statBox {
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.sbLabel {
+  font-size: 0.75rem;
+  color: var(--theme-text-secondary, #94A3B8);
+  text-transform: uppercase;
+}
+
+.sbValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--theme-text);
+}
+
+.subTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--theme-surface, #1E293B);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--theme-border, #334155);
+}
+
+.subTable th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--theme-text-secondary, #94A3B8);
+  border-bottom: 1px solid var(--theme-border, #334155);
+  background: rgba(0,0,0,0.1);
+}
+
+.subTable td {
+  padding: 12px 16px;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--theme-border, #334155);
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.badgeA { background: rgba(16, 185, 129, 0.15); color: #34D399; }
+.badgeB { background: rgba(59, 130, 246, 0.15); color: #60A5FA; }
+
+/* Chart Mock */
+.chartContainer {
+  margin-top: 24px;
+  background: var(--theme-surface, #1E293B);
+  border: 1px solid var(--theme-border, #334155);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.chartBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  height: 120px;
+  margin-top: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--theme-border, #334155);
+}
+
+.barGroup {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bar {
+  width: 16px;
+  border-radius: 4px 4px 0 0;
+  background: var(--color-primary, #3B82F6);
+}
+
+.barAvg {
+  background: var(--theme-border, #475569);
+}
+
+.barLabels {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+.bLabel {
+  flex: 1;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--theme-text-secondary, #94A3B8);
+}

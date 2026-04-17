@@ -31,6 +31,12 @@ class AcademicYear(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     is_active = models.BooleanField(default=False)
+    working_days = models.JSONField(default=list, help_text="List of working day indices (1=Mon, 7=Sun)")
+
+    def save(self, *args, **kwargs):
+        if not self.working_days:
+            self.working_days = [1, 2, 3, 4, 5]  # Mon-Fri default
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.school.name} — {self.name}"
@@ -83,7 +89,7 @@ class User(AbstractUser):
             return True
             
         # Special "Class Teacher" logic: If assigned as a class teacher, grant Class Teacher role perms
-        if hasattr(self, 'managed_sections') and self.managed_sections.exists():
+        if getattr(self, "managed_section", None):
             from apps.permissions.models import Role
             ct_role = Role.objects.filter(name='Class Teacher').first()
             if ct_role and ct_role.permissions.filter(codename=codename).exists():
@@ -108,7 +114,8 @@ class User(AbstractUser):
 
     def get_class_teacher_section_ids(self):
         """Returns IDs of sections where this user is the assigned class teacher."""
-        return list(self.managed_sections.all().values_list('id', flat=True))
+        section = getattr(self, "managed_section", None)
+        return [section.id] if section else []
 
     def is_class_teacher_of(self, section):
         """Returns True if the user is the assigned class teacher of this section."""
@@ -116,7 +123,8 @@ class User(AbstractUser):
             return False
         # Handle both object and ID input
         section_id = getattr(section, 'id', section)
-        return self.managed_sections.filter(id=section_id).exists()
+        my_section = getattr(self, "managed_section", None)
+        return my_section and my_section.id == section_id
 
     def get_accessible_section_ids(self):
         """

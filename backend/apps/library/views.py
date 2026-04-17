@@ -8,6 +8,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.db.models import Count, Sum, Q, F
+from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -70,34 +71,76 @@ def _excel_column_name(index):
     return column_name
 
 
-def _xml_cell(cell_ref, value):
+def _xml_cell(cell_ref, value, style_id=0):
     if value is None:
         value = ""
 
     if isinstance(value, Decimal):
         value = float(value)
 
+    style_attr = f' s="{style_id}"'
+
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return f'<c r="{cell_ref}"><v>{value}</v></c>'
+        return f'<c r="{cell_ref}"{style_attr}><v>{value}</v></c>'
 
     text = escape(str(value))
-    return f'<c r="{cell_ref}" t="inlineStr"><is><t>{text}</t></is></c>'
+    return f'<c r="{cell_ref}"{style_attr} t="inlineStr"><is><t>{text}</t></is></c>'
 
 
-def _xlsx_sheet_xml(headers, rows):
+def _estimate_column_widths(headers, rows):
+    column_count = len(headers)
+    widths = []
+
+    for col_index in range(column_count):
+        values = [headers[col_index]]
+        for row in rows:
+            if col_index < len(row):
+                values.append("" if row[col_index] is None else row[col_index])
+
+        max_len = max(len(str(value)) for value in values) if values else 10
+        widths.append(min(50, max(12, round(max_len * 1.2 + 2, 1))))
+
+    return widths
+
+
+def _xlsx_sheet_xml(headers, rows, column_widths):
     all_rows = [headers] + rows
+    row_count = max(1, len(all_rows))
+    col_count = max(1, len(headers))
+    end_col = _excel_column_name(col_count)
+
+    cols_xml = "".join(
+        f'<col min="{index}" max="{index}" width="{width}" customWidth="1"/>'
+        for index, width in enumerate(column_widths, start=1)
+    )
+
     row_xml = []
     for row_index, row_values in enumerate(all_rows, start=1):
         cells = []
+        if row_index == 1:
+            style_id = 1  # header row
+            row_meta = ' ht="24" customHeight="1"'
+        else:
+            style_id = 2 if row_index % 2 == 0 else 3  # alternating body rows
+            row_meta = ' ht="21" customHeight="1"'
+
         for col_index, value in enumerate(row_values, start=1):
             cell_ref = f"{_excel_column_name(col_index)}{row_index}"
-            cells.append(_xml_cell(cell_ref, value))
-        row_xml.append(f'<row r="{row_index}">{"".join(cells)}</row>')
+            cells.append(_xml_cell(cell_ref, value, style_id=style_id))
+
+        row_xml.append(f'<row r="{row_index}"{row_meta}>{"".join(cells)}</row>')
 
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<dimension ref="A1:{end_col}{row_count}"/>'
+        '<sheetViews><sheetView workbookViewId="0">'
+        '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+        '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>'
+        '</sheetView></sheetViews>'
+        f'<cols>{cols_xml}</cols>'
         f'<sheetData>{"".join(row_xml)}</sheetData>'
+        f'<autoFilter ref="A1:{end_col}1"/>'
         "</worksheet>"
     )
 
@@ -109,7 +152,8 @@ def _sanitize_sheet_name(name):
 
 def _build_xlsx_bytes(sheet_name, headers, rows):
     safe_sheet_name = _sanitize_sheet_name(sheet_name)
-    sheet_xml = _xlsx_sheet_xml(headers, rows)
+    column_widths = _estimate_column_widths(headers, rows)
+    sheet_xml = _xlsx_sheet_xml(headers, rows, column_widths)
 
     workbook_xml = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -122,12 +166,38 @@ def _build_xlsx_bytes(sheet_name, headers, rows):
     styles_xml = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        '<fonts count="1"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts>'
-        '<fills count="2"><fill><patternFill patternType="none"/></fill>'
-        '<fill><patternFill patternType="gray125"/></fill></fills>'
-        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<fonts count="3">'
+        '<font><sz val="11"/><name val="Calibri"/><family val="2"/><color rgb="FF111827"/></font>'
+        '<font><b/><sz val="11"/><name val="Calibri"/><family val="2"/><color rgb="FFFFFFFF"/></font>'
+        '<font><sz val="11"/><name val="Calibri"/><family val="2"/><color rgb="FF111827"/></font>'
+        '</fonts>'
+        '<fills count="5">'
+        '<fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FF1E2F4A"/><bgColor indexed="64"/></patternFill></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFF3F4F6"/><bgColor indexed="64"/></patternFill></fill>'
+        '</fills>'
+        '<borders count="2">'
+        '<border><left/><right/><top/><bottom/><diagonal/></border>'
+        '<border>'
+        '<left style="thin"><color rgb="FFD1D5DB"/></left>'
+        '<right style="thin"><color rgb="FFD1D5DB"/></right>'
+        '<top style="thin"><color rgb="FFD1D5DB"/></top>'
+        '<bottom style="thin"><color rgb="FFD1D5DB"/></bottom>'
+        '<diagonal/>'
+        '</border>'
+        '</borders>'
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-        '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+        '<cellXfs count="4">'
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">'
+        '<alignment horizontal="center" vertical="center"/></xf>'
+        '<xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">'
+        '<alignment horizontal="left" vertical="center"/></xf>'
+        '<xf numFmtId="0" fontId="2" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">'
+        '<alignment horizontal="left" vertical="center"/></xf>'
+        '</cellXfs>'
         '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
         "</styleSheet>"
     )
@@ -528,3 +598,122 @@ def mark_fine_paid_view(request, pk):
         return Response({"message": "Fine marked as paid."}, status=status.HTTP_200_OK)
     except BookIssue.DoesNotExist:
         return Response({"error": "Record not found."}, status=status.HTTP_404_NOT_FOUND)
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def book_bulk_upload_view(request):
+    """
+    GET: Download an Excel template for bulk book upload.
+    POST: Process the uploaded Excel file and create book records.
+    """
+    if request.method == "GET":
+        headers = ["Title", "Author", "ISBN", "Category", "Publisher", "Edition", "Total Copies", "Shelf Code", "Position"]
+        # Add a placeholder sample row
+        rows = [["Beautiful Code", "Andy Oram", "978-0596510046", "Technology", "O'Reilly", "1st Edition", 1, "S-01", "Row 1"]]
+        workbook_bytes = _build_xlsx_bytes("Book Upload Template", headers, rows)
+        
+        response = HttpResponse(
+            workbook_bytes,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="book_upload_template.xlsx"'
+        return response
+
+    if request.method == "POST":
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"error": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            import pandas as pd
+            # Use openpyxl engine specifically for .xlsx files
+            df = pd.read_excel(file, engine='openpyxl')
+            
+            column_map = {
+                "Title": "title",
+                "Author": "author",
+                "ISBN": "isbn",
+                "Category": "category",
+                "Publisher": "publisher",
+                "Edition": "edition",
+                "Total Copies": "total_copies",
+                "Shelf Code": "shelf_code",
+                "Position": "position"
+            }
+            
+            # Normalize column names
+            df.columns = [str(c).strip() for c in df.columns]
+            df = df.rename(columns=column_map)
+            
+            success_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for index, row in df.iterrows():
+                    row_num = index + 2
+                    try:
+                        title = str(row.get("title", "")).strip()
+                        author = str(row.get("author", "")).strip()
+                        
+                        # Check for mandatory fields
+                        if not title or title.lower() == "nan":
+                            errors.append(f"Row {row_num}: Title is mandatory.")
+                            continue
+                        if not author or author.lower() == "nan":
+                            errors.append(f"Row {row_num}: Author is mandatory.")
+                            continue
+                            
+                        # Validate Shelf
+                        shelf_obj = None
+                        shelf_code = str(row.get("shelf_code", "")).strip()
+                        if shelf_code and shelf_code.lower() != "nan":
+                            shelf_obj = Shelf.objects.filter(code=shelf_code).first()
+                            if not shelf_obj:
+                                errors.append(f"Row {row_num}: Shelf code '{shelf_code}' not found.")
+                                continue
+                        
+                        isbn = str(row.get("isbn", "")).strip()
+                        if not isbn or isbn.lower() == "nan":
+                            isbn = None
+                        elif Book.objects.filter(isbn=isbn).exists():
+                            # Skip duplicates by ISBN
+                            errors.append(f"Row {row_num}: Book with ISBN '{isbn}' already exists.")
+                            continue
+
+                        # Handle numeric fields
+                        raw_copies = row.get("total_copies", 1)
+                        try:
+                            total_copies = int(float(raw_copies)) if pd.notna(raw_copies) else 1
+                        except (ValueError, TypeError):
+                            total_copies = 1
+                            
+                        if total_copies < 1:
+                            total_copies = 1
+
+                        # Create Book record
+                        Book.objects.create(
+                            title=title,
+                            author=author,
+                            isbn=isbn,
+                            category=str(row.get("category", "")).strip() if pd.notna(row.get("category")) else "",
+                            publisher=str(row.get("publisher", "")).strip() if pd.notna(row.get("publisher")) else "",
+                            edition=str(row.get("edition", "")).strip() if pd.notna(row.get("edition")) else "",
+                            total_copies=total_copies,
+                            available_copies=total_copies,
+                            shelf=shelf_obj,
+                            position=str(row.get("position", "")).strip() if pd.notna(row.get("position")) else ""
+                        )
+                        success_count += 1
+                        
+                    except Exception as row_err:
+                        errors.append(f"Row {row_num}: Internal Error - {str(row_err)}")
+            
+            res_status = status.HTTP_201_CREATED if not errors else status.HTTP_207_MULTI_STATUS
+            return Response({
+                "message": "Bulk upload process completed.",
+                "success_count": success_count,
+                "error_count": len(errors),
+                "errors": errors[:100]
+            }, status=res_status)
+
+        except Exception as e:
+            return Response({"error": f"Failed to process Excel file: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

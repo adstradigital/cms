@@ -28,7 +28,8 @@ const today = () => {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 };
 
-const MEAL_TYPES = ['breakfast', 'lunch', 'snacks', 'dinner'];
+const MEAL_TYPES = ['Breakfast', 'Lunch'];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const FOOD_CATEGORIES = ['breakfast', 'lunch', 'snacks', 'dinner', 'juice', 'other'];
 const INVENTORY_LOG_TYPES = ['in', 'out', 'wastage'];
 const FEEDBACK_STATUSES = ['open', 'in_progress', 'resolved'];
@@ -57,7 +58,8 @@ const CanteenModule = ({ activeSegment }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [modalType, setModalType] = useState(null);
-  const [expandedDropdown, setExpandedDropdown] = useState(null); // Track which custom dropdown is open
+  const [editId, setEditId] = useState(null);
+  const [expandedDropdown, setExpandedDropdown] = useState(null);
 
   // Reference data for forms (so dropdowns work even when the active tab is different)
   const [foodItemOptions, setFoodItemOptions] = useState([]);
@@ -65,7 +67,13 @@ const CanteenModule = ({ activeSegment }) => {
   const [supplierOptions, setSupplierOptions] = useState([]);
 
   // Simple create forms
-  const [menuForm, setMenuForm] = useState({ date: today(), meal_type: 'breakfast', dishes: [], combos: [], dish_name: '' });
+  const [menuForm, setMenuForm] = useState({ 
+    day: 'Monday', 
+    meal_type: 'Breakfast', 
+    title: '', 
+    items: [], 
+    currentItemInput: '' 
+  });
   const [pendingMenuForm, setPendingMenuForm] = useState(null);
   const [pendingDishForm, setPendingDishForm] = useState(null);
   const [ingredientForm, setIngredientForm] = useState({ name: '' });
@@ -97,7 +105,7 @@ const CanteenModule = ({ activeSegment }) => {
           setAnalytics(res.data);
           break;
         case 'menu':
-          res = await canteenApi.getDailyMenus();
+          res = await canteenApi.getWeeklyMenus();
           setData(res.data?.results || res.data || []);
           break;
         case 'price-chart':
@@ -156,24 +164,29 @@ const CanteenModule = ({ activeSegment }) => {
     fetchTabDetails();
   }, [fetchTabDetails]);
 
-  const closeModal = () => setModalType(null);
+  const closeModal = () => {
+    setModalType(null);
+    setEditId(null);
+    setMenuForm({ 
+      day: 'Monday', 
+      meal_type: 'Breakfast', 
+      title: '', 
+      items: [], 
+      currentItemInput: '' 
+    });
+  };
 
   const handleAddNew = async () => {
     try {
       if (activeTab === 'menu') {
-        const [dishesRes, combosRes, ingredientsRes] = await Promise.all([
-          canteenApi.getDishes(),
-          canteenApi.getCombos(),
-          canteenApi.getIngredients(),
-        ]);
-        setFoodItemOptions({
-          dishes: dishesRes.data?.results || dishesRes.data || [],
-          combos: combosRes.data?.results || combosRes.data || [],
-          ingredients: ingredientsRes.data?.results || ingredientsRes.data || [],
+        setEditId(null);
+        setMenuForm({ 
+          day: 'Monday', 
+          meal_type: 'Breakfast', 
+          title: '', 
+          items: [], 
+          currentItemInput: '' 
         });
-        if (!pendingMenuForm) {
-          setMenuForm({ date: today(), meal_type: 'breakfast', dishes: [], combos: [], ingredients: [], dish_name: '' });
-        }
         setModalType('menu');
         return;
       }
@@ -253,33 +266,77 @@ const CanteenModule = ({ activeSegment }) => {
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
-  const submitDailyMenu = async (event) => {
-    event.preventDefault();
+  const submitDailyMenu = async (e) => {
+    if (e) e.preventDefault();
+    if (submitting) return;
 
-    if (!menuForm.dishes.length && !menuForm.combos.length && !menuForm.ingredients?.length) {
-      alert('Please select at least one dish, combo or ingredient.');
+    if (!menuForm.title.trim()) {
+      alert('Menu title is required.');
       return;
+    }
+    if (menuForm.items.length === 0) {
+      alert('Please add at least one item.');
+      return;
+    }
+
+    // Validation: prevent same day + meal type duplicates
+    const isDuplicate = data.some(m => 
+      String(m.day).toLowerCase() === String(menuForm.day).toLowerCase() && 
+      String(m.meal_type).toLowerCase() === String(menuForm.meal_type).toLowerCase() && 
+      (!editId || m.id !== editId)
+    );
+    
+    if (isDuplicate) {
+        alert(`A menu for ${menuForm.day} ${menuForm.meal_type} already exists.`);
+        return;
     }
 
     setSubmitting(true);
     try {
-      await canteenApi.createDailyMenu({
-        date: menuForm.date,
+      const payload = {
+        day: menuForm.day,
         meal_type: menuForm.meal_type,
-        dishes: menuForm.dishes.map(Number),
-        combos: menuForm.combos.map(Number),
-        dish_name: menuForm.dish_name || '',
-      });
-      alert('Daily menu saved.');
-      setPendingMenuForm(null);
-      closeModal();
+        title: menuForm.title,
+        items: menuForm.items
+      };
+
+      if (editId) {
+        await canteenApi.updateWeeklyMenu(editId, payload);
+        alert('Weekly menu updated successfully!');
+      } else {
+        await canteenApi.createWeeklyMenu(payload);
+        alert('Weekly menu created successfully!');
+      }
+      
       fetchTabDetails();
+      closeModal();
     } catch (err) {
-      console.error('Failed to save daily menu', err);
-      alert('Failed to save daily menu.');
+      console.error('Error saving menu:', err);
+      alert('Failed to save menu. Please try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleItemAdd = (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault();
+          const val = menuForm.currentItemInput.trim();
+          if (val && !menuForm.items.includes(val)) {
+              setMenuForm(prev => ({
+                  ...prev,
+                  items: [...prev.items, val],
+                  currentItemInput: ''
+              }));
+          }
+      }
+  };
+
+  const removeItem = (item) => {
+      setMenuForm(prev => ({
+          ...prev,
+          items: prev.items.filter(i => i !== item)
+      }));
   };
 
   const handleQuickAdd = (targetModal) => {
@@ -784,18 +841,65 @@ const CanteenModule = ({ activeSegment }) => {
         {activeTab === 'overview' && renderOverview()}
         
         {activeTab === 'menu' && renderTable(
-          ['Date', 'Meal Type', 'Menu Header', 'Items (Dishes/Combos)'],
+          ['Day', 'Meal Type', 'Menu Title', 'Items', 'Actions'],
           data,
           (row) => (
             <tr key={row.id}>
-              <td>{new Date(row.date).toLocaleDateString()}</td>
-              <td className="capitalize">{row.meal_type}</td>
-              <td>{row.dish_name || '-'}</td>
+              <td style={{ fontWeight: '600', color: '#111827' }}>{row.day}</td>
               <td>
-                <div className="flex flex-wrap gap-1">
-                  {row.combos_detail?.map(c => <span key={c.id} className={styles.badge} style={{background: '#e0e7ff', color: '#4338ca'}}>{c.name} (Combo)</span>)}
-                  {row.dishes_detail?.map(d => <span key={d.id} className={styles.badge} style={{background: '#f3f4f6'}}>{d.name}</span>)}
-                  {!row.combos_detail?.length && !row.dishes_detail?.length && (row.items || '-')}
+                <span className={styles.badge} style={{ 
+                  background: row.meal_type === 'Breakfast' ? '#ebf5ff' : '#fef3c7', 
+                  color: row.meal_type === 'Breakfast' ? '#0070f3' : '#92400e',
+                  textTransform: 'capitalize'
+                }}>
+                  {row.meal_type}
+                </span>
+              </td>
+              <td>{row.title}</td>
+              <td>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {row.items?.map((item, idx) => (
+                    <span key={idx} className={styles.badge} style={{ background: '#f3f4f6', color: '#374151', fontSize: '11px' }}>
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </td>
+              <td style={{ textAlign: 'right' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button 
+                    onClick={() => {
+                      setEditId(row.id);
+                      setMenuForm({
+                        day: row.day,
+                        meal_type: row.meal_type,
+                        title: row.title,
+                        items: row.items || [],
+                        currentItemInput: ''
+                      });
+                      setModalType('menu');
+                    }}
+                    className={styles.btnSecondary}
+                    style={{ padding: '4px 8px', fontSize: '12px' }}
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      if (confirm('Are you sure you want to delete this menu?')) {
+                        try {
+                          await canteenApi.deleteWeeklyMenu(row.id);
+                          fetchTabDetails();
+                        } catch (err) {
+                          alert('Failed to delete menu');
+                        }
+                      }
+                    }}
+                    className={styles.btnSecondary}
+                    style={{ padding: '4px 8px', fontSize: '12px', color: '#ef4444', borderColor: '#fee2e2' }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </td>
             </tr>
@@ -994,53 +1098,96 @@ const CanteenModule = ({ activeSegment }) => {
               <form className={styles.modalForm} onSubmit={submitDailyMenu}>
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
-                    <label>Date</label>
-                    <input className={styles.formControl} type="date" value={menuForm.date} onChange={(e) => setMenuForm((prev) => ({ ...prev, date: e.target.value }))} required />
+                    <label>Day of Week</label>
+                    <select 
+                      className={styles.formControl} 
+                      value={menuForm.day} 
+                      onChange={(e) => setMenuForm(p => ({ ...p, day: e.target.value }))}
+                      required
+                    >
+                      {DAYS.map(day => <option key={day} value={day}>{day}</option>)}
+                    </select>
                   </div>
                   <div className={styles.formGroup}>
                     <label>Meal Type</label>
-                    <select className={styles.formControl} value={menuForm.meal_type || ''} onChange={(e) => setMenuForm((prev) => ({ ...prev, meal_type: e.target.value || null }))}>
-                      <option value="">-- Not Specific --</option>
-                      {MEAL_TYPES.map((meal) => (
-                        <option key={meal} value={meal}>{meal}</option>
-                      ))}
+                    <select 
+                      className={styles.formControl} 
+                      value={menuForm.meal_type} 
+                      onChange={(e) => setMenuForm(p => ({ ...p, meal_type: e.target.value }))}
+                      required
+                    >
+                      {MEAL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                     </select>
                   </div>
                   <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Menu Header (e.g. Special Breakfast)</label>
+                    <label>Menu Title</label>
                     <input 
                       type="text"
-                      className={styles.formControl} 
-                      value={menuForm.dish_name} 
-                      onChange={(e) => setMenuForm((prev) => ({ ...prev, dish_name: e.target.value }))} 
-                      placeholder="e.g. South Indian Special"
+                      className={styles.formControl}
+                      value={menuForm.title}
+                      onChange={(e) => setMenuForm(p => ({ ...p, title: e.target.value }))}
+                      placeholder="e.g., South Indian Special"
+                      required
                     />
                   </div>
-                  <MultiSelect 
-                    label="Select Dishes"
-                    options={foodItemOptions.dishes}
-                    selectedValues={menuForm.dishes}
-                    onChange={(vals) => setMenuForm(p => ({ ...p, dishes: vals }))}
-                    onAddNew={() => {
-                        setPendingMenuForm(menuForm);
-                        handleQuickAdd('dish');
-                    }}
-                  />
-
-                  <MultiSelect 
-                    label="Predefined Combos"
-                    options={foodItemOptions.combos}
-                    selectedValues={menuForm.combos}
-                    onChange={(vals) => setMenuForm(p => ({ ...p, combos: vals }))}
-                    onAddNew={() => {
-                        setPendingMenuForm(menuForm);
-                        handleQuickAdd('combo');
-                    }}
-                  />
+                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+                    <label>Menu Items (Type and press Enter or Comma)</label>
+                    <div style={{ 
+                      border: '1px solid #e5e7eb', 
+                      borderRadius: '8px', 
+                      padding: '8px',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      minHeight: '42px',
+                      background: '#fff'
+                    }}>
+                      {menuForm.items.map((item, index) => (
+                        <span key={index} style={{
+                          background: '#f3f4f6',
+                          color: '#374151',
+                          padding: '4px 10px',
+                          borderRadius: '16px',
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          {item}
+                          <button 
+                            type="button" 
+                            onClick={() => removeItem(item)}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+                          >
+                            <X size={14} color="#9ca3af" />
+                          </button>
+                        </span>
+                      ))}
+                      <input 
+                        className={styles.formControl}
+                        style={{ border: 'none', padding: 0, margin: 0, height: 'auto', flex: 1, minWidth: '120px', boxShadow: 'none' }}
+                        value={menuForm.currentItemInput}
+                        onChange={(e) => setMenuForm(p => ({ ...p, currentItemInput: e.target.value }))}
+                        onKeyDown={handleItemAdd}
+                        placeholder={menuForm.items.length === 0 ? "Add items..." : ""}
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Save Menu'}</button>
+                  <button 
+                    className={styles.btnSecondary} 
+                    type="button" 
+                    onClick={() => setMenuForm({ ...menuForm, title: '', items: [], currentItemInput: '' })}
+                  >
+                    Reset
+                  </button>
+                  <div className="flex gap-2">
+                    <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
+                    <button className={styles.btnPrimary} type="submit" disabled={submitting}>
+                      {submitting ? 'Saving...' : (editId ? 'Update Menu' : 'Save Menu')}
+                    </button>
+                  </div>
                 </div>
               </form>
             )}

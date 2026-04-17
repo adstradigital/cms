@@ -6,14 +6,15 @@ from .models import (
     FoodItem, DailyMenu, CanteenComplaint, CanteenSupplier, 
     CanteenInventoryItem, CanteenInventoryLog, CanteenWastageLog, 
     CanteenConsumptionLog, FoodCategory, CanteenOrder,
-    CanteenIngredient, CanteenDish, CanteenCombo
+    CanteenIngredient, CanteenDish, CanteenCombo, WeeklyMenu
 )
 from .serializers import (
     FoodItemSerializer, DailyMenuSerializer, CanteenComplaintSerializer, 
     CanteenSupplierSerializer, CanteenInventoryItemSerializer, 
     CanteenInventoryLogSerializer, CanteenWastageLogSerializer, 
     CanteenConsumptionLogSerializer, FoodCategorySerializer, CanteenOrderSerializer,
-    CanteenIngredientSerializer, CanteenDishSerializer, CanteenComboSerializer
+    CanteenIngredientSerializer, CanteenDishSerializer, CanteenComboSerializer,
+    WeeklyMenuSerializer
 )
 
 class FoodCategoryViewSet(viewsets.ModelViewSet):
@@ -98,3 +99,7 @@ class CanteenConsumptionLogViewSet(viewsets.ModelViewSet):
 class CanteenOrderViewSet(viewsets.ModelViewSet):
     queryset = CanteenOrder.objects.all()
     serializer_class = CanteenOrderSerializer
+
+class WeeklyMenuViewSet(viewsets.ModelViewSet):
+    queryset = WeeklyMenu.objects.all()
+    serializer_class = WeeklyMenuSerializer

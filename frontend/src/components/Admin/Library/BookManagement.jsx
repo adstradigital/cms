@@ -15,6 +15,10 @@ import {
   ChevronDown,
   BookOpen,
   RefreshCw,
+  Upload,
+  Download,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import axios from '@/api/instance';
 
@@ -228,6 +232,225 @@ function BookModal({ open, onClose, editingBook, shelves, onSaved }) {
   return createPortal(modal, document.body);
 }
 
+/* ─────────────────────────── Bulk Upload Modal ─────────────────────────── */
+function BulkUploadModal({ open, onClose, onSaved }) {
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => { setIsMounted(true); }, []);
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await axios.get('/library/books/bulk-upload/', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'book_upload_template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      alert('Failed to download template. Please try again.');
+    }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+      setResult(null);
+    }
+  };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!file) return;
+
+    setUploading(true);
+    setResult(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await axios.post('/library/books/bulk-upload/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setResult({
+        success: true,
+        message: res.data.message,
+        success_count: res.data.success_count,
+        error_count: res.data.error_count,
+        errors: res.data.errors || []
+      });
+      if (res.data.success_count > 0) onSaved();
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      setResult({
+        success: false,
+        message: error.response?.data?.error || 'Failed to upload file. Please ensure it is a valid Excel file.'
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!open) return null;
+
+  const modal = (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget && !uploading) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999,
+        backdropFilter: 'blur(4px)',
+      }}
+    >
+      <div style={{
+        backgroundColor: 'var(--color-surface, #ffffff)', borderRadius: '16px',
+        width: '560px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '20px 24px', borderBottom: '1px solid var(--theme-border-subtle)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          position: 'sticky', top: 0, backgroundColor: 'var(--color-surface, #ffffff)', zIndex: 1,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '8px',
+              backgroundColor: '#4F46E5', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Upload size={18} color="white" />
+            </div>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--theme-text)', margin: 0 }}>
+              Bulk Book Upload
+            </h3>
+          </div>
+          <button
+            onClick={() => !uploading && onClose()}
+            style={{
+              background: 'var(--color-bg)', border: 'none', borderRadius: '8px',
+              width: '32px', height: '32px', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', cursor: 'pointer', color: 'var(--theme-text-muted)',
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '24px' }}>
+          {/* Step 1: Download */}
+          <div style={{ marginBottom: '24px' }}>
+            <h4 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--theme-text)', marginBottom: '8px' }}>1. Download Template</h4>
+            <p style={{ fontSize: '13px', color: 'var(--theme-text-muted)', marginBottom: '12px' }}>
+              Use our Excel template to ensure your data is formatted correctly for import.
+            </p>
+            <button
+              onClick={handleDownloadTemplate}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                padding: '10px 16px', borderRadius: '8px',
+                border: '1px solid var(--theme-primary)', color: 'var(--theme-primary)',
+                backgroundColor: 'transparent', cursor: 'pointer', fontWeight: '600', fontSize: '14px',
+              }}
+            >
+              <Download size={16} /> Download Excel Template
+            </button>
+          </div>
+
+          <div style={{ height: '1px', backgroundColor: 'var(--theme-border-subtle)', marginBottom: '24px' }} />
+
+          {/* Step 2: Upload */}
+          <div>
+            <h4 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--theme-text)', marginBottom: '8px' }}>2. Upload Filled Template</h4>
+            <form onSubmit={handleUpload}>
+              <div style={{
+                border: '2px dashed var(--theme-border-subtle)', borderRadius: '12px',
+                padding: '30px 20px', textAlign: 'center', backgroundColor: 'var(--theme-bg-subtle)',
+                marginBottom: '16px', position: 'relative',
+              }}>
+                <Upload size={32} style={{ color: 'var(--theme-text-muted)', marginBottom: '12px', opacity: 0.5 }} />
+                <p style={{ fontSize: '14px', color: 'var(--theme-text)', marginBottom: '4px', fontWeight: '500' }}>
+                  {file ? file.name : 'Click to select or drag & drop Excel file'}
+                </p>
+                <p style={{ fontSize: '12px', color: 'var(--theme-text-muted)' }}>Only .xlsx or .xls files supported</p>
+                <input
+                  type="file"
+                  accept=".xlsx, .xls"
+                  onChange={handleFileChange}
+                  style={{
+                    position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="submit"
+                  disabled={!file || uploading}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '10px 24px', borderRadius: '8px', border: 'none',
+                    backgroundColor: 'var(--theme-primary)', color: 'white',
+                    cursor: (file && !uploading) ? 'pointer' : 'not-allowed',
+                    fontWeight: '600', fontSize: '14px', opacity: (file && !uploading) ? 1 : 0.6,
+                  }}
+                >
+                  {uploading ? (
+                    <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</>
+                  ) : (
+                    <><Upload size={16} /> Start Upload</>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Results section */}
+          {result && (
+            <div style={{
+              marginTop: '24px', padding: '16px', borderRadius: '12px',
+              backgroundColor: result.success ? '#F0FDF4' : '#FEF2F2',
+              border: `1px solid ${result.success ? '#BBF7D0' : '#FECACA'}`,
+            }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                {result.success ? <CheckCircle2 size={20} color="#16A34A" /> : <AlertCircle size={20} color="#DC2626" />}
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: '700', fontSize: '14px', color: result.success ? '#166534' : '#991B1B', marginBottom: '4px' }}>
+                    {result.message}
+                  </p>
+                  {result.success && result.success_count !== undefined && (
+                    <p style={{ fontSize: '13px', color: '#166534' }}>
+                      Successfully imported: <strong>{result.success_count}</strong> records.
+                      {result.error_count > 0 && <span> Failed: <strong style={{ color: '#DC2626' }}>{result.error_count}</strong></span>}
+                    </p>
+                  )}
+                  {result.errors && result.errors.length > 0 && (
+                    <div style={{ marginTop: '10px', maxHeight: '120px', overflowY: 'auto' }}>
+                      <p style={{ fontSize: '12px', fontWeight: '700', color: '#991B1B', marginBottom: '4px' }}>Errors encountered:</p>
+                      <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#991B1B' }}>
+                        {result.errors.map((err, i) => <li key={i}>{err}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!isMounted) return null;
+  return createPortal(modal, document.body);
+}
+
 /* ─────────────────────────── Filter Dropdown ─────────────────────────── */
 function FilterPanel({ filters, setFilters, categories, onClose }) {
   return (
@@ -301,6 +524,7 @@ const BookManagement = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [editingBook, setEditingBook] = useState(null);
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters]       = useState({ category: '', availability: '' });
@@ -460,20 +684,35 @@ const BookManagement = () => {
             </div>
           </div>
 
-          {/* Add New Book */}
-          <button
-            onClick={() => handleOpenModal()}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '10px 20px', borderRadius: '8px', border: 'none',
-              backgroundColor: 'var(--theme-primary)', color: 'white',
-              cursor: 'pointer', fontWeight: '600', fontSize: '14px',
-              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Plus size={18} /> Add New Book
-          </button>
+          {/* Add New Book Actions */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => setIsBulkModalOpen(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 18px', borderRadius: '8px',
+                border: '1px solid var(--theme-border-subtle)',
+                backgroundColor: 'var(--theme-bg-white)', color: 'var(--theme-text)',
+                cursor: 'pointer', fontWeight: '600', fontSize: '14px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Upload size={18} /> Bulk Upload
+            </button>
+            <button
+              onClick={() => handleOpenModal()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 20px', borderRadius: '8px', border: 'none',
+                backgroundColor: 'var(--theme-primary)', color: 'white',
+                cursor: 'pointer', fontWeight: '600', fontSize: '14px',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Plus size={18} /> Add New Book
+            </button>
+          </div>
         </div>
 
         {/* Active filter chips */}
@@ -632,6 +871,11 @@ const BookManagement = () => {
         onClose={() => setIsModalOpen(false)}
         editingBook={editingBook}
         shelves={shelves}
+        onSaved={fetchData}
+      />
+      <BulkUploadModal
+        open={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
         onSaved={fetchData}
       />
     </>

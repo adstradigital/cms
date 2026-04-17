@@ -5,7 +5,8 @@ from .views import (
     CanteenSupplierViewSet, CanteenInventoryItemViewSet, 
     CanteenInventoryLogViewSet, CanteenWastageLogViewSet, 
     CanteenConsumptionLogViewSet, FoodCategoryViewSet, CanteenOrderViewSet,
-    CanteenIngredientViewSet, CanteenDishViewSet, CanteenComboViewSet
+    CanteenIngredientViewSet, CanteenDishViewSet, CanteenComboViewSet,
+    WeeklyMenuViewSet
 )
 
 router = DefaultRouter()
@@ -22,6 +23,7 @@ router.register(r'orders', CanteenOrderViewSet)
 router.register(r'ingredients', CanteenIngredientViewSet)
 router.register(r'dishes', CanteenDishViewSet)
 router.register(r'combos', CanteenComboViewSet)
+router.register(r'weekly-menu', WeeklyMenuViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

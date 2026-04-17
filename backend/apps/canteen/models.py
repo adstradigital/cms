@@ -203,3 +203,32 @@ class CanteenOrder(models.Model):
     class Meta:
         db_table = "canteen_orders"
         ordering = ["-order_date"]
+
+class WeeklyMenu(models.Model):
+    DAY_CHOICES = [
+        ("Monday", "Monday"),
+        ("Tuesday", "Tuesday"),
+        ("Wednesday", "Wednesday"),
+        ("Thursday", "Thursday"),
+        ("Friday", "Friday"),
+    ]
+    MEAL_CHOICES = [
+        ("Breakfast", "Breakfast"),
+        ("Lunch", "Lunch"),
+    ]
+    
+    day = models.CharField(max_length=20, choices=DAY_CHOICES)
+    meal_type = models.CharField(max_length=20, choices=MEAL_CHOICES)
+    title = models.CharField(max_length=200, help_text="Menu header, e.g. Special Breakfast")
+    items = models.JSONField(default=list, help_text="List of menu items/dishes")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "canteen_weekly_menus"
+        unique_together = ("day", "meal_type")
+        ordering = ["day", "meal_type"]
+
+    def __str__(self):
+        return f"{self.day} - {self.meal_type}: {self.title}"

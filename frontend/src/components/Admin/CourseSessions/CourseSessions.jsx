@@ -24,6 +24,21 @@ function formatTime(t) {
   return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
 }
 
+function formatDateLong(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function getSessionSectionLabel(session) {
+  return session.section_name || session.class_name || 'Section';
+}
+
 // ─── Icons ─────────────────────────────────────────────────────────────────────
 function Icon({ name, size = 18 }) {
   const icons = {
@@ -279,45 +294,117 @@ export default function CourseSessions() {
     );
   });
 
+  const sortedSessions = [...filteredSessions].sort((a, b) => {
+    const left = new Date(`${a.date}T${a.start_time || '00:00'}`).getTime();
+    const right = new Date(`${b.date}T${b.start_time || '00:00'}`).getTime();
+    return left - right;
+  });
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const upcomingSession =
+    sortedSessions.find((session) => session.date >= todayKey && session.status !== 'cancelled') ||
+    sortedSessions[0] ||
+    null;
+
+  const activeFilterCount = [filterStatus, filterSection, filterSubject, filterDate].filter(Boolean).length;
+  const completionRate = stats.total ? Math.round((stats.completed / stats.total) * 100) : 0;
+
   return (
     <div className={styles.page}>
-      {/* Header */}
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <div className={styles.searchWrapper}>
-            <span className={styles.searchIcon}><Icon name="search" size={18} /></span>
-            <input 
-              type="text" 
-              className={styles.headerSearch} 
-              placeholder="Search sessions..." 
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+      <section className={styles.heroSection}>
+        <div className={styles.heroBackdrop} />
+        <div className={styles.heroContent}>
+          <div className={styles.heroLeft}>
+            <div className={styles.heroEyebrow}>Academic Operations</div>
+            <h1 className={styles.heroTitle}>Course Sessions Command Deck</h1>
+            <p className={styles.heroText}>
+              Schedule, track, and adjust every teaching block from one fast-moving academic workspace.
+            </p>
+
+            <div className={styles.searchWrapper}>
+              <span className={styles.searchIcon}><Icon name="search" size={18} /></span>
+              <input
+                type="text"
+                className={styles.headerSearch}
+                placeholder="Search by title, teacher, class, or subject"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className={styles.heroActions}>
+              <button className={styles.btnSecondary} onClick={loadSessions}>
+                <Icon name="refresh" size={16} /> Refresh Board
+              </button>
+              <button id="create-session-btn" className={styles.createBtn} onClick={openCreate}>
+                <Icon name="plus" size={16} /> Create Session
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.heroRight}>
+            <div className={styles.spotlightCard}>
+              <div className={styles.spotlightLabel}>Next Up</div>
+              {upcomingSession ? (
+                <>
+                  <div className={styles.spotlightTitle}>{upcomingSession.title || upcomingSession.subject_name}</div>
+                  <div className={styles.spotlightMeta}>
+                    <span>{formatDateLong(upcomingSession.date)}</span>
+                    <span>{formatTime(upcomingSession.start_time)} - {formatTime(upcomingSession.end_time)}</span>
+                  </div>
+                  <div className={styles.spotlightRow}>
+                    <span className={styles.spotlightChip}>{upcomingSession.class_name}</span>
+                    <span className={styles.spotlightChipMuted}>{getSessionSectionLabel(upcomingSession)}</span>
+                    <span className={`${styles.statusBadge} ${styles[upcomingSession.status]}`}>
+                      {STATUS_LABELS[upcomingSession.status]}
+                    </span>
+                  </div>
+                  <div className={styles.spotlightFooter}>
+                    <div>
+                      <div className={styles.spotlightFooterLabel}>Assigned Teacher</div>
+                      <div className={styles.spotlightFooterValue}>{upcomingSession.teacher_name || 'To be assigned'}</div>
+                    </div>
+                    <button className={styles.quickEditBtn} onClick={() => openEdit(upcomingSession)}>
+                      <Icon name="edit" size={14} /> Open
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className={styles.spotlightEmpty}>
+                  <Icon name="calendar" size={22} />
+                  <span>No upcoming sessions yet.</span>
+                </div>
+              )}
+            </div>
+
+            <div className={styles.heroMiniStats}>
+              <div className={styles.miniStat}>
+                <span className={styles.miniStatLabel}>Completion</span>
+                <strong>{completionRate}%</strong>
+              </div>
+              <div className={styles.miniStat}>
+                <span className={styles.miniStatLabel}>Live Filters</span>
+                <strong>{activeFilterCount}</strong>
+              </div>
+            </div>
           </div>
         </div>
-        <div className={styles.headerRight}>
-          <button className={styles.btnSecondary} onClick={loadSessions}>
-            <Icon name="refresh" size={16} /> Refresh
-          </button>
-          <button id="create-session-btn" className={styles.createBtn} onClick={openCreate}>
-            <Icon name="plus" size={16} /> Add New
-          </button>
-        </div>
-      </div>
+      </section>
 
-      {/* Stats */}
       <div className={styles.statsGrid}>
         {[
-          { label: 'Total Sessions', value: stats.total,     icon: 'layers',   cls: 'purple' },
-          { label: 'Scheduled',      value: stats.scheduled, icon: 'calendar', cls: 'blue'   },
-          { label: 'Completed',      value: stats.completed, icon: 'check',    cls: 'green'  },
-          { label: 'Cancelled',      value: stats.cancelled, icon: 'x',        cls: 'red'    },
+          { label: 'Total Sessions', value: stats.total, icon: 'layers', cls: 'purple', hint: 'All listed blocks' },
+          { label: 'Scheduled', value: stats.scheduled, icon: 'calendar', cls: 'blue', hint: 'Ready to deliver' },
+          { label: 'Completed', value: stats.completed, icon: 'check', cls: 'green', hint: 'Wrapped successfully' },
+          { label: 'Cancelled', value: stats.cancelled, icon: 'x', cls: 'red', hint: 'Removed from plan' },
         ].map(s => (
           <div className={styles.statCard} key={s.label}>
+            <div className={styles.statGlow} />
             <div className={`${styles.statIcon} ${styles[s.cls]}`}><Icon name={s.icon} size={20} /></div>
             <div className={styles.statContent}>
               <div className={styles.label}>{s.label}</div>
               <div className={styles.value}>{s.value}</div>
+              <div className={styles.statHint}>{s.hint}</div>
             </div>
           </div>
         ))}

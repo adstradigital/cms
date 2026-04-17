@@ -105,13 +105,14 @@
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   margin-left: 0.5rem;
-  border: 1px solid transparent;
-  transition: all 0.2s;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  transition: all 0.2s ease;
 }
 
 .profileContainer:hover {
-    background-color: var(--color-surface-hover);
-    border-color: var(--theme-border);
+    background-color: #ffffff;
+    border-color: rgba(59, 130, 246, 0.22);
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
 }
 
 .profileImage {
@@ -152,6 +153,10 @@
     display: flex;
 }
 
+.profileActionWrapper {
+    margin-left: 0.25rem;
+}
+
 .dropdown {
     position: absolute;
     top: calc(100% + 12px);
@@ -166,6 +171,15 @@
     animation: slideDown 0.2s ease-out;
 }
 
+.profileDropdown {
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 300px;
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+}
+
 .dropdown::before {
     content: '';
     position: absolute;
@@ -174,6 +188,19 @@
     right: 0;
     height: 15px;
     background: transparent;
+}
+
+.profileDropdown::after {
+    content: '';
+    position: absolute;
+    top: -7px;
+    right: 28px;
+    width: 14px;
+    height: 14px;
+    background: var(--theme-surface);
+    border-left: 1px solid var(--theme-border);
+    border-top: 1px solid var(--theme-border);
+    transform: rotate(45deg);
 }
 
 @keyframes slideDown {
@@ -192,11 +219,24 @@
     letter-spacing: 0.05em;
 }
 
+.profileDropdown .dropdownHeader {
+    padding: 18px 20px;
+    background: linear-gradient(180deg, #f5f8ff 0%, #eef3ff 100%);
+    color: #7486a6;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+}
+
 .dropdownContent {
     padding: 8px;
     display: flex;
     flex-direction: column;
     gap: 2px;
+}
+
+.profileDropdown .dropdownContent {
+    padding: 12px;
+    gap: 6px;
 }
 
 .dropdownItem {
@@ -213,6 +253,12 @@
     gap: 10px;
     transition: all 0.2s;
     width: 100%;
+}
+
+.profileDropdown .dropdownItem {
+    padding: 14px 14px;
+    border-radius: 12px;
+    font-weight: 600;
 }
 
 .dropdownItem:hover {
@@ -241,4 +287,18 @@
 
 .dropdownItemViewAll:hover {
     text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .profileMeta {
+    display: none;
+  }
+
+  .profileContainer {
+    padding-right: 12px;
+  }
+
+  .profileDropdown {
+    min-width: 260px;
+  }
 }

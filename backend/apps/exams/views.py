@@ -194,6 +194,31 @@ def question_paper_list_view(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def question_paper_detail_view(request, pk):
+    try:
+        try:
+            paper = QuestionPaper.objects.get(pk=pk)
+        except QuestionPaper.DoesNotExist:
+            return Response({"error": "Question paper not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(QuestionPaperSerializer(paper).data, status=status.HTTP_200_OK)
+
+        if request.method == "PATCH":
+            serializer = QuestionPaperSerializer(paper, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        paper.delete()
+        return Response({"message": "Question paper deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # ─── Exam Results (Marks Entry) ───────────────────────────────────────────────
 
 @api_view(["GET", "POST"])

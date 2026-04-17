@@ -23,11 +23,17 @@ class FoodItem(models.Model):
         ("other", "Other"),
     ]
     
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("inactive", "Inactive"),
+        ("out_of_stock", "Out of Stock"),
+    ]
+    
     name = models.CharField(max_length=100)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     is_veg = models.BooleanField(default=True)
-    is_available = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to="canteen/food/", null=True, blank=True)
 
@@ -189,20 +195,53 @@ class CanteenCombo(models.Model):
 class CanteenOrder(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending"),
+        ("preparing", "Preparing"),
+        ("ready", "Ready"),
         ("completed", "Completed"),
         ("cancelled", "Cancelled"),
     ]
+    PAYMENT_METHOD_CHOICES = [
+        ("cash", "Cash"),
+        ("online", "Online"),
+    ]
     
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="canteen_orders")
-    items = models.ManyToManyField(FoodItem)
+    items = models.ManyToManyField(FoodItem, related_name="orders")
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     order_date = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default="cash")
     payment_status = models.CharField(max_length=20, default="pending")
+    
+    def __str__(self):
+        return f"Order #{self.id} - {self.student.user.get_full_name()} ({self.status})"
+
+class CanteenPayment(models.Model):
+    order = models.OneToOneField(CanteenOrder, on_delete=models.CASCADE, related_name="payment_detail")
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_date = models.DateTimeField(auto_now_add=True)
+    is_refunded = models.BooleanField(default=False)
+    refund_note = models.TextField(blank=True)
 
     class Meta:
-        db_table = "canteen_orders"
-        ordering = ["-order_date"]
+        db_table = "canteen_payments"
+
+class CanteenNotification(models.Model):
+    TYPE_CHOICES = [
+        ("order", "New Order"),
+        ("stock", "Low Stock"),
+        ("system", "System Alert"),
+    ]
+    
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "canteen_notifications"
+        ordering = ["-created_at"]
 
 class WeeklyMenu(models.Model):
     DAY_CHOICES = [
@@ -220,7 +259,7 @@ class WeeklyMenu(models.Model):
     day = models.CharField(max_length=20, choices=DAY_CHOICES)
     meal_type = models.CharField(max_length=20, choices=MEAL_CHOICES)
     title = models.CharField(max_length=200, help_text="Menu header, e.g. Special Breakfast")
-    items = models.JSONField(default=list, help_text="List of menu items/dishes")
+    food_items = models.ManyToManyField(FoodItem, blank=True, related_name="weekly_menus")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -9,6 +9,7 @@ urlpatterns = [
     
     # Current User
     path("me/", views.me_view, name="me"),
+    path("me/profile/", views.my_profile_view, name="my_profile"),
     path("change-password/", views.change_password_view, name="change_password"),
     
     # Users (Admin)

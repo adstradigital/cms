@@ -9,6 +9,9 @@ const authApi = {
   logout: (data) => instance.post(ENDPOINTS.AUTH.LOGOUT, data),
   getProfile: () => instance.get(ENDPOINTS.AUTH.PROFILE),
   updateProfile: (data) => instance.patch(ENDPOINTS.AUTH.PROFILE, data),
+  getProfileDetails: () => instance.get(ENDPOINTS.AUTH.PROFILE_DETAILS),
+  updateProfileDetails: (data) => instance.patch(ENDPOINTS.AUTH.PROFILE_DETAILS, data),
+  changePassword: (data) => instance.post(ENDPOINTS.AUTH.CHANGE_PASSWORD, data),
 };
 
 export default authApi;

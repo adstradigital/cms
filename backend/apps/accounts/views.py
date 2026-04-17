@@ -128,6 +128,25 @@ def me_view(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def my_profile_view(request):
+    try:
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+        if request.method == "GET":
+            return Response(UserProfileSerializer(profile).data, status=status.HTTP_200_OK)
+
+        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def change_password_view(request):

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, Bell, MessageSquare, Settings, ChevronDown, User, LogOut, Shield, Key } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import styles from './AdminHeader.module.css';
 
 const AdminHeader = () => {
     const { user, logout } = useAuth();
+    const router = useRouter();
     const [activeDropdown, setActiveDropdown] = useState(null);
 
     const toggleDropdown = (name) => {
@@ -83,25 +85,33 @@ const AdminHeader = () => {
                 </div>
 
                 {/* Profile */}
-                <div className={styles.actionWrapper}>
+                <div className={`${styles.actionWrapper} ${styles.profileActionWrapper}`}>
                     <div className={styles.profileContainer} onClick={() => toggleDropdown('profile')}>
                         <img
-                            src={user?.photo || "https://i.pravatar.cc/150?img=11"}
+                            src={user?.profile?.photo || user?.photo || "https://i.pravatar.cc/150?img=11"}
                             alt="User"
                             className={styles.profileImage}
                         />
                         <div className={styles.profileMeta}>
-                            <span className={styles.profileName}>{user?.first_name || 'Admin'}</span>
+                            <span className={styles.profileName}>{user?.full_name || user?.first_name || user?.username || 'Admin'}</span>
                             <span className={styles.profileRole}>{user?.role_name || 'Administrator'}</span>
                         </div>
                         <ChevronDown size={16} className={styles.profileChevron} />
                     </div>
 
                     {activeDropdown === 'profile' && (
-                        <div className={styles.dropdown}>
+                        <div className={`${styles.dropdown} ${styles.profileDropdown}`}>
                             <div className={styles.dropdownHeader}>Account</div>
                             <div className={styles.dropdownContent}>
-                                <button className={styles.dropdownItem}><User size={14} /> My Profile</button>
+                                <button
+                                    className={styles.dropdownItem}
+                                    onClick={() => {
+                                        closeDropdowns();
+                                        router.push('/admins/settings');
+                                    }}
+                                >
+                                    <User size={14} /> My Profile
+                                </button>
                                 <button className={`${styles.dropdownItem} ${styles.danger}`} onClick={logout}>
                                     <LogOut size={14} /> Sign out
                                 </button>

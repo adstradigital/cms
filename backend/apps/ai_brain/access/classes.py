@@ -27,8 +27,7 @@ def get_school_active_academic_year(school_id: int) -> Optional[AcademicYear]:
 def get_subject_allocations(section: Section, academic_year: AcademicYear):
     return (
         SubjectAllocation.objects.filter(section=section, academic_year=academic_year)
-        .select_related("subject")
-        .prefetch_related("teachers")
+        .select_related("subject", "teacher")
     )
 
 
@@ -70,7 +69,7 @@ def ensure_subject_allocations(section: Section, academic_year: AcademicYear) ->
         if was_created:
             created += 1
 
-        if allocation.teachers.exists():
+        if allocation.teacher:
             continue
 
         preferred_teachers = all_teachers.filter(
@@ -78,13 +77,15 @@ def ensure_subject_allocations(section: Section, academic_year: AcademicYear) ->
         ).distinct()
 
         if preferred_teachers.exists():
-            allocation.teachers.add(*preferred_teachers)
-            updated += preferred_teachers.count()
+            allocation.teacher = preferred_teachers.first()
+            allocation.save()
+            updated += 1
             continue
 
         # Controlled fallback so generation can still proceed while exposing gaps to admin.
         fallback_teacher = teacher_list[index % len(teacher_list)]
-        allocation.teachers.add(fallback_teacher)
+        allocation.teacher = fallback_teacher
+        allocation.save()
         updated += 1
         missing_subject_teacher_mapping.append(
             {
@@ -116,7 +117,7 @@ def ensure_class_teacher_first_period_support(section: Section, academic_year: A
         }
 
     allocations = list(
-        SubjectAllocation.objects.filter(section=section, academic_year=academic_year).prefetch_related("teachers")
+        SubjectAllocation.objects.filter(section=section, academic_year=academic_year).select_related("teacher")
     )
     if not allocations:
         return {
@@ -125,12 +126,13 @@ def ensure_class_teacher_first_period_support(section: Section, academic_year: A
         }
 
     for allocation in allocations:
-        if allocation.teachers.filter(id=class_teacher_id).exists():
+        if allocation.teacher_id == class_teacher_id:
             return {"success": True, "already_mapped": True, "updated": False}
 
     # Fallback: add class teacher to the first allocation so generator can place first period.
     target = allocations[0]
-    target.teachers.add(class_teacher_id)
+    target.teacher_id = class_teacher_id
+    target.save()
     return {
         "success": True,
         "already_mapped": False,

@@ -657,7 +657,7 @@ def test_question_list_view(request, test_pk):
     data = {**request.data, "test": test.id}
     # Auto-set order if not provided
     if "order" not in data:
-        max_order = test.test_questions.aggregate(m=models.Max("order"))["m"] or 0
+        max_order = test.test_questions.aggregate(m=Max("order"))["m"] or 0
         data["order"] = max_order + 1
 
     serializer = TestQuestionSerializer(data=data)

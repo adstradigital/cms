@@ -8,7 +8,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
 }
 
 .titleArea h2 {
@@ -26,7 +28,13 @@
 
 .actionRow {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
+  background: white;
+  padding: 6px;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .btn {
@@ -52,12 +60,19 @@
 }
 
 .primary {
-  background: #0f172a;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   color: white;
+  padding: 10px 22px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+}
+
+.primary:hover {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
 }
 
 .purple {
-  background: #6366f1;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   color: white;
 }
 
@@ -108,7 +123,34 @@
 
 .filters {
   display: flex;
-  gap: 12px;
+  gap: 4px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.iconBtn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconBtn:hover {
+  color: #0f172a;
+}
+
+/* Active state for view toggles */
+.iconBtnActive {
+  background: white;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .select {

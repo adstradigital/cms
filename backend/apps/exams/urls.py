@@ -28,10 +28,6 @@ urlpatterns = [
     path("schedules/", views.exam_schedule_global_list_view, name="exam_schedule_global_list"),
     path("schedules/<int:pk>/", views.exam_schedule_detail_view, name="exam_schedule_detail"),
 
-    # Student Quiz Endpoints
-    path("quizzes/", views.student_quiz_list_view, name="student_quiz_list"),
-    path("quizzes/<int:pk>/", views.student_quiz_detail_view, name="student_quiz_detail"),
-    path("quizzes/<int:pk>/submit/", views.student_quiz_submit_view, name="student_quiz_submit"),
 
     # ─── Online Test v2 ───────────────────────────────────────────────
     path("online-tests/", views.online_test_list_view, name="online_test_list"),

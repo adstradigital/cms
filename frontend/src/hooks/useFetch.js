@@ -18,7 +18,7 @@ export default function useFetch(url, { immediate = true } = {}) {
       const res = await instance.get(url);
       setData(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      setError(err.response?.data?.error || err.response?.data?.detail || err.message);
     } finally {
       setLoading(false);
     }

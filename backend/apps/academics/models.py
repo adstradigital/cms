@@ -224,11 +224,16 @@ class Homework(models.Model):
 
 
 class HomeworkSubmission(models.Model):
+    SUBMISSION_STATUS = [
+        ('draft', 'Draft'),
+        ('submitted', 'Submitted'),
+    ]
     homework = models.ForeignKey(Homework, on_delete=models.CASCADE, related_name="submissions")
     student = models.ForeignKey("students.Student", on_delete=models.CASCADE, related_name="homework_submissions")
     submitted_file = models.FileField(upload_to="homework/submissions/", null=True, blank=True)
     remarks = models.TextField(blank=True)
     grade = models.CharField(max_length=10, blank=True)
+    status = models.CharField(max_length=20, choices=SUBMISSION_STATUS, default='submitted')
     submitted_at = models.DateTimeField(auto_now_add=True)
     is_late = models.BooleanField(default=False)
 

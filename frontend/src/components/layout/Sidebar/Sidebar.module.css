@@ -1,146 +1,331 @@
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR v3 — Refined Midnight Console
+   Elegant dark glass with warm accent system
+   ═══════════════════════════════════════════════════════════ */
+
 .sidebar {
   width: var(--sidebar-width);
   height: 100vh;
-  background: var(--theme-sidebar-bg); /* Now the vibrant green */
-  color: var(--theme-sidebar-text);
+  background: #0c1222;
+  color: #fff;
   display: flex;
   flex-direction: column;
   position: fixed;
   left: 0;
   top: 0;
   z-index: var(--z-sticky);
-  transition: width var(--transition-base);
-  overflow: visible; /* Important for cutout effect */
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+}
+
+/* Subtle right-edge glow */
+.sidebar::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, transparent 0%, rgba(56, 189, 248, 0.15) 50%, transparent 100%);
 }
 
 .collapsed {
   width: var(--sidebar-collapsed-width);
 }
 
-.logo {
+/* ─── BRAND ─── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 20px 20px;
+  min-height: 76px;
+}
+
+.brandLogo {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-8) var(--space-4);
-  min-height: 100px;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
 }
 
-.logoText {
-  font-size: var(--text-2xl);
-  font-weight: var(--font-bold);
-  color: #fff;
-  letter-spacing: -0.5px;
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
+.brandName {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1;
+  letter-spacing: -0.3px;
+}
+
+.brandRole {
+  font-size: 10px;
+  font-weight: 600;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+/* ─── TOGGLE ─── */
 .toggleBtn {
   position: absolute;
-  right: -12px;
-  top: 40px;
-  background: #fff;
-  border: 1px solid var(--color-border);
-  color: var(--color-primary);
-  width: 24px;
-  height: 24px;
+  right: -13px;
+  top: 38px;
+  width: 26px;
+  height: 26px;
+  background: #0ea5e9;
+  border: 3px solid var(--color-bg, #f1f5f9);
+  color: #fff;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-sm);
   cursor: pointer;
   z-index: 10;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
 }
 
+.toggleBtn:hover {
+  transform: scale(1.1);
+  background: #0284c7;
+}
+
+/* ─── NAVIGATION ─── */
 .nav {
   flex: 1;
-  padding: var(--space-4) 0 var(--space-4) var(--space-4); /* Padding only on left for cutout */
+  padding: 4px 10px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.navItem {
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+.sectionGroup {
+  margin-bottom: 4px;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  padding: 16px 14px 8px;
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* ─── MENU ITEM ─── */
+.menuItem {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-3-5) var(--space-4);
-  border-radius: var(--radius-full) 0 0 var(--radius-full);
-  color: rgba(255, 255, 255, 0.8);
+  justify-content: space-between;
+  padding: 0 14px;
+  height: 42px;
+  border-radius: 10px;
+  color: #64748b;
   text-decoration: none;
-  transition: all var(--transition-fast);
-  white-space: nowrap;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  position: relative;
+  background: none;
+  border: none;
+  width: 100%;
+  font-family: inherit;
+}
+
+.menuItem:hover {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.menuLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   position: relative;
 }
 
-.navItem:hover:not(.active) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.active {
-  background: var(--color-bg); /* Match main content background */
-  color: var(--color-primary);
-  font-weight: var(--font-bold);
-  pointer-events: none;
-}
-
-/* Cutout Curves (Above) */
-.active::before {
-  content: "";
-  position: absolute;
-  top: -40px;
-  right: 0;
-  width: 40px;
-  height: 40px;
-  background: transparent;
-  border-radius: 50%;
-  box-shadow: 20px 20px 0 0 var(--color-bg);
-  pointer-events: none;
-}
-
-/* Cutout Curves (Below) */
-.active::after {
-  content: "";
-  position: absolute;
-  bottom: -40px;
-  right: 0;
-  width: 40px;
-  height: 40px;
-  background: transparent;
-  border-radius: 50%;
-  box-shadow: 20px -20px 0 0 var(--color-bg);
-  pointer-events: none;
-}
-
-.icon {
-  font-size: var(--text-xl);
-  flex-shrink: 0;
+.menuIcon {
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s;
 }
 
-.label {
-  font-size: var(--text-sm);
+.menuItem:hover .menuIcon {
+  opacity: 1;
 }
 
-.footer {
-  padding: var(--space-8) var(--space-4);
+.menuLabel {
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  letter-spacing: 0.1px;
+}
+
+/* ─── ACTIVE STATE ─── */
+.menuActive {
+  color: #f1f5f9;
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.menuActive .menuIcon {
+  color: #38bdf8;
+  opacity: 1;
+}
+
+.menuActive .menuLabel {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.activeBar {
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  background: linear-gradient(180deg, #0ea5e9, #38bdf8);
+  border-radius: 0 3px 3px 0;
+}
+
+/* ─── EXPAND / DROPDOWN ─── */
+.expandIcon {
+  color: #334155;
+  transition: transform 0.25s ease;
+}
+
+.expandOpen {
+  transform: rotate(180deg);
+  color: #38bdf8;
+}
+
+/* ─── SUB MENU ─── */
+.subMenu {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  padding: 2px 0 6px 0;
+  margin-left: 20px;
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.footerItem {
+.subMenuItem {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  color: rgba(255, 255, 255, 0.7);
+  gap: 10px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #475569;
   text-decoration: none;
-  font-size: var(--text-sm);
-  padding: var(--space-2) 0;
+  transition: all 0.15s;
+  border-radius: 8px;
+  margin-left: 10px;
 }
 
-.footerItem:hover {
-  color: #fff;
+.subMenuItem:hover {
+  color: #94a3b8;
+}
+
+.subDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #1e293b;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.subMenuActive {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.subMenuActive .subDot {
+  background: #0ea5e9;
+  box-shadow: 0 0 6px rgba(14, 165, 233, 0.4);
+}
+
+/* ─── FOOTER ─── */
+.footer {
+  padding: 4px 10px 14px;
+}
+
+.footerDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.04);
+  margin: 4px 4px 8px;
+}
+
+.logoutItem:hover {
+  color: #fb7185 !important;
+  background: rgba(251, 113, 133, 0.06) !important;
+}
+
+/* ─── COLLAPSED STATE ─── */
+.collapsed .brandText,
+.collapsed .brandRole,
+.collapsed .menuLabel,
+.collapsed .sectionLabel,
+.collapsed .expandIcon {
+  display: none;
+}
+
+.collapsed .brand {
+  justify-content: center;
+  padding: 24px 0 20px;
+}
+
+.collapsed .menuItem {
+  justify-content: center;
+  padding: 0;
+  height: 40px;
+}
+
+.collapsed .menuLeft {
+  justify-content: center;
+}
+
+.collapsed .nav {
+  padding: 4px 6px;
+}
+
+.collapsed .footer {
+  padding: 4px 6px 14px;
+}
+
+.collapsed .activeBar {
+  left: -6px;
+}
+
+.collapsed .sidebar::after {
+  display: none;
 }

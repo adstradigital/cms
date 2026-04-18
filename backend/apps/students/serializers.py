@@ -31,6 +31,7 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
 
 class StudentSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    full_name = serializers.SerializerMethodField()
     section_name = serializers.SerializerMethodField()
     class_name = serializers.SerializerMethodField()
     parent_name = serializers.SerializerMethodField()
@@ -41,11 +42,14 @@ class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = [
-            "id", "user", "admission_number", "roll_number", "academic_year", 
+            "id", "user", "full_name", "admission_number", "roll_number", "academic_year", 
             "section", "section_name", "class_name", "admission_date", 
             "hostel_resident", "transport_user", "previous_school", "is_active",
             "parent_name", "parent_phone", "parent_email", "documents",
         ]
+
+    def get_full_name(self, obj):
+        return obj.user.get_full_name()
 
     def get_section_name(self, obj):
         if obj.section:

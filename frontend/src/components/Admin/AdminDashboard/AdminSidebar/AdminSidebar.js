@@ -42,7 +42,7 @@ const AdminSidebar = () => {
     else if (pathname?.startsWith('/admins/examinations')) setExpandedMenu('Examinations');
 
     else if (pathname?.startsWith('/admins/library')) setExpandedMenu('Library');
-
+    else if (pathname?.startsWith('/admins/canteen')) setExpandedMenu('Canteen');
   }, [pathname]);
   
   const isStudentsPath = pathname?.startsWith('/admins/students');
@@ -53,7 +53,7 @@ const AdminSidebar = () => {
   const isExaminationsPath = pathname?.startsWith('/admins/examinations');
 
   const isLibraryPath = pathname?.startsWith('/admins/library');
-
+  const isCanteenPath = pathname?.startsWith('/admins/canteen');
   
   const isStudentsExpanded = expandedMenu === 'Students';
   const isClassesExpanded = expandedMenu === 'Classes';
@@ -63,6 +63,7 @@ const AdminSidebar = () => {
   const isExaminationsExpanded = expandedMenu === 'Examinations';
 
   const isLibraryExpanded = expandedMenu === 'Library';
+  const isCanteenExpanded = expandedMenu === 'Canteen';
 
 
   return (
@@ -203,14 +204,41 @@ const AdminSidebar = () => {
         )}
 
         {/* Canteen Section */}
-        <NavItem 
-          icon={<Utensils size={18} />} 
-          label="Canteen" 
-          collapsed={isCollapsed}
-          active={pathname?.startsWith('/admins/canteen')} 
-          href="/admins/canteen/overview"
-          onClick={() => setExpandedMenu(null)}
-        />
+        {isCollapsed ? (
+          <NavItem 
+            icon={<Utensils size={18} />} 
+            label="Canteen" 
+            collapsed={isCollapsed}
+            active={isCanteenPath} 
+            href="/admins/canteen/dashboard"
+          />
+        ) : (
+          <div className={styles.expandableMenuContainer}>
+            <div 
+              onClick={() => setExpandedMenu(isCanteenExpanded ? null : 'Canteen')}
+              className={`${styles.expandableMenu} ${isCanteenExpanded ? styles.expanded : styles.collapsed}`}
+            >
+              <div className={styles.expandableMenuContent}>
+                <div className={`${styles.expandableMenuIcon} ${isCanteenExpanded ? styles.expanded : styles.collapsed}`}>
+                  <Utensils size={18} />
+                </div>
+                <span>Canteen</span>
+              </div>
+              <ChevronDown size={14} className={`${styles.expandableChevron} ${isCanteenExpanded ? styles.rotated : ''}`} />
+            </div>
+
+            <div className={`${styles.subItemsContainer} ${isCanteenExpanded ? styles.expanded : styles.collapsed}`}>
+              <SubNavItem label="Overview" active={pathname === '/admins/canteen/dashboard'} href="/admins/canteen/dashboard" />
+              <SubNavItem label="Menu Management" active={pathname === '/admins/canteen/menu'} href="/admins/canteen/menu" />
+              <SubNavItem label="Orders" active={pathname === '/admins/canteen/orders'} href="/admins/canteen/orders" />
+              <SubNavItem label="Payments" active={pathname === '/admins/canteen/payments'} href="/admins/canteen/payments" />
+              <SubNavItem label="Inventory" active={pathname === '/admins/canteen/inventory'} href="/admins/canteen/inventory" />
+              <SubNavItem label="Suppliers" active={pathname === '/admins/canteen/suppliers'} href="/admins/canteen/suppliers" />
+              <SubNavItem label="Feedback" active={pathname === '/admins/canteen/feedback'} href="/admins/canteen/feedback" />
+              <SubNavItem label="Reports" active={pathname === '/admins/canteen/reports'} href="/admins/canteen/reports" />
+            </div>
+          </div>
+        )}
 
         {/* Hostel Section */}
         {isCollapsed ? (

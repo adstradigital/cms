@@ -35,7 +35,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': _db_engine,
-            'NAME': os.getenv('DB_NAME', 'CMS'),
+            'NAME': os.getenv('DB_NAME', 'cms'),
             'USER': os.getenv('DB_USER', 'root'),
             'PASSWORD': os.getenv('DB_PASSWORD', ''),
             'HOST': os.getenv('DB_HOST', '127.0.0.1'),

@@ -1,0 +1,462 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+.tabContent {
+  font-family: 'Manrope', sans-serif;
+  animation: canteenFadeIn 0.26s ease-out;
+}
+
+.contentArea {
+  animation: canteenFadeIn 0.3s ease-out;
+}
+
+@keyframes canteenFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.filterBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid #f1dcc8;
+  background: linear-gradient(120deg, #fff8ef 0%, #fffbf6 55%, #f8fdff 100%);
+}
+
+.searchWrapper {
+  position: relative;
+  flex: 1;
+  max-width: 440px;
+}
+
+.searchWrapper svg {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  color: #b08968;
+  pointer-events: none;
+}
+
+.searchWrapper input {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid #e8d3bd;
+  background: #fff;
+  color: #3f2f22;
+  padding: 10px 14px 10px 40px;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.searchWrapper input::placeholder {
+  color: #b89c82;
+}
+
+.searchWrapper input:focus {
+  outline: none;
+  border-color: #c36f29;
+  box-shadow: 0 0 0 4px rgba(195, 111, 41, 0.14);
+}
+
+.btnPrimary,
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.btnPrimary {
+  color: #fff;
+  border-color: #b55c13;
+  background: linear-gradient(135deg, #cf6f1f 0%, #b65316 100%);
+  box-shadow: 0 10px 20px -14px rgba(182, 83, 22, 0.9);
+}
+
+.btnPrimary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px -14px rgba(182, 83, 22, 0.95);
+}
+
+.btnPrimary:active {
+  transform: translateY(0);
+}
+
+.btnSecondary {
+  color: #7a4312;
+  background: #fff;
+  border-color: #efcfb0;
+  box-shadow: 0 2px 8px -6px rgba(122, 67, 18, 0.45);
+}
+
+.btnSecondary:hover {
+  color: #5f2f06;
+  border-color: #ddaf86;
+  background: #fff9f3;
+}
+
+.btnPrimary:disabled,
+.btnSecondary:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.analyticsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.statCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 16px;
+  border: 1px solid #f0dcc5;
+  background: #fff;
+  padding: 16px 18px;
+  box-shadow: 0 12px 22px -20px rgba(129, 71, 18, 0.4);
+}
+
+.statInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.statLabel {
+  color: #8b6a4c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.statValue {
+  color: #3f2d1f;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.statIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tableContainer {
+  border-radius: 18px;
+  border: 1px solid #f0ddc8;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 20px 36px -30px rgba(120, 69, 26, 0.6);
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.table th {
+  padding: 14px 20px;
+  text-align: left;
+  border-bottom: 1px solid #f4e3d3;
+  background: linear-gradient(180deg, #fff8ef 0%, #fffdf9 100%);
+  color: #9a6f45;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.table td {
+  padding: 15px 20px;
+  border-bottom: 1px solid #f9ede3;
+  color: #513a28;
+  font-size: 13px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover td {
+  background: #fffaf5;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+}
+
+.badgeSuccess {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badgeWarning {
+  background: #fff3cd;
+  color: #92400e;
+}
+
+.badgeDanger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badgeInfo {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(60, 35, 14, 0.42);
+  backdrop-filter: blur(2px);
+}
+
+.modalContent {
+  width: min(980px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid #edd5bb;
+  background: #fff;
+  box-shadow: 0 34px 60px -30px rgba(87, 45, 8, 0.55);
+  padding: 24px;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.modalTitle {
+  color: #5e3818;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.modalClose {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #edd8c4;
+  background: #fff;
+  color: #a67e5b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modalClose:hover {
+  border-color: #d4ad88;
+  color: #6c3d12;
+  background: #fff7f0;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formGroup label {
+  color: #7f5f44;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.formControl {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 11px;
+  border: 1px solid #ecd5bf;
+  background: #fff;
+  color: #3d2b1d;
+  padding: 9px 12px;
+  font-size: 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.formControl::placeholder {
+  color: #b69a81;
+}
+
+.formControl:focus {
+  outline: none;
+  border-color: #c7722c;
+  box-shadow: 0 0 0 4px rgba(199, 114, 44, 0.12);
+}
+
+.formControl:disabled {
+  background: #faf5ef;
+  color: #bba58e;
+  cursor: not-allowed;
+}
+
+textarea.formControl {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+}
+
+.modalActions button {
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  .filterBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchWrapper {
+    max-width: none;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .modalBackdrop {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .modalContent {
+    border-radius: 16px 16px 0 0;
+    max-height: 90vh;
+    padding: 18px 14px;
+  }
+
+  .modalTitle {
+    font-size: 18px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px;
+    font-size: 12px;
+  }
+
+  .modalActions {
+    flex-direction: column;
+  }
+}
+
+/* horizontal Navigation Styles */
+.tabNavigation {
+  display: flex;
+  gap: 8px;
+  background: #fff;
+  padding: 6px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  margin-bottom: 30px;
+  width: fit-content;
+}
+
+.tabButton {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #8b6a4c;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.tabButton:hover {
+  background: #fff5eb;
+  color: #5d3d1e;
+}
+
+.activeTab {
+  background: #cf6f1f;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(207, 111, 31, 0.2);
+}

@@ -55,9 +55,14 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
         debug_info.append(f"QueryParams: {dict(self.request.query_params)}")
 
         # ── 1. School Scoping ──
-        if not user.is_superuser and user.school:
+        # Skip school filtering if ignore_rls is requested (administrative modules)
+        ignore_rls = self.request.query_params.get("ignore_rls", "").lower() == "true"
+        
+        if not user.is_superuser and user.school and not ignore_rls:
             qs = qs.filter(user__school=user.school)
             debug_info.append(f"Filtered by school: {user.school.name}")
+        elif ignore_rls:
+            debug_info.append(f"School filter bypassed via ignore_rls")
 
         # ── 2. Query Parameters Filtering ──
         section_id = self.request.query_params.get("section")
@@ -87,7 +92,9 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
         # if 'all', we skip this filter
 
         # ── 3. Role-Based Access Control (RBAC) ──
-        if user.is_superuser or (user.role and user.role.scope == 'school'):
+        # Allow bypassing RLS for administrative modules (e.g. Canteen) if explicitly requested
+        
+        if user.is_superuser or (user.role and user.role.scope == 'school') or ignore_rls:
             return qs.order_by("roll_number", "user__last_name")
 
         # Row Level Security for Teachers

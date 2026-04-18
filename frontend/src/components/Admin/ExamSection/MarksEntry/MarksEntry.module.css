@@ -4,13 +4,21 @@
   gap: 20px;
 }
 
-.filters {
+.filtersWrapper {
   display: flex;
-  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
   background: var(--theme-surface, #1E293B);
   padding: 16px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--theme-border, #334155);
+}
+
+.filters {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  max-width: 800px;
 }
 
 .select {
@@ -23,55 +31,114 @@
   font-size: 0.875rem;
 }
 
+.quickActions {
+  display: flex;
+  gap: 12px;
+}
+
 .tableContainer {
   background: var(--theme-surface, #1E293B);
   border: 1px solid var(--theme-border, #334155);
   border-radius: var(--radius-xl);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.toolbar {
+.emptyState {
+  padding: 60px;
+  text-align: center;
+  opacity: 0.5;
+  color: var(--theme-text);
+}
+
+.emptyState svg {
+  margin: 0 auto 16px;
+}
+
+.workspace {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+}
+
+.statsBar {
   padding: 16px 20px;
   border-bottom: 1px solid var(--theme-border, #334155);
   background: rgba(255, 255, 255, 0.02);
 }
 
-.tTitle {
-  font-weight: 600;
-  font-size: 1.125rem;
-  color: var(--theme-text);
+.badgeGroup {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.tSub {
+.statusBadgePrimary {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
   font-size: 0.75rem;
-  color: var(--theme-text-secondary, #94A3B8);
-  margin-top: 4px;
+  font-weight: 600;
 }
 
-.btnSm {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
-  cursor: pointer;
+.statsPill {
+  background: var(--theme-bg, #0B0E14);
+  color: var(--theme-text-secondary, #94a3b8);
+  border: 1px solid var(--theme-border, #334155);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.lastSaved {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.alertWarning {
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 4px solid #f59e0b;
+  color: #fcd34d;
+  padding: 12px 20px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--theme-border, #334155);
 }
 
-.btnPrimary {
-  background: var(--color-primary, #3B82F6);
-  color: white;
-  border: none;
+.alertError {
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 4px solid #ef4444;
+  color: #fca5a5;
+  padding: 12px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--theme-border, #334155);
 }
 
-.btnDraft {
-  background: transparent;
-  color: var(--theme-text);
-  border: 1px solid var(--theme-border, #334155);
+.alertInfo {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 4px solid #3b82f6;
+  color: #93c5fd;
+  padding: 12px 20px;
+  font-size: 0.875rem;
+  border-top: 1px solid var(--theme-border, #334155);
+}
+
+.gridWrapper {
+  overflow-x: auto;
 }
 
 .gridTable {
@@ -88,75 +155,155 @@
   color: var(--theme-text-secondary, #94A3B8);
   border-bottom: 2px solid var(--theme-border, #334155);
   border-right: 1px solid var(--theme-border, #334155);
+  white-space: nowrap;
 }
 
 .gridTable td {
-  padding: 12px 16px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--theme-border, #334155);
   border-right: 1px solid var(--theme-border, #334155);
+  background: var(--theme-surface, #1E293B);
+}
+
+.rowChanged td {
+  background: rgba(59, 130, 246, 0.02);
+}
+
+.idxCell {
+  font-weight: 600;
+  color: var(--theme-text-secondary, #94a3b8);
+  text-align: center;
 }
 
 .studentCell {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-.avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--theme-border, #334155);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
+.rollCell {
+  font-family: monospace;
+  color: var(--theme-text-secondary, #94a3b8);
 }
 
 .markInput {
-  width: 70px;
+  width: 60px;
   padding: 8px;
-  background: var(--theme-bg, #0B0E14);
-  border: 1px solid var(--theme-border, #334155);
   border-radius: 6px;
+  border: 1px solid var(--theme-border, #334155);
+  background: var(--theme-bg, #0B0E14);
   color: var(--theme-text);
-  font-family: var(--font-mono, monospace);
-  font-size: 0.875rem;
   text-align: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s;
 }
 
 .markInput:focus {
-  border-color: var(--color-primary, #3B82F6);
-  outline: none;
+  border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .markInputError {
-  border-color: #EF4444 !important;
-  background: rgba(239, 68, 68, 0.1) !important;
-  color: #EF4444;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+  color: #ef4444;
 }
 
-.badge {
-  padding: 4px 8px;
-  border-radius: 4px;
+.overlayBadge {
+  background: var(--theme-bg, #0B0E14);
+  color: var(--theme-text-secondary, #94a3b8);
+  padding: 4px 12px;
+  border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
-  display: inline-block;
-  min-width: 32px;
+  text-transform: uppercase;
+  border: 1px dashed var(--theme-border, #334155);
+}
+
+.statusDropdown {
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
   text-align: center;
 }
 
-.gradeA { background: rgba(16, 185, 129, 0.15); color: #34D399; }
-.gradeB { background: rgba(59, 130, 246, 0.15); color: #60A5FA; }
-.gradeF { background: rgba(239, 68, 68, 0.15); color: #F87171; }
+.statusPass { background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
+.statusFail { background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.2); }
+.statusError { background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.2); }
+.statusPending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-color: rgba(245, 158, 11, 0.2); }
+.statusAbsent { background: var(--theme-bg, #0B0E14); color: var(--theme-text-secondary, #94a3b8); border-color: var(--theme-border, #334155); }
+.statusWithheld { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.2); }
 
-.statusSelect {
-  padding: 6px;
-  border-radius: 6px;
-  border: 1px solid var(--theme-border);
+.remarksInput {
+  width: 100%;
+  min-width: 120px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--theme-text);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s;
 }
+
+.remarksInput:focus, .remarksInput:hover {
+  border-color: var(--theme-border, #334155);
+  background: var(--theme-bg, #0B0E14);
+}
+
+.footerActions {
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--theme-border, #334155);
+}
+
+.btnSecondary, .btnOutline, .btnWarningOutline, .btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btnSecondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--theme-text);
+  border: 1px solid var(--theme-border, #334155);
+}
+.btnSecondary:hover { background: rgba(255, 255, 255, 0.1); }
+
+.btnOutline {
+  background: transparent;
+  color: var(--theme-text);
+  border: 1px solid var(--theme-border, #334155);
+}
+.btnOutline:hover { background: rgba(255, 255, 255, 0.05); }
+
+.btnWarningOutline {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+.btnWarningOutline:hover { background: rgba(245, 158, 11, 0.2); }
+
+.btnPrimary {
+  background: #10b981;
+  color: white;
+}
+.btnPrimary:hover { background: #059669; }
+.btnPrimary:disabled { opacity: 0.5; cursor: not-allowed; }

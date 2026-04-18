@@ -82,15 +82,26 @@ class SubjectAllocationSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source="subject.name", read_only=True)
     section_name = serializers.CharField(source="section.name", read_only=True)
     class_name = serializers.CharField(source="section.school_class.name", read_only=True)
+    teacher_name = serializers.CharField(source="teacher.get_full_name", read_only=True)
+    substitute_teacher_name = serializers.CharField(source="substitute_teacher.get_full_name", read_only=True)
     teacher_names = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
 
     class Meta:
         model = SubjectAllocation
-        fields = ["id", "subject", "section", "teachers", "academic_year", "subject_name", "section_name", "class_name", "teacher_names", "progress"]
+        fields = [
+            "id", "subject", "section", "teacher", "substitute_teacher", 
+            "academic_year", "subject_name", "section_name", "class_name", 
+            "teacher_name", "substitute_teacher_name", "teacher_names", "progress"
+        ]
 
     def get_teacher_names(self, obj):
-        return ", ".join([t.get_full_name() for t in obj.teachers.all()])
+        names = []
+        if obj.teacher:
+            names.append(obj.teacher.get_full_name())
+        if obj.substitute_teacher:
+            names.append(f"{obj.substitute_teacher.get_full_name()} (Substitute)")
+        return ", ".join(names) if names else "Not Assigned"
 
     def get_progress(self, obj):
         total = SyllabusTopic.objects.filter(chapter__unit__subject=obj.subject).count()

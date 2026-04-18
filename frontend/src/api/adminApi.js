@@ -21,6 +21,7 @@ const adminApi = {
   // Academics - Subjects & Syllabus
   getSubjects: (params) => instance.get('/academics/subjects/', { params }),
   createSubject: (data) => instance.post('/academics/subjects/', data),
+  deleteSubject: (id) => instance.delete(`/academics/subjects/${id}/`),
   getSyllabusUnits: (params) => instance.get('/academics/syllabus/units/', { params }),
   createSyllabusUnit: (data) => instance.post('/academics/syllabus/units/', data),
   updateSyllabusUnit: (id, data) => instance.patch(`/academics/syllabus/units/${id}/`, data),
@@ -91,6 +92,8 @@ const adminApi = {
   getExamSchedules: (examId) => 
     examId ? instance.get(`/exams/${examId}/schedules/`) : instance.get('/exams/schedules/'),
   createExamSchedule: (examId, data) => instance.post(`/exams/${examId}/schedules/`, data),
+  updateExamSchedule: (id, data) => instance.patch(`/exams/schedules/${id}/`, data),
+  deleteExamSchedule: (id) => instance.delete(`/exams/schedules/${id}/`),
   getExamResults: (params) => instance.get('/exams/results/', { params }),
   bulkSaveExamResults: (records) => instance.post('/exams/results/bulk/', { records }),
   getReportCards: (params) => instance.get('/exams/report-cards/', { params }),
@@ -102,10 +105,13 @@ const adminApi = {
   deleteExamType: (id) => instance.delete(`/exams/types/${id}/`),
   getQuestionBank: (params) => instance.get('/exams/question-bank/', { params }),
   createQuestion: (data) => instance.post('/exams/question-bank/', data),
+  deleteQuestion: (id) => instance.delete(`/exams/question-bank/${id}/`),
+  bulkDeleteQuestions: (data) => instance.post('/exams/question-bank/bulk-delete/', data),
   getQuestionPapers: (params) => instance.get('/exams/question-papers/', { params }),
   createQuestionPaper: (data) => instance.post('/exams/question-papers/', data),
   getQuestionPaperDetail: (id) => instance.get(`/exams/question-papers/${id}/`),
   updateQuestionPaper: (id, data) => instance.patch(`/exams/question-papers/${id}/`, data),
+  deleteQuestionPaper: (id) => instance.delete(`/exams/question-papers/${id}/`),
   getExamAnalytics: (params) => instance.get('/exams/analytics/', { params }),
   generateAiReportCardsForSection: (data) => instance.post('/ai-brain/report-card/generate-class/', data),
   generateAiReportCardForStudent: (data) => instance.post('/ai-brain/report-card/generate/', data),
@@ -160,6 +166,30 @@ const adminApi = {
   getClubs: (params) => instance.get('/events/clubs/', { params }),
   createClub: (data) => instance.post('/events/clubs/', data),
   updateClub: (id, data) => instance.patch(`/events/clubs/${id}/`, data),
+
+  // ─── Online Tests v2 ─────────────────────────────────────────────
+  getOnlineTests: (params) => instance.get('/exams/online-tests/', { params }),
+  createOnlineTest: (data) => instance.post('/exams/online-tests/', data),
+  getOnlineTest: (id) => instance.get(`/exams/online-tests/${id}/`),
+  updateOnlineTest: (id, data) => instance.patch(`/exams/online-tests/${id}/`, data),
+  deleteOnlineTest: (id) => instance.delete(`/exams/online-tests/${id}/`),
+  publishOnlineTest: (id) => instance.post(`/exams/online-tests/${id}/publish/`),
+
+  // Questions
+  getTestQuestions: (testId) => instance.get(`/exams/online-tests/${testId}/questions/`),
+  createTestQuestion: (testId, data) => instance.post(`/exams/online-tests/${testId}/questions/`, data),
+  updateTestQuestion: (id, data) => instance.patch(`/exams/online-tests/questions/${id}/`, data),
+  deleteTestQuestion: (id) => instance.delete(`/exams/online-tests/questions/${id}/`),
+
+  // Attempts
+  startTestAttempt: (testId) => instance.post(`/exams/online-tests/${testId}/attempt/`),
+  submitTestAttempt: (attemptId, data) => instance.post(`/exams/online-tests/attempts/${attemptId}/submit/`, data),
+  getTestAttempt: (attemptId) => instance.get(`/exams/online-tests/attempts/${attemptId}/`),
+  getTestSubmissions: (testId, params) => instance.get(`/exams/online-tests/${testId}/submissions/`, { params }),
+
+  // Grading
+  gradeTestAnswer: (answerId, data) => instance.patch(`/exams/online-tests/answers/${answerId}/grade/`, data),
+  publishTestResult: (attemptId) => instance.post(`/exams/online-tests/attempts/${attemptId}/publish/`),
 };
 
 export default adminApi;

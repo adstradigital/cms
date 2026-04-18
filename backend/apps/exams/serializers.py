@@ -88,11 +88,16 @@ class ReportCardSerializer(serializers.ModelSerializer):
         return "Unknown"
 
 class QuestionBankSerializer(serializers.ModelSerializer):
+    question_text = serializers.CharField(source="text")
     subject_name = serializers.CharField(source="subject.name", read_only=True)
 
     class Meta:
         model = QuestionBank
-        fields = "__all__"
+        fields = [
+            "id", "subject", "subject_name", "academic_year", "question_text", 
+            "question_type", "options", "correct_answer", "marks", 
+            "difficulty", "bloom_level", "created_by", "created_at"
+        ]
 
 class QuestionPaperSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source="subject.name", read_only=True)
@@ -115,6 +120,203 @@ class OnlineTestAttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = OnlineTestAttempt
         fields = "__all__"
+
+    def get_student_name(self, obj):
+        if obj.student and hasattr(obj.student, "user") and obj.student.user:
+            return f"{obj.student.user.first_name} {obj.student.user.last_name}".strip()
+        return "Unknown"
+
+
+# ─── Online Test v2 Serializers ───────────────────────────────────────────────
+
+from .models import OnlineTest, TestQuestion, TestChoice, TestAttempt, TestAnswer
+
+
+class TestChoiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TestChoice
+        fields = ["id", "text", "is_correct", "order"]
+
+
+class TestQuestionSerializer(serializers.ModelSerializer):
+    choices = TestChoiceSerializer(many=True, read_only=True)
+    choices_data = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
+
+    class Meta:
+        model = TestQuestion
+        fields = [
+            "id", "test", "order", "question_type", "text", "marks",
+            "negative_marks", "is_required", "image", "accepted_answers",
+            "choices", "choices_data",
+        ]
+
+    def create(self, validated_data):
+        choices_data = validated_data.pop("choices_data", [])
+        question = TestQuestion.objects.create(**validated_data)
+        for i, choice in enumerate(choices_data):
+            TestChoice.objects.create(
+                question=question,
+                text=choice.get("text", ""),
+                is_correct=choice.get("is_correct", False),
+                order=choice.get("order", i),
+            )
+        return question
+
+    def update(self, instance, validated_data):
+        choices_data = validated_data.pop("choices_data", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if choices_data is not None:
+            instance.choices.all().delete()
+            for i, choice in enumerate(choices_data):
+                TestChoice.objects.create(
+                    question=instance,
+                    text=choice.get("text", ""),
+                    is_correct=choice.get("is_correct", False),
+                    order=choice.get("order", i),
+                )
+        return instance
+
+
+class OnlineTestSerializer(serializers.ModelSerializer):
+    test_questions = TestQuestionSerializer(many=True, read_only=True)
+    total_marks = serializers.ReadOnlyField()
+    question_count = serializers.ReadOnlyField()
+    section_name = serializers.SerializerMethodField()
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    attempt_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OnlineTest
+        fields = [
+            "id", "title", "description", "created_by", "section", "subject",
+            "grading_mode", "result_visibility", "duration_minutes",
+            "start_at", "end_at", "max_attempts", "shuffle_questions",
+            "is_published", "created_at", "updated_at",
+            "test_questions", "total_marks", "question_count",
+            "section_name", "subject_name", "created_by_name", "attempt_count",
+        ]
+
+    def get_section_name(self, obj):
+        if obj.section:
+            class_name = getattr(obj.section, "class_name", None)
+            if class_name:
+                return f"{class_name} - {obj.section.name}"
+            return obj.section.name
+        return ""
+
+    def get_created_by_name(self, obj):
+        if obj.created_by and obj.created_by.user:
+            u = obj.created_by.user
+            return f"{u.first_name} {u.last_name}".strip()
+        return ""
+
+    def get_attempt_count(self, obj):
+        return obj.attempts.count()
+
+
+class OnlineTestListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list views (no nested questions)."""
+    total_marks = serializers.ReadOnlyField()
+    question_count = serializers.ReadOnlyField()
+    section_name = serializers.SerializerMethodField()
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    attempt_count = serializers.SerializerMethodField()
+    graded_count = serializers.SerializerMethodField()
+    pending_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OnlineTest
+        fields = [
+            "id", "title", "description", "created_by", "section", "subject",
+            "grading_mode", "result_visibility", "duration_minutes",
+            "start_at", "end_at", "max_attempts", "shuffle_questions",
+            "is_published", "created_at",
+            "total_marks", "question_count",
+            "section_name", "subject_name", "created_by_name",
+            "attempt_count", "graded_count", "pending_count",
+        ]
+
+    def get_section_name(self, obj):
+        if obj.section:
+            class_name = getattr(obj.section, "class_name", None)
+            if class_name:
+                return f"{class_name} - {obj.section.name}"
+            return obj.section.name
+        return ""
+
+    def get_created_by_name(self, obj):
+        if obj.created_by and obj.created_by.user:
+            u = obj.created_by.user
+            return f"{u.first_name} {u.last_name}".strip()
+        return ""
+
+    def get_attempt_count(self, obj):
+        return obj.attempts.count()
+
+    def get_graded_count(self, obj):
+        return obj.attempts.filter(status__in=["graded", "published"]).count()
+
+    def get_pending_count(self, obj):
+        return obj.attempts.filter(status="submitted").count()
+
+
+class TestAnswerSerializer(serializers.ModelSerializer):
+    selected_choice_ids = serializers.PrimaryKeyRelatedField(
+        source="selected_choices", queryset=TestChoice.objects.all(),
+        many=True, required=False,
+    )
+    question_text = serializers.CharField(source="question.text", read_only=True)
+    question_type = serializers.CharField(source="question.question_type", read_only=True)
+    question_marks = serializers.DecimalField(source="question.marks", max_digits=6, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = TestAnswer
+        fields = [
+            "id", "attempt", "question", "selected_choice_ids",
+            "text_answer", "file_answer", "auto_score", "manual_score",
+            "teacher_remark", "is_correct",
+            "question_text", "question_type", "question_marks",
+        ]
+
+
+class TestAttemptSerializer(serializers.ModelSerializer):
+    answers = TestAnswerSerializer(many=True, read_only=True)
+    student_name = serializers.SerializerMethodField()
+    final_score = serializers.ReadOnlyField()
+    test_title = serializers.CharField(source="test.title", read_only=True)
+    total_marks = serializers.DecimalField(source="test.total_marks", max_digits=8, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = TestAttempt
+        fields = [
+            "id", "test", "student", "attempt_number", "started_at",
+            "submitted_at", "auto_score", "manual_score", "status",
+            "final_score", "answers", "student_name", "test_title", "total_marks",
+        ]
+
+    def get_student_name(self, obj):
+        if obj.student and hasattr(obj.student, "user") and obj.student.user:
+            return f"{obj.student.user.first_name} {obj.student.user.last_name}".strip()
+        return "Unknown"
+
+
+class TestAttemptListSerializer(serializers.ModelSerializer):
+    """Lightweight for list views."""
+    student_name = serializers.SerializerMethodField()
+    final_score = serializers.ReadOnlyField()
+
+    class Meta:
+        model = TestAttempt
+        fields = [
+            "id", "test", "student", "attempt_number", "started_at",
+            "submitted_at", "auto_score", "manual_score", "status",
+            "final_score", "student_name",
+        ]
 
     def get_student_name(self, obj):
         if obj.student and hasattr(obj.student, "user") and obj.student.user:

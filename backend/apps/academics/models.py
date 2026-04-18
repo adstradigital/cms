@@ -66,7 +66,7 @@ class Subject(models.Model):
     syllabus_master = models.ForeignKey(SyllabusMaster, on_delete=models.SET_NULL, null=True, blank=True, related_name="subject_instances")
     
     name = models.CharField(max_length=100) # Instance name (can override global name)
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20) # No longer globally unique
     description = models.TextField(blank=True)
     weekly_periods = models.PositiveSmallIntegerField(default=5, help_text="Number of periods per week for this subject.")
     color_code = models.CharField(max_length=20, default="#3b82f6")
@@ -78,6 +78,10 @@ class Subject(models.Model):
 
     class Meta:
         db_table = "subjects"
+        unique_together = [
+            ("school_class", "name"),
+            ("school_class", "code")
+        ]
 
 
 class SyllabusUnit(models.Model):
@@ -128,7 +132,8 @@ class SyllabusTopic(models.Model):
 class SubjectAllocation(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="allocations")
     section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="subject_allocations")
-    teachers = models.ManyToManyField(User, related_name="allocated_subjects", blank=True)
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name="allocated_subjects", null=True, blank=True)
+    substitute_teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="substitute_allocations", help_text="Temporary substitute teacher assignment.")
     academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="subject_allocations")
 
     def __str__(self):
@@ -224,11 +229,16 @@ class Homework(models.Model):
 
 
 class HomeworkSubmission(models.Model):
+    SUBMISSION_STATUS = [
+        ('draft', 'Draft'),
+        ('submitted', 'Submitted'),
+    ]
     homework = models.ForeignKey(Homework, on_delete=models.CASCADE, related_name="submissions")
     student = models.ForeignKey("students.Student", on_delete=models.CASCADE, related_name="homework_submissions")
     submitted_file = models.FileField(upload_to="homework/submissions/", null=True, blank=True)
     remarks = models.TextField(blank=True)
     grade = models.CharField(max_length=10, blank=True)
+    status = models.CharField(max_length=20, choices=SUBMISSION_STATUS, default='submitted')
     submitted_at = models.DateTimeField(auto_now_add=True)
     is_late = models.BooleanField(default=False)
 

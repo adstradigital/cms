@@ -167,6 +167,10 @@ const CanteenModule = ({ activeSegment }) => {
   const [loadingMap, setLoadingMap] = useState({});
   const setSecLoading = (key, val) => setLoadingMap(p => ({ ...p, [key]: val }));
 
+  useEffect(() => {
+    if (activeSegment) setMenuSub(activeSegment);
+  }, [activeSegment]);
+
   /* ─── Dashboard State ─── */
   const [dash, setDash] = useState(null);
   const loadDashboard = useCallback(async () => {

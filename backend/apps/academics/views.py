@@ -221,7 +221,8 @@ def auto_allocate_subjects(section, academic_year):
                 academic_year=academic_year
             )
             if created:
-                allocation.teachers.add(teacher)
+                allocation.teacher = teacher
+                allocation.save()
                 allocations_created.append(f"{subject.name} -> {teacher.get_full_name()}")
     
     return True, f"Auto-allocated {len(allocations_created)} subjects."
@@ -856,10 +857,20 @@ def subject_allocation_list_view(request):
         section_id = request.query_params.get("section")
         teacher_id = request.query_params.get("teacher")
         subject_id = request.query_params.get("subject")
-        qs = SubjectAllocation.objects.select_related("subject", "section").prefetch_related("teachers").all()
+        qs = SubjectAllocation.objects.select_related("subject", "section", "teacher", "substitute_teacher").all()
+        
+        user = request.user
+        # Strict filtering: if not a school admin, only show allocations where this user is primary or substitute
+        if not user.is_superuser and not (user.role and user.role.scope == 'school'):
+            qs = qs.filter(Q(teacher=user) | Q(substitute_teacher=user))
+
         if section_id: qs = qs.filter(section_id=section_id)
-        if teacher_id: qs = qs.filter(teachers__id=teacher_id)
+        if teacher_id: qs = qs.filter(Q(teacher_id=teacher_id) | Q(substitute_teacher_id=teacher_id))
         if subject_id: qs = qs.filter(subject_id=subject_id)
+        
+        # Add distinct() because filtering by OR can cause duplicates
+        qs = qs.distinct()
+        
         return Response(SubjectAllocationSerializer(qs, many=True).data)
     
     serializer = SubjectAllocationSerializer(data=request.data)
@@ -936,6 +947,14 @@ def timetable_settings_view(request):
         working_codes = [day_map[name] for name in working_day_names if name in day_map]
         
         ay.working_days = working_codes
+        
+        # Save full config
+        ay.timetable_config = {
+            "periods": request.data.get("periods", []),
+            "time_format": request.data.get("time_format", "24h"),
+            "time_zone": request.data.get("time_zone", "UTC"),
+            "locale": request.data.get("locale", "en-US"),
+        }
         ay.save()
         return Response({"message": "Settings updated."}, status=200)
 
@@ -944,12 +963,14 @@ def timetable_settings_view(request):
     day_name_map = {code: name for code, name in Timetable.DAY_CHOICES}
     working_day_names = [day_name_map[code] for code in working_codes if code in day_name_map]
 
+    config = ay.timetable_config if ay and ay.timetable_config else {}
+    
     return Response({
-        "standard_periods": 10,
-        "period_duration_minutes": 45,
-        "lunch_break_period": 4,
-        "school_start_time": "08:30",
-        "school_end_time": "17:00",
+        "standard_periods": config.get("standard_periods", 10),
+        "periods": config.get("periods", []),
+        "time_format": config.get("time_format", "24h"),
+        "time_zone": config.get("time_zone", "UTC"),
+        "locale": config.get("locale", "en-US"),
         "working_days": working_day_names
     }, status=status.HTTP_200_OK)
 

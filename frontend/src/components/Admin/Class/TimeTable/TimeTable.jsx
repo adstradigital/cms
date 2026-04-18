@@ -171,11 +171,11 @@ const TimeTable = () => {
       if (selectedSubject?.id && Number(a.subject) === Number(selectedSubject.id)) return true;
       return a.subject_name === slotForm.subject;
     });
-    const allowedTeacherIdsFromAllocations = new Set(
-      filteredAllocations
-        .flatMap((a) => (Array.isArray(a.teachers) ? a.teachers : []))
-        .map((id) => Number(id))
-    );
+    const allowedTeacherIdsFromAllocations = new Set();
+    filteredAllocations.forEach((a) => {
+      if (a.teacher) allowedTeacherIdsFromAllocations.add(Number(a.teacher));
+      if (a.substitute_teacher) allowedTeacherIdsFromAllocations.add(Number(a.substitute_teacher));
+    });
     const allowedTeacherIdsFromProfile = new Set(
       teachers
         .filter((teacher) =>
@@ -247,8 +247,8 @@ const TimeTable = () => {
         const sameSubject = Number(allocation.subject) === Number(subjectRow.id)
           || allocation.subject_name === subjectRow.name
           || (subjectObj && allocation.subject_name === subjectObj.name);
-        const hasTeachers = Array.isArray(allocation.teachers) && allocation.teachers.length > 0;
-        return sameSubject && hasTeachers;
+        const hasTeacher = Boolean(allocation.teacher || allocation.substitute_teacher);
+        return sameSubject && hasTeacher;
       });
       if (hasAllocationTeacher) return false;
       const hasProfileTeacher = teachers.some((teacher) =>
@@ -890,6 +890,18 @@ const TimeTable = () => {
     }
   };
 
+  const handleResetToDefaults = () => {
+    if (!window.confirm('Are you sure you want to reset all timetable settings (working days, periods, and time format) to their default values?')) return;
+    
+    setDraftDays([...DEFAULT_DAYS]);
+    setDraftPeriods([...DEFAULT_PERIODS]);
+    setTimeFormat('24h');
+    setTimeZone(DEFAULT_TIMEZONE);
+    setRegionLocale(DEFAULT_LOCALE);
+    
+    push('Settings reset to defaults in this modal. Click Save to apply.', 'info');
+  };
+
   const assignSubstitute = async () => {
     const teacher = teachers.find((t) => t.id === Number(selectedSubTeacherId));
     if (!teacher || !absence.isDetected) return;
@@ -1378,7 +1390,17 @@ const TimeTable = () => {
                 </div>
                 <button className={`${styles.btn} ${styles.outline}`} onClick={() => setDraftPeriods((prev) => [...prev, { label: `Period ${prev.length + 1}`, time: '00:00 - 00:00', isBreak: false }])}><Plus size={14} /> Add Period</button>
               </div>
-              <div className={styles.modalActions}><button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowSettingsModal(false)}>Cancel</button><button className={`${styles.btn} ${styles.primary}`} onClick={applySettings}><Check size={14} /> Save Settings</button></div>
+              <div className={styles.modalActions}>
+                <button 
+                  className={`${styles.btn} ${styles.outline}`} 
+                  onClick={handleResetToDefaults}
+                  style={{ marginRight: 'auto', color: '#ef4444', borderColor: '#fecaca' }}
+                >
+                  <RefreshCw size={14} /> Reset to Defaults
+                </button>
+                <button className={`${styles.btn} ${styles.outline}`} onClick={() => setShowSettingsModal(false)}>Cancel</button>
+                <button className={`${styles.btn} ${styles.primary}`} onClick={applySettings}><Check size={14} /> Save Settings</button>
+              </div>
             </div>
           </div>
         </div>

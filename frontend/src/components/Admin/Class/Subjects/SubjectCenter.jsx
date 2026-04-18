@@ -12,12 +12,20 @@ import {
   Search,
   Trash2,
   X,
+  AlertTriangle,
+  Shield,
 } from 'lucide-react';
 import styles from './Subjects.module.css';
 import adminApi from '@/api/adminApi';
 import LessonPlanner from './LessonPlanner';
+import { useAuth } from '@/context/AuthContext';
 
 const SubjectCenter = ({ section = null }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const isClassTeacher = user?.role === 'teacher' && section?.class_teacher === user?.id;
+  const canDeleteSubject = isAdmin || isClassTeacher;
+
   const sectionId = section?.id ? Number(section.id) : null;
   const forcedClassId = section?.school_class ? String(section.school_class) : '';
   const isSectionScoped = Boolean(sectionId);
@@ -49,9 +57,12 @@ const SubjectCenter = ({ section = null }) => {
   const [isAddingSubject, setIsAddingSubject] = useState(false);
   const [editingAllocation, setEditingAllocation] = useState(null);
 
-  const [newAlloc, setNewAlloc] = useState({ subject: '', section: '', teachers: [], academic_year: '' });
-  const [newSubject, setNewSubject] = useState({ name: '', code: '', description: '', school_class: forcedClassId, weekly_periods: 5 });
+  const [newAlloc, setNewAlloc] = useState({ subject: '', section: '', teacher: '', substitute_teacher: '', academic_year: '' });
+  const [newSubject, setNewSubject] = useState({ name: '', code: '', description: '', school_classes: forcedClassId ? [forcedClassId] : [], weekly_periods: 5 });
   const [selectedSectionStats, setSelectedSectionStats] = useState(0);
+  const [showAllTeachers, setShowAllTeachers] = useState(false);
+  const [isViewingAllocations, setIsViewingAllocations] = useState(false);
+  const [subjectForAllocations, setSubjectForAllocations] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -177,6 +188,24 @@ const SubjectCenter = ({ section = null }) => {
     return subjects.filter((s) => s.name.toLowerCase().includes(q) || (s.code || '').toLowerCase().includes(q));
   }, [subjects, query]);
 
+  const groupedSubjects = useMemo(() => {
+    const groups = {};
+    filteredSubjects.forEach(s => {
+      if (!groups[s.name]) {
+        groups[s.name] = {
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          description: s.description,
+          instances: [],
+          total_sections: 0,
+        };
+      }
+      groups[s.name].instances.push(s);
+    });
+    return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredSubjects]);
+
   const scopedSections = useMemo(() => {
     if (isSectionScoped) {
       return sections.filter((s) => Number(s.id) === sectionId);
@@ -185,13 +214,31 @@ const SubjectCenter = ({ section = null }) => {
     return sections.filter((s) => String(s.school_class || s.school_class_id) === String(selectedClassId));
   }, [isSectionScoped, sectionId, sections, selectedClassId]);
 
+  const filteredTeachers = useMemo(() => {
+    if (showAllTeachers || !newAlloc.subject) return teachers;
+    const selectedSubId = Number(newAlloc.subject);
+    const qualified = teachers.filter(t => 
+      Array.isArray(t.teaching_subject_ids) && t.teaching_subject_ids.includes(selectedSubId)
+    );
+    return qualified.length > 0 ? qualified : teachers;
+  }, [teachers, newAlloc.subject, showAllTeachers]);
+
+  const qualifiedCount = useMemo(() => {
+    if (!newAlloc.subject) return 0;
+    const selectedSubId = Number(newAlloc.subject);
+    return teachers.filter(t => 
+      Array.isArray(t.teaching_subject_ids) && t.teaching_subject_ids.includes(selectedSubId)
+    ).length;
+  }, [teachers, newAlloc.subject]);
+
   const openAllocationModal = (subjectId, allocation = null) => {
     if (allocation) {
       setEditingAllocation(allocation);
       setNewAlloc({
         subject: allocation.subject,
         section: allocation.section,
-        teachers: allocation.teachers || [],
+        teacher: allocation.teacher || '',
+        substitute_teacher: allocation.substitute_teacher || '',
         academic_year: allocation.academic_year || '',
       });
       const sectionObj = sections.find((s) => s.id === allocation.section);
@@ -203,24 +250,31 @@ const SubjectCenter = ({ section = null }) => {
         ...prev,
         subject: subjectId,
         section: isSectionScoped ? sectionId : '',
-        teachers: [],
+        teacher: '',
+        substitute_teacher: '',
         academic_year: prev.academic_year || '',
       }));
       setSelectedSectionStats(isSectionScoped ? (scopedSectionObj?.student_count || 0) : 0);
     }
     setIsAssigning(true);
   };
+  
+  const openSubjectAllocations = (subject) => {
+    setSubjectForAllocations(subject);
+    setIsViewingAllocations(true);
+  };
 
   const saveAllocation = async () => {
-    if (!newAlloc.subject || (!isSectionScoped && !newAlloc.section) || !newAlloc.academic_year || newAlloc.teachers.length === 0) {
-      alert('Please select class, academic year, and at least one teacher.');
+    if (!newAlloc.subject || (!isSectionScoped && !newAlloc.section) || !newAlloc.academic_year || !newAlloc.teacher) {
+      alert('Please select class, academic year, and a primary teacher.');
       return;
     }
     const payload = {
       subject: Number(newAlloc.subject),
       section: Number(isSectionScoped ? sectionId : newAlloc.section),
       academic_year: Number(newAlloc.academic_year),
-      teachers: newAlloc.teachers.map(Number),
+      teacher: Number(newAlloc.teacher),
+      substitute_teacher: newAlloc.substitute_teacher ? Number(newAlloc.substitute_teacher) : null,
     };
     try {
       if (editingAllocation) {
@@ -249,60 +303,131 @@ const SubjectCenter = ({ section = null }) => {
     }
   };
 
+  const handleDeleteSubject = async (id) => {
+    if (!window.confirm('WARNING: Deleting a subject will permanently remove all associated lesson plans, units, and chapters. Are you sure you want to proceed?')) return;
+    
+    try {
+      await adminApi.deleteSubject(id);
+      setSubjects(prev => prev.filter(s => s.id !== id));
+      // Also cleanup allocations related to this subject
+      setAllocations(prev => prev.filter(a => a.subject !== id));
+    } catch (err) {
+      alert('Failed to delete subject: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   const renderGridView = () => (
     <div className={styles.gridView}>
-      {filteredSubjects.map((subject) => {
-        const subjectAllocations = getSubjectAllocations(subject.id);
-        const topAllocation = subjectAllocations[0];
-        const progress = topAllocation ? getAllocationProgress(topAllocation, subject.id) : 0;
-        const currentTopic = topAllocation ? getCurrentTopicForAllocation(topAllocation) : 'No in-progress lesson';
+      {groupedSubjects.map((group) => {
+        const allSubjectIds = group.instances.map(i => i.id);
+        const groupAllocations = allocations.filter(a => allSubjectIds.includes(a.subject));
+        
+        // Calculate average progress across all instances
+        let totalProgress = 0;
+        group.instances.forEach(ins => {
+          const insAllocs = groupAllocations.filter(a => a.subject === ins.id);
+          if (insAllocs.length > 0) {
+            totalProgress += insAllocs.reduce((acc, a) => acc + getAllocationProgress(a, ins.id), 0) / insAllocs.length;
+          }
+        });
+        const averageProgress = group.instances.length > 0 ? Math.round(totalProgress / group.instances.length) : 0;
 
         return (
-          <div key={subject.id} className={styles.card}>
+          <div key={group.name} className={styles.card} style={{ cursor: 'pointer', borderTop: '4px solid var(--color-primary)' }} onClick={() => openSubjectAllocations(group.instances[0])}>
             <div className={styles.cardHeader}>
-              <div className={styles.subjectIcon}>{subject.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}</div>
+              <div className={styles.subjectIcon} style={{ borderRadius: '12px', background: 'var(--color-primary-light)' }}>
+                {group.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+              </div>
               <div className={styles.cardInfo} style={{ flex: 1, marginLeft: 16 }}>
-                <h3>{subject.name}</h3>
-                <span>{subject.code}</span>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: 2 }}>{group.name}</h3>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--theme-text-muted)', fontWeight: 700 }}>{group.code}</span>
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    background: '#f1f5f9',
+                    color: '#475569',
+                    borderRadius: 20,
+                    padding: '1px 8px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    {group.instances.length} Grade{group.instances.length !== 1 ? 's' : ''}
+                  </span>
+                  {groupAllocations.length > 0 && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      background: 'var(--color-primary)',
+                      color: 'white',
+                      borderRadius: 20,
+                      padding: '1px 8px'
+                    }}>
+                      {groupAllocations.length} Section{groupAllocations.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
-              <button className={styles.iconBtn} onClick={() => openAllocationModal(subject.id)}><Plus size={16} /></button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button className={styles.iconBtn} onClick={(e) => { e.stopPropagation(); setIsAddingSubject(true); setNewSubject(prev => ({ ...prev, name: group.name, code: group.code })); }} title="Add to more classes"><Plus size={16} /></button>
+              </div>
             </div>
 
-            <div className={styles.teacherBox}>
-              <div className={styles.avatar}>{(topAllocation?.teacher_names || 'A').split(',')[0].trim().split(' ').map((n) => n[0]).join('')}</div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: 11, color: 'var(--theme-text-muted)', fontWeight: 600 }}>Assigned Teacher(s)</span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{topAllocation?.teacher_names || 'Not Assigned'}</span>
+            <div className={styles.teacherBox} style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                  Active Classes ({group.instances.length})
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {group.instances.map(ins => (
+                    <div key={ins.id} style={{ 
+                      fontSize: 10, 
+                      fontWeight: 700, 
+                      padding: '4px 8px', 
+                      background: 'white', 
+                      border: '1px solid #e2e8f0', 
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}>
+                      {ins.school_class_name || `Class ${ins.school_class}`}
+                      {canDeleteSubject && (
+                        <Trash2 
+                          size={10} 
+                          style={{ color: '#ef4444', cursor: 'pointer', marginLeft: 4 }} 
+                          onClick={(e) => { e.stopPropagation(); handleDeleteSubject(ins.id); }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className={styles.progressSection}>
+            <div className={styles.progressSection} style={{ marginTop: 16 }}>
               <div className={styles.progressHeader}>
-                <span>Syllabus Progress</span>
-                <span style={{ color: 'var(--color-primary)' }}>{progress}%</span>
+                <span style={{ fontSize: 11, fontWeight: 700 }}>Overall Curriculum Progress</span>
+                <span style={{ color: 'var(--color-primary)', fontWeight: 800 }}>{averageProgress}%</span>
               </div>
               <div className={styles.progressBar}>
-                <div className={styles.progressFill} style={{ width: `${progress}%` }}></div>
+                <div className={styles.progressFill} style={{ width: `${averageProgress}%` }}></div>
               </div>
-              <span style={{ fontSize: 11, color: 'var(--theme-text-muted)' }}>
-                {topAllocation ? `${subjectAllocations.length} Classes Assigned` : 'No classes assigned yet'}
-              </span>
             </div>
 
-            <div className={styles.lessonInfo}>
+            <div className={styles.lessonInfo} style={{ border: 'none', background: 'transparent', padding: 0 }}>
               <BarChart2 size={14} color="var(--color-warning)" />
-              <span>Currently Teaching: <b>{currentTopic}</b></span>
+              <span style={{ fontSize: 11 }}>Active across all grades</span>
             </div>
 
             <button
-              className={`${styles.btn} ${styles.outline}`}
-              style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-              onClick={() => {
-                setSelectedSubject(subject);
-                setSelectedAllocation(topAllocation || null);
+              className={`${styles.btn} ${styles.primary}`}
+              style={{ width: '100%', justifyContent: 'center', marginTop: 12, borderRadius: '10px' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                openSubjectAllocations(group.instances[0]);
               }}
             >
-              <BookOpen size={16} /> Lesson Plan
+              Manage Subject
             </button>
           </div>
         );
@@ -316,49 +441,62 @@ const SubjectCenter = ({ section = null }) => {
         <thead>
           <tr>
             <th className={styles.th}>Subject Name</th>
-            <th className={styles.th}>Allocations</th>
-            <th className={styles.th}>Overall Progress</th>
+            <th className={styles.th}>Mapped Grades</th>
+            <th className={styles.th}>Total Sections</th>
+            <th className={styles.th}>Progress</th>
             <th className={styles.th}>Action</th>
           </tr>
         </thead>
         <tbody>
-          {filteredSubjects.map((subject) => {
-            const subjectAllocations = getSubjectAllocations(subject.id);
-            const totalProgress = subjectAllocations.length > 0
-              ? Math.round(subjectAllocations.reduce((acc, curr) => acc + getAllocationProgress(curr, subject.id), 0) / subjectAllocations.length)
-              : 0;
+          {groupedSubjects.map((group) => {
+            const allSubjectIds = group.instances.map(i => i.id);
+            const groupAllocations = allocations.filter(a => allSubjectIds.includes(a.subject));
+            
+            // Average progress
+            let totalP = 0;
+            group.instances.forEach(ins => {
+              const insAllocs = groupAllocations.filter(a => a.subject === ins.id);
+              if (insAllocs.length > 0) {
+                totalP += insAllocs.reduce((acc, a) => acc + getAllocationProgress(a, ins.id), 0) / insAllocs.length;
+              }
+            });
+            const avgP = group.instances.length > 0 ? Math.round(totalP / group.instances.length) : 0;
+
             return (
-              <tr key={subject.id}>
+              <tr key={group.name}>
                 <td className={styles.td}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div className={styles.avatar} style={{ background: 'var(--color-primary-light)', color: 'white', fontWeight: 700 }}>{subject.name[0]}</div>
+                    <div className={styles.avatar} style={{ background: 'var(--color-primary-light)', color: 'white', fontWeight: 700, borderRadius: 8 }}>{group.name[0]}</div>
                     <div>
-                      <div style={{ fontWeight: 700 }}>{subject.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--theme-text-muted)' }}>{subject.code}</div>
+                      <div style={{ fontWeight: 700 }}>{group.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--theme-text-muted)' }}>{group.code}</div>
                     </div>
                   </div>
                 </td>
                 <td className={styles.td}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {subjectAllocations.length > 0 ? subjectAllocations.map((a) => (
-                      <span key={a.id} className={styles.badge} style={{ background: 'var(--color-surface-hover)', border: '1px solid var(--theme-border)', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                        {a.section_name} • {a.teacher_names}
-                        <button className={styles.iconBtn} style={{ padding: 4 }} onClick={() => openAllocationModal(subject.id, a)}><Edit3 size={11} /></button>
-                        <button className={styles.iconBtn} style={{ padding: 4, color: '#ef4444' }} onClick={() => deleteAllocation(a.id)}><Trash2 size={11} /></button>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {group.instances.map(ins => (
+                      <span key={ins.id} style={{ fontSize: 10, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                        {ins.school_class_name || `Class ${ins.school_class}`}
                       </span>
-                    )) : <span style={{ color: 'var(--theme-text-muted)', fontSize: 12 }}>Not Assigned</span>}
+                    ))}
                   </div>
                 </td>
                 <td className={styles.td}>
+                  <span className={styles.badge} style={{ background: 'var(--color-primary)', color: 'white' }}>
+                    {groupAllocations.length} Section{groupAllocations.length !== 1 ? 's' : ''}
+                  </span>
+                </td>
+                <td className={styles.td}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className={styles.progressBar} style={{ flex: 1, minWidth: 100 }}><div className={styles.progressFill} style={{ width: `${totalProgress}%` }} /></div>
-                    <span style={{ fontWeight: 700, fontSize: 12 }}>{totalProgress}%</span>
+                    <div className={styles.progressBar} style={{ flex: 1, minWidth: 80 }}><div className={styles.progressFill} style={{ width: `${avgP}%` }} /></div>
+                    <span style={{ fontWeight: 800, fontSize: 12 }}>{avgP}%</span>
                   </div>
                 </td>
                 <td className={styles.td}>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className={styles.iconBtn} title="Lesson Plan" onClick={() => { setSelectedSubject(subject); setSelectedAllocation(subjectAllocations[0] || null); }}><BookOpen size={16} /></button>
-                    <button className={styles.iconBtn} title="Assign to Class" onClick={() => openAllocationModal(subject.id)}><Plus size={16} /></button>
+                    <button className={styles.iconBtn} title="Manage" onClick={() => openSubjectAllocations(group.instances[0])}><BookOpen size={16} /></button>
+                    <button className={styles.iconBtn} title="Add to Classes" onClick={() => { setIsAddingSubject(true); setNewSubject(p => ({ ...p, name: group.name, code: group.code })); }}><Plus size={16} /></button>
                   </div>
                 </td>
               </tr>
@@ -381,38 +519,25 @@ const SubjectCenter = ({ section = null }) => {
           </p>
         </div>
         <div className={styles.actionRow}>
-          <div className={styles.filters} style={{ marginRight: 12 }}>
-            <button className={styles.iconBtn} onClick={() => handleSetView('grid')} style={{ background: view === 'grid' ? 'var(--color-primary)' : 'white', color: view === 'grid' ? 'white' : 'inherit' }}><LayoutGrid size={18} /></button>
-            <button className={styles.iconBtn} onClick={() => handleSetView('list')} style={{ background: view === 'list' ? 'var(--color-primary)' : 'white', color: view === 'list' ? 'white' : 'inherit' }}><List size={18} /></button>
-          </div>
-          <button className={`${styles.btn} ${styles.primary}`} onClick={() => setIsAddingSubject(true)}><Plus size={18} /> Add Subject</button>
-        </div>
-      </div>
-
-      <div className={styles.toolbar}>
-        <div className={styles.searchWrapper}>
-          <Search size={18} className={styles.searchIcon} />
-          <input type="text" placeholder="Search subjects..." className={styles.searchInput} value={query} onChange={(e) => setQuery(e.target.value)} />
-        </div>
-        <div className={styles.filters}>
-          {!isSectionScoped ? (
-            <select
-              className={styles.select}
-              value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              style={{ minWidth: 200 }}
+          <div className={styles.filters}>
+            <button 
+              className={`${styles.iconBtn} ${view === 'grid' ? styles.iconBtnActive : ''}`} 
+              onClick={() => handleSetView('grid')}
+              title="Grid View"
             >
-              <option value="">All Classes</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          ) : (
-            <div className={styles.select} style={{ minWidth: 260, display: 'flex', alignItems: 'center' }}>
-              {section?.class_name || 'Class'} - {section?.name || 'Section'}
-            </div>
-          )}
-          <button className={`${styles.btn} ${styles.outline}`}><Filter size={18} /> Filters</button>
+              <LayoutGrid size={18} />
+            </button>
+            <button 
+              className={`${styles.iconBtn} ${view === 'list' ? styles.iconBtnActive : ''}`} 
+              onClick={() => handleSetView('list')}
+              title="List View"
+            >
+              <List size={18} />
+            </button>
+          </div>
+          <button className={`${styles.btn} ${styles.primary}`} onClick={() => setIsAddingSubject(true)}>
+            <Plus size={18} /> Add Subject
+          </button>
         </div>
       </div>
 
@@ -456,31 +581,55 @@ const SubjectCenter = ({ section = null }) => {
               </div>
 
               <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 8 }}>Teacher(s)</label>
-                <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, padding: 10, maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {teachers.map((t) => {
-                    const checked = newAlloc.teachers.includes(t.id);
-                    const fullName = t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email || `User ${t.id}`;
-                    return (
-                      <label key={t.id} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13 }}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            setNewAlloc((prev) => ({
-                              ...prev,
-                              teachers: e.target.checked ? [...prev.teachers, t.id] : prev.teachers.filter((id) => id !== t.id),
-                            }));
-                          }}
-                        />
-                        <span style={{ display: 'flex', flexDirection: 'column' }}>
-                          <b>{fullName}</b>
-                          <small style={{ color: '#64748b' }}>{t.subject_specialty || t.specialty || 'General'}</small>
-                        </span>
-                      </label>
-                    );
-                  })}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>Section Teacher</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', color: '#64748b' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={showAllTeachers} 
+                      onChange={(e) => setShowAllTeachers(e.target.checked)}
+                    />
+                    Show all staff
+                  </label>
                 </div>
+                <p style={{ fontSize: 11, color: '#64748b', marginBottom: 8, marginTop: 0 }}>
+                  One teacher per section. Different sections can have different teachers.
+                </p>
+                <select 
+                  className={styles.select} 
+                  style={{ width: '100%' }} 
+                  value={newAlloc.teacher} 
+                  onChange={(e) => setNewAlloc((prev) => ({ ...prev, teacher: e.target.value }))}
+                >
+                  <option value="">-- Select primary teacher --</option>
+                  {filteredTeachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email} ({t.subject_specialty || 'General'})
+                    </option>
+                  ))}
+                </select>
+                {!showAllTeachers && qualifiedCount > 0 && (
+                  <p style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>
+                    Showing {qualifiedCount} qualified teachers for this subject.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 8 }}>Substitute Teacher (Optional)</label>
+                <select 
+                  className={styles.select} 
+                  style={{ width: '100%' }} 
+                  value={newAlloc.substitute_teacher} 
+                  onChange={(e) => setNewAlloc((prev) => ({ ...prev, substitute_teacher: e.target.value }))}
+                >
+                  <option value="">-- No substitute --</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id} disabled={String(t.id) === String(newAlloc.teacher)}>
+                      {t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -522,19 +671,31 @@ const SubjectCenter = ({ section = null }) => {
                 <textarea className={styles.searchInput} style={{ width: '100%', paddingLeft: 12, marginTop: 4, minHeight: 80, paddingTop: 10 }} placeholder="General syllabus overview..." value={newSubject.description} onChange={(e) => setNewSubject({ ...newSubject, description: e.target.value })} />
               </div>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 600 }}>Class</label>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 8 }}>Select Class(es)</label>
+                <p style={{ fontSize: 11, color: '#64748b', marginTop: -4, marginBottom: 8 }}>Assign this subject to multiple grades at once</p>
                 {!isSectionScoped ? (
-                  <select
-                    className={styles.select}
-                    style={{ width: '100%', marginTop: 4 }}
-                    value={newSubject.school_class}
-                    onChange={(e) => setNewSubject({ ...newSubject, school_class: e.target.value })}
-                  >
-                    <option value="">-- Select class --</option>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, maxHeight: 150, overflowY: 'auto', padding: 12, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
                     {classes.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={newSubject.school_classes.includes(String(c.id))}
+                          onChange={(e) => {
+                            const cid = String(c.id);
+                            const current = [...newSubject.school_classes];
+                            if (e.target.checked) {
+                              if (!current.includes(cid)) current.push(cid);
+                            } else {
+                              const idx = current.indexOf(cid);
+                              if (idx > -1) current.splice(idx, 1);
+                            }
+                            setNewSubject({ ...newSubject, school_classes: current });
+                          }}
+                        />
+                        {c.name}
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 ) : (
                   <input className={styles.searchInput} readOnly style={{ width: '100%', paddingLeft: 12, marginTop: 4 }} value={section?.class_name || ''} />
                 )}
@@ -557,28 +718,143 @@ const SubjectCenter = ({ section = null }) => {
                   className={`${styles.btn} ${styles.primary}`}
                   style={{ flex: 1 }}
                   onClick={async () => {
-                    if (!newSubject.school_class) {
-                      alert('Please select class for this subject.');
+                    if (newSubject.school_classes.length === 0) {
+                      alert('Please select at least one class for this subject.');
                       return;
                     }
                     try {
-                      const payload = {
-                        ...newSubject,
-                        school_class: Number(newSubject.school_class),
-                        weekly_periods: Number(newSubject.weekly_periods || 5),
-                      };
-                      const res = await adminApi.createSubject(payload);
-                      setSubjects((prev) => [res.data, ...prev]);
+                      setLoading(true);
+                      const promises = newSubject.school_classes.map(cid => {
+                        const payload = {
+                          name: newSubject.name,
+                          code: newSubject.code,
+                          description: newSubject.description,
+                          school_class: Number(cid),
+                          weekly_periods: Number(newSubject.weekly_periods || 5),
+                        };
+                        return adminApi.createSubject(payload);
+                      });
+                      
+                      const results = await Promise.all(promises);
+                      const newSubs = results.map(r => r.data);
+                      setSubjects((prev) => [...newSubs, ...prev]);
                       setIsAddingSubject(false);
-                      setNewSubject({ name: '', code: '', description: '', school_class: forcedClassId || '', weekly_periods: 5 });
+                      setNewSubject({ name: '', code: '', description: '', school_classes: forcedClassId ? [forcedClassId] : [], weekly_periods: 5 });
                     } catch (err) {
-                      alert(err?.response?.data?.error || 'Creation failed. Check class and subject code.');
+                      alert(err?.response?.data?.error || 'One or more subject creations failed. Check for duplicate codes.');
+                    } finally {
+                      setLoading(false);
                     }
                   }}
                 >
-                  Create Master
+                  Create Global Subject
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {isViewingAllocations && subjectForAllocations && (
+        <div className={styles.modalOverlay} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: 32, borderRadius: 24, width: 700, maxWidth: '95%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--color-primary)' }}>{subjectForAllocations.name} Master Control</h3>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--theme-text-muted)' }}>Manage the qualified teacher pool and section assignments</p>
+              </div>
+              <button className={styles.iconBtn} onClick={() => setIsViewingAllocations(false)}><X size={24} /></button>
+            </div>
+
+            {/* TEACHER POOL SECTION */}
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <div style={{ padding: '6px', background: 'var(--color-primary-light)', borderRadius: 8, color: 'white' }}><Shield size={18} /></div>
+                <h4 style={{ margin: 0, fontSize: 16 }}>Qualified Teacher Pool</h4>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: 20, background: '#f1f5f9', borderRadius: 16, border: '1px dashed #cbd5e1' }}>
+                {teachers.filter(t => Array.isArray(t.teaching_subject_ids) && t.teaching_subject_ids.includes(subjectForAllocations.id)).length === 0 ? (
+                  <div style={{ textAlign: 'center', width: '100%', padding: '10px 0', color: '#64748b', fontSize: 13 }}>
+                    No teachers have been linked to this subject yet. Go to Staff Directory to add them.
+                  </div>
+                ) : (
+                  teachers.filter(t => Array.isArray(t.teaching_subject_ids) && t.teaching_subject_ids.includes(subjectForAllocations.id)).map(t => (
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'white', padding: '8px 12px', borderRadius: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                      <div className={styles.avatar} style={{ width: 32, height: 32, fontSize: 12, background: 'var(--color-primary)' }}>
+                        {(t.full_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{t.full_name}</span>
+                        <span style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>{t.specialization || 'Qualified'}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* ALLOCATIONS SECTION */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <div style={{ padding: '6px', background: '#6366f1', borderRadius: 8, color: 'white' }}><BookOpen size={18} /></div>
+                <h4 style={{ margin: 0, fontSize: 16 }}>Section Assignments</h4>
+              </div>
+              <div className={styles.tableWrapper} style={{ background: '#f8fafc', borderRadius: 16, padding: 8 }}>
+                <table className={styles.table} style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: 12 }}>Section</th>
+                      <th style={{ textAlign: 'left', padding: 12 }}>Current Teacher</th>
+                      <th style={{ textAlign: 'center', padding: 12 }}>Status</th>
+                      <th style={{ textAlign: 'right', padding: 12 }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getSubjectAllocations(subjectForAllocations.id).length === 0 ? (
+                      <tr>
+                        <td colSpan="4" style={{ textAlign: 'center', padding: 40, color: 'var(--theme-text-muted)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                            <AlertTriangle size={32} color="#94a3b8" />
+                            <span>No sections have been assigned to this subject yet.</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      getSubjectAllocations(subjectForAllocations.id).map((alloc) => (
+                        <tr key={alloc.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                          <td style={{ padding: 12, fontWeight: 700 }}>{alloc.section_name}</td>
+                          <td style={{ padding: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div className={styles.avatar} style={{ width: 28, height: 28, fontSize: 11, background: alloc.teacher_name ? 'var(--color-primary)' : '#e2e8f0' }}>
+                                {(alloc.teacher_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <span style={{ fontSize: 14 }}>{alloc.teacher_name || 'Not Assigned'}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: 12, textAlign: 'center' }}>
+                            {alloc.teacher_name ? (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '4px 8px', borderRadius: 12 }}>ACTIVE</span>
+                            ) : (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: '#fef2f2', padding: '4px 8px', borderRadius: 12 }}>UNASSIGNED</span>
+                            )}
+                          </td>
+                          <td style={{ padding: 12, textAlign: 'right' }}>
+                            <button className={styles.iconBtn} onClick={() => { setIsViewingAllocations(false); openAllocationModal(subjectForAllocations.id, alloc); }}>
+                              <Edit3 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button className={styles.btn} onClick={() => setIsViewingAllocations(false)}>Close Overview</button>
+              <button className={`${styles.btn} ${styles.primary}`} onClick={() => { setIsViewingAllocations(false); openAllocationModal(subjectForAllocations.id); }}>
+                <Plus size={16} /> Add New Section
+              </button>
             </div>
           </div>
         </div>

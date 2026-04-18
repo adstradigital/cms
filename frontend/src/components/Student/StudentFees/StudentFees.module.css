@@ -1,0 +1,368 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.titleArea h1 {
+  font-size: 28px;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.titleArea p {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* PREMIUM RIBBON (Standard Console Pattern) */
+.achievementRibbon {
+  background: #0f172a;
+  padding: 40px;
+  border-radius: 24px;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.achievementMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gaugeCol {
+  flex: 0 0 160px;
+}
+
+.circularGauge {
+  position: relative;
+  width: 110px;
+  height: 110px;
+}
+
+.circularGauge svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gaugeBg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.05);
+  stroke-width: 8;
+}
+
+.gaugeFill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 283;
+  transition: stroke-dashoffset 1s ease;
+}
+
+.gaugeContent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gaugeValue {
+  font-size: 24px;
+  font-weight: 800;
+  color: white;
+}
+
+.gaugeLabel {
+  font-size: 8px;
+  font-weight: 800;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.verticalDivider {
+  width: 1px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.metricCol {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+}
+
+.metricIconBox {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.metricText {
+  display: flex;
+  flex-direction: column;
+}
+
+.metricValue {
+  font-size: 20px;
+  font-weight: 800;
+  color: white;
+}
+
+.metricLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+/* MAIN LAYOUT */
+.mainLayout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+}
+
+.historyCard {
+  background: white;
+  padding: 32px;
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tableLegend {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.feesTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.feesTable th {
+  text-align: left;
+  padding: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.feesTable td {
+  padding: 20px 16px;
+  font-size: 14px;
+  color: #475569;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dateCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.receiptNo {
+  font-family: monospace;
+  font-weight: 700;
+  color: #4f46e5;
+}
+
+.categoryCell {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.methodBadge {
+  padding: 4px 10px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.amountCell {
+  font-weight: 800;
+  color: #1e293b;
+  font-size: 16px;
+}
+
+.textRight { text-align: right; }
+
+.statusBadge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.statusBadge.paid { background: #dcfce7; color: #166534; }
+.statusBadge.pending { background: #fef9c3; color: #854d0e; }
+
+/* SIDE PANEL */
+.sidePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.alertCard {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  padding: 24px;
+  border-radius: 24px;
+}
+
+.alertHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.alertIcon {
+  width: 40px;
+  height: 40px;
+  background: #fb7185;
+  color: white;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.alertHeader h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #9f1239;
+}
+
+.alertCard p {
+  font-size: 13px;
+  color: #be123c;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.payNowBtn {
+  width: 100%;
+  padding: 14px;
+  background: #e11d48;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.payNowBtn:hover { background: #be123c; }
+
+.supportCard {
+  background: white;
+  padding: 24px;
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.supportIcon {
+  width: 48px;
+  height: 48px;
+  background: #eff6ff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.supportInfo h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.supportInfo p {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.detailsBtn {
+  width: 100%;
+  padding: 10px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 12px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.loader {
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #64748b;
+}
+
+.emptyState {
+  padding: 120px 40px;
+  background: white;
+  border-radius: 32px;
+  border: 2px dashed #e2e8f0;
+  text-align: center;
+  color: #64748b;
+}

@@ -1,10 +1,12 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Database, FileText, CheckCircle, Search, Plus, Loader2, X, ArrowUp, ArrowDown, Bold, Italic, Underline, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Printer, Download, Save, Eye, Layers, GitBranch, BarChart3, Space, Type } from 'lucide-react';
+import { Database, FileText, CheckCircle, Search, Plus, Loader2, X, ArrowUp, ArrowDown, Bold, Italic, Underline, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Printer, Download, Save, Eye, Layers, GitBranch, BarChart3, Space, Type, Trash2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import adminApi from '@/api/adminApi';
+import authApi from '@/api/authApi';
 import styles from './QuestionPaper.module.css';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
 
 export default function QuestionPaperTab() {
   const [questions, setQuestions] = useState([]);
@@ -18,7 +20,11 @@ export default function QuestionPaperTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [paginationInfo, setPaginationInfo] = useState({ count: 0, next: null, previous: null });
-  
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isWipeModalOpen, setIsWipeModalOpen] = useState(false);
+  const [wipeReason, setWipeReason] = useState('');
+  const [wiping, setWiping] = useState(false);
+
   // Builder State
   const [isBuildingPaper, setIsBuildingPaper] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -31,7 +37,7 @@ export default function QuestionPaperTab() {
   // OR links: array of [questionId1, questionId2] pairs
   const [orLinks, setOrLinks] = useState([]);
   const [builderFormData, setBuilderFormData] = useState({
-    schoolName: 'BLAZE INTERNATIONAL SCHOOL',
+    schoolName: 'CAMPUS MANAGEMENT SYSTEM',
     name: '',
     subject: '',
     subjectName: '',
@@ -58,20 +64,36 @@ export default function QuestionPaperTab() {
     options: {}
   });
 
+  useEffect(() => {
+    const fetchInitial = async () => {
+      try {
+        const [profileRes] = await Promise.all([authApi.getProfile()]);
+        setCurrentUser(profileRes.data);
+        fetchData();
+      } catch (e) {
+        console.error("Error fetching profile:", e);
+        fetchData();
+      }
+    };
+    fetchInitial();
+  }, []);
+
+  const isAdmin = currentUser?.portal === 'admin' || currentUser?.is_superuser;
+
   const fetchData = async () => {
     setLoading(true);
     try {
       const [qRes, pRes, sRes, cRes] = await Promise.all([
-        adminApi.getQuestionBank({ 
-          search: searchTerm, 
+        adminApi.getQuestionBank({
+          search: searchTerm,
           subject: selectedSubject,
-          page: currentPage 
+          page: currentPage
         }),
         adminApi.getQuestionPapers(),
         adminApi.getSubjects(),
         adminApi.getClasses() // Fetch classes
       ]);
-      
+
       if (qRes.data.results) {
         setQuestions(qRes.data.results);
         setPaginationInfo({
@@ -82,10 +104,10 @@ export default function QuestionPaperTab() {
       } else {
         setQuestions(qRes.data || []);
       }
-      
+
       setPapers(pRes.data || []);
       setSubjects(sRes.data || []);
-      setClasses(cRes.data || []); 
+      setClasses(cRes.data || []);
     } catch (error) {
       console.error("Error fetching question data:", error);
     } finally {
@@ -103,6 +125,26 @@ export default function QuestionPaperTab() {
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, selectedSubject, currentPage]); // We don't fetch differently by selectedClass, we filter locally.
+
+  const handleDeleteQuestion = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this question from the bank?")) return;
+    try {
+      await adminApi.deleteQuestion(id);
+      fetchData();
+    } catch (error) {
+      alert("Error deleting question: " + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleDeletePaper = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this question paper?")) return;
+    try {
+      await adminApi.deleteQuestionPaper(id);
+      fetchData();
+    } catch (error) {
+      alert("Error deleting paper: " + (error.response?.data?.error || error.message));
+    }
+  };
 
   const filteredSubjects = selectedClass
     ? subjects.filter(s => s.school_class === parseInt(selectedClass))
@@ -182,10 +224,10 @@ export default function QuestionPaperTab() {
     const sq = selectedQuestions[index];
     if (!sq) return;
     const qid = sq.id || sq.tempId;
-    
+
     // Check if it's in a section
     const inSection = sections.find(s => s.questionIds?.includes(qid));
-    
+
     if (inSection) {
       setSections(prev => prev.map(s => {
         if (s.id !== inSection.id) return s;
@@ -225,7 +267,7 @@ export default function QuestionPaperTab() {
   };
 
   const handleAddManualQuestion = () => {
-    if(!manualEntry.text) return;
+    if (!manualEntry.text) return;
     const qid = `manual_${Date.now()}`;
     const newQ = {
       tempId: qid,
@@ -305,7 +347,8 @@ export default function QuestionPaperTab() {
     const desc = selectedQuestions.filter(q => ['Descriptive', 'DESC'].includes(q.question_type || q.type || '')).length;
     const tf = selectedQuestions.filter(q => (q.question_type || q.type || '') === 'True/False').length;
     const totalMarks = selectedQuestions.reduce((s, q) => s + parseFloat(q.marks || 0), 0);
-    return { total, easy, medium, hard, mcq, desc, tf, totalMarks,
+    return {
+      total, easy, medium, hard, mcq, desc, tf, totalMarks,
       easyPct: Math.round((easy / total) * 100),
       mediumPct: Math.round((medium / total) * 100),
       hardPct: Math.round((hard / total) * 100),
@@ -317,7 +360,7 @@ export default function QuestionPaperTab() {
       const res = await adminApi.getQuestionPaperDetail(paperId);
       const paper = res.data;
       setBuilderFormData({
-        schoolName: 'BLAZE INTERNATIONAL SCHOOL',
+        schoolName: 'CAMPUS MANAGEMENT SYSTEM',
         name: paper.name,
         subject: paper.subject || '',
         subjectName: paper.subject_name || '',
@@ -341,7 +384,7 @@ export default function QuestionPaperTab() {
       const res = await adminApi.getQuestionPaperDetail(paperId);
       const paper = res.data;
       setBuilderFormData({
-        schoolName: 'BLAZE INTERNATIONAL SCHOOL',
+        schoolName: 'CAMPUS MANAGEMENT SYSTEM',
         name: paper.name,
         subject: paper.subject || '',
         subjectName: paper.subject_name || '',
@@ -373,7 +416,7 @@ export default function QuestionPaperTab() {
       return;
     }
     const totalMarks = selectedQuestions.reduce((sum, q) => sum + parseFloat(q.marks), 0);
-    
+
     // Extract manual questions
     const manualQuestions = selectedQuestions.filter(q => q.isManualEntry);
     let finalIds = selectedQuestions.filter(q => !q.isManualEntry).map(q => q.id);
@@ -381,16 +424,16 @@ export default function QuestionPaperTab() {
     try {
       // Auto-save manual questions to bank
       for (let mq of manualQuestions) {
-         const qData = {
-           subject: builderFormData.subject,
-           question_text: mq.text,
-           marks: mq.marks,
-           question_type: mq.type,
-           difficulty: 'Medium',
-           bloom_level: 'Apply'
-         };
-         const res = await adminApi.createQuestion(qData);
-         finalIds.push(res.data.id);
+        const qData = {
+          subject: builderFormData.subject,
+          question_text: mq.text,
+          marks: mq.marks,
+          question_type: mq.type,
+          difficulty: 'Medium',
+          bloom_level: 'Apply'
+        };
+        const res = await adminApi.createQuestion(qData);
+        finalIds.push(res.data.id);
       }
 
       const payload = {
@@ -404,21 +447,21 @@ export default function QuestionPaperTab() {
       } else {
         await adminApi.createQuestionPaper(payload);
       }
-      
+
       setIsBuildingPaper(false);
       setEditingId(null);
       setIsPreviewMode(false);
       setSelectedQuestions([]);
       setSections([]);
       setOrLinks([]);
-      setBuilderFormData({ 
-        schoolName: 'BLAZE INTERNATIONAL SCHOOL', 
-        name: '', 
-        subject: '', 
+      setBuilderFormData({
+        schoolName: 'CAMPUS MANAGEMENT SYSTEM',
+        name: '',
+        subject: '',
         subjectName: '',
         className: '',
-        date: '', 
-        instructions: 'Attempt all questions. Marks are indicated against each question.', 
+        date: '',
+        instructions: 'Attempt all questions. Marks are indicated against each question.',
         duration_minutes: 60,
         total_marks: ''
       });
@@ -818,121 +861,121 @@ export default function QuestionPaperTab() {
     };
 
     const renderManualEntryBox = (sectionId = null) => (
-      <div className={styles.manualEntryBox} style={{marginTop: sectionId ? '12px' : '0'}}>
-        {sectionId && <div style={{fontSize: '0.8rem', fontWeight: 600, color: '#2563eb', marginBottom: '10px'}}>Adding Question to: {sections.find(s=>s.id===sectionId)?.title}</div>}
-        <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
-          <textarea 
-            className={styles.toolbarInput} 
-            style={{flex: 1, resize: 'vertical', minHeight: '60px'}} 
+      <div className={styles.manualEntryBox} style={{ marginTop: sectionId ? '12px' : '0' }}>
+        {sectionId && <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#2563eb', marginBottom: '10px' }}>Adding Question to: {sections.find(s => s.id === sectionId)?.title}</div>}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+          <textarea
+            className={styles.toolbarInput}
+            style={{ flex: 1, resize: 'vertical', minHeight: '60px' }}
             placeholder="Type a new question to add directly to paper..."
             value={manualEntry.text}
-            onChange={e => setManualEntry({...manualEntry, text: e.target.value})}
+            onChange={e => setManualEntry({ ...manualEntry, text: e.target.value })}
           />
-          <div style={{display: 'flex', flexDirection: 'column', gap: '8px', width: '120px'}}>
-            <input 
-              className={styles.toolbarInput} 
-              type="number" 
-              placeholder="Marks" 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '120px' }}>
+            <input
+              className={styles.toolbarInput}
+              type="number"
+              placeholder="Marks"
               value={manualEntry.marks}
-              onChange={e => setManualEntry({...manualEntry, marks: e.target.value})}
+              onChange={e => setManualEntry({ ...manualEntry, marks: e.target.value })}
             />
-            <select 
-              className={styles.toolbarSelect} 
-              style={{minWidth: '100%'}}
+            <select
+              className={styles.toolbarSelect}
+              style={{ minWidth: '100%' }}
               value={manualEntry.type}
-              onChange={e => setManualEntry({...manualEntry, type: e.target.value})}
+              onChange={e => setManualEntry({ ...manualEntry, type: e.target.value })}
             >
               <option>Descriptive</option>
               <option>MCQ</option>
               <option>True/False</option>
             </select>
           </div>
-          <button className={styles.btnWordPrimary} style={{height: '40px'}} onClick={handleAddManualQuestion}>Insert</button>
+          <button className={styles.btnWordPrimary} style={{ height: '40px' }} onClick={handleAddManualQuestion}>Insert</button>
         </div>
         {!sectionId && sections.length === 0 && (
-          <div style={{display: 'flex', gap: '8px', marginTop: '12px'}}>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
             <button className={styles.btnSectionAction} onClick={() => handleAddTextBlock(null)}>
-              <Type size={14} style={{marginRight: '6px'}}/> Add Text/Heading
+              <Type size={14} style={{ marginRight: '6px' }} /> Add Text/Heading
             </button>
           </div>
         )}
-        <div style={{fontSize: '0.75rem', color: '#64748b', marginTop: '8px'}}>* Questions typed here will automatically be saved to the Question Bank upon saving the document.</div>
+        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '8px' }}>* Questions typed here will automatically be saved to the Question Bank upon saving the document.</div>
       </div>
     );
-    
+
     return (
       <div className={styles.wordBuilderContainer}>
         {/* Word Toolbar */}
         <div className={styles.wordToolbar}>
           <div className={styles.toolbarGroup}>
             <button className={styles.btnWordSecondary} onClick={() => setIsBuildingPaper(false)}>Close</button>
-            <div style={{height: '24px', width: '1px', background: '#cbd5e1', margin: '0 8px'}}></div>
+            <div style={{ height: '24px', width: '1px', background: '#cbd5e1', margin: '0 8px' }}></div>
             <select className={styles.toolbarSelect} value={selectedClass} onChange={e => {
               const val = e.target.value;
               setSelectedClass(val);
               const cls = classes.find(c => c.id === parseInt(val));
-              setBuilderFormData(prev => ({...prev, className: cls?.name || ''}));
+              setBuilderFormData(prev => ({ ...prev, className: cls?.name || '' }));
             }} disabled={isPreviewMode}>
-               <option value="">Select Class...</option>
-               {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="">Select Class...</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <select className={styles.toolbarSelect} value={builderFormData.subject} onChange={e => {
               const val = e.target.value;
               const subj = filteredSubjects.find(s => s.id === parseInt(val));
-              setBuilderFormData(prev => ({...prev, subject: val, subjectName: subj?.name || ''}));
+              setBuilderFormData(prev => ({ ...prev, subject: val, subjectName: subj?.name || '' }));
             }} disabled={isPreviewMode}>
-               <option value="">Select Subject...</option>
-               {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name} {s.class_name ? `(${s.class_name})` : ''}</option>)}
+              <option value="">Select Subject...</option>
+              {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name} {s.class_name ? `(${s.class_name})` : ''}</option>)}
             </select>
-            <input 
-              className={styles.toolbarInput} 
-              type="text" 
-              placeholder="Exam Title" 
-              value={builderFormData.name} 
-              onChange={e => setBuilderFormData({...builderFormData, name: e.target.value})}
+            <input
+              className={styles.toolbarInput}
+              type="text"
+              placeholder="Exam Title"
+              value={builderFormData.name}
+              onChange={e => setBuilderFormData({ ...builderFormData, name: e.target.value })}
               disabled={isPreviewMode}
             />
-            <input 
-              className={styles.toolbarInput} 
-              type="date" 
+            <input
+              className={styles.toolbarInput}
+              type="date"
               title="Date of Exam"
-              value={builderFormData.date} 
-              onChange={e => setBuilderFormData({...builderFormData, date: e.target.value})}
+              value={builderFormData.date}
+              onChange={e => setBuilderFormData({ ...builderFormData, date: e.target.value })}
               disabled={isPreviewMode}
             />
-            <div style={{display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap'}}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
               Duration:
-              <input 
-                className={styles.toolbarInput} 
-                style={{width: '60px'}}
-                type="number" 
-                placeholder="Mins" 
-                value={builderFormData.duration_minutes} 
-                onChange={e => setBuilderFormData({...builderFormData, duration_minutes: e.target.value})}
+              <input
+                className={styles.toolbarInput}
+                style={{ width: '60px' }}
+                type="number"
+                placeholder="Mins"
+                value={builderFormData.duration_minutes}
+                onChange={e => setBuilderFormData({ ...builderFormData, duration_minutes: e.target.value })}
                 disabled={isPreviewMode}
               />
-              <span style={{color: '#64748b', fontSize: '0.7rem'}}>({formatDuration(builderFormData.duration_minutes)})</span>
+              <span style={{ color: '#64748b', fontSize: '0.7rem' }}>({formatDuration(builderFormData.duration_minutes)})</span>
             </div>
           </div>
-          <div className={styles.toolbarGroup} style={{whiteSpace: 'nowrap'}}>
-            <div style={{fontSize: '0.875rem', fontWeight: 600, color: '#475569'}}>Total Marks: {displayMarks}</div>
+          <div className={styles.toolbarGroup} style={{ whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>Total Marks: {displayMarks}</div>
             {!isPreviewMode && (
               <button className={styles.btnWordSecondary} onClick={() => {
                 setTargetSectionId(null);
                 if (builderFormData.subject) setSelectedSubject(builderFormData.subject);
                 setIsBankModalOpen(true);
               }}>
-                <Database size={16} style={{marginRight: '6px'}}/> Pick from Bank
+                <Database size={16} style={{ marginRight: '6px' }} /> Pick from Bank
               </button>
             )}
             <button className={styles.btnIconSm} onClick={handlePrint} title="Print">
-              <Printer size={15}/>
+              <Printer size={15} />
             </button>
             <button className={styles.btnIconSm} onClick={handleDownloadPDF} title="Download PDF">
-              <Download size={15}/>
+              <Download size={15} />
             </button>
-            <button className={styles.btnIconSm} onClick={handleSavePaper} title={isPreviewMode ? 'Close Preview' : 'Save Document'} style={isPreviewMode ? {} : {background: 'var(--color-primary, #2563eb)', color: '#fff', borderColor: 'var(--color-primary, #2563eb)'}}>
-              {isPreviewMode ? <Eye size={15}/> : <Save size={15}/>}
+            <button className={styles.btnIconSm} onClick={handleSavePaper} title={isPreviewMode ? 'Close Preview' : 'Save Document'} style={isPreviewMode ? {} : { background: 'var(--color-primary, #2563eb)', color: '#fff', borderColor: 'var(--color-primary, #2563eb)' }}>
+              {isPreviewMode ? <Eye size={15} /> : <Save size={15} />}
             </button>
           </div>
         </div>
@@ -941,296 +984,307 @@ export default function QuestionPaperTab() {
         <div className={styles.wordWorkspace}>
           <div className={styles.a4Paper} ref={printRef}>
             <div className={styles.a4Header}>
-              
+
               <h1 className={styles.schoolName}>
-                 <input 
-                   className={styles.inlineHeaderInput} 
-                   value={builderFormData.schoolName} 
-                   onChange={e => setBuilderFormData({...builderFormData, schoolName: e.target.value})}
-                   placeholder="SCHOOL NAME"
-                   disabled={isPreviewMode}
-                 />
+                <input
+                  className={styles.inlineHeaderInput}
+                  value={builderFormData.schoolName}
+                  onChange={e => setBuilderFormData({ ...builderFormData, schoolName: e.target.value })}
+                  placeholder="SCHOOL NAME"
+                  disabled={isPreviewMode}
+                />
               </h1>
               <h2 className={styles.examTitle}>
-                 <input 
-                   className={styles.inlineHeaderInput} 
-                   value={builderFormData.name} 
-                   onChange={e => setBuilderFormData({...builderFormData, name: e.target.value})}
-                   placeholder="EXAMINATION TITLE"
-                   disabled={isPreviewMode}
-                 />
+                <input
+                  className={styles.inlineHeaderInput}
+                  value={builderFormData.name}
+                  onChange={e => setBuilderFormData({ ...builderFormData, name: e.target.value })}
+                  placeholder="EXAMINATION TITLE"
+                  disabled={isPreviewMode}
+                />
               </h2>
 
-              <div style={{display: 'flex', justifyContent: 'space-between', margin: '20px 0 15px', paddingBottom: '10px', borderBottom: '1px solid #cbd5e1', fontSize: '13px', fontStyle: 'italic', opacity: 0.8}}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '20px 0 15px', paddingBottom: '10px', borderBottom: '1px solid #cbd5e1', fontSize: '13px', fontStyle: 'italic', opacity: 0.8 }}>
                 <div>Candidate Name: _____________________</div>
                 <div>Roll No: ____________</div>
                 <div>Section: ______</div>
               </div>
 
               <div className={styles.metaGrid}>
-                 <div className={styles.metaItem}><span>Subject:</span> <b>{selectedSubjObj?.name || builderFormData.subjectName || ''}</b></div>
-                 <div className={styles.metaItem}><span>Class:</span> <b>{classes.find(c=>c.id===parseInt(selectedClass))?.name || builderFormData.className || ''}</b></div>
-                 <div className={styles.metaItem}><span>Date:</span> <b>{builderFormData.date || ''}</b></div>
+                <div className={styles.metaItem}><span>Subject:</span> <b>{selectedSubjObj?.name || builderFormData.subjectName || ''}</b></div>
+                <div className={styles.metaItem}><span>Class:</span> <b>{classes.find(c => c.id === parseInt(selectedClass))?.name || builderFormData.className || ''}</b></div>
+                <div className={styles.metaItem}><span>Date:</span> <b>{builderFormData.date || ''}</b></div>
               </div>
               <div className={styles.metaGridSecondary}>
-                 <div className={styles.metaItem}>
-                    <span>Duration:</span> 
-                    <b style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
-                      <input 
-                        className={styles.inlineMetaInput} 
-                        type="number" 
-                        value={builderFormData.duration_minutes} 
-                        onChange={e => setBuilderFormData({...builderFormData, duration_minutes: e.target.value})} 
-                        disabled={isPreviewMode}
-                      />
-                      <span style={{fontSize: '0.9em', fontWeight: 600}}>
-                        {parseInt(builderFormData.duration_minutes) % 60 === 0 ? (parseInt(builderFormData.duration_minutes) / 60 === 1 ? 'Hr' : 'Hrs') : (parseInt(builderFormData.duration_minutes) < 60 ? 'Mins' : 'Mins')}
-                      </span>
-                      <span style={{fontSize: '0.75rem', fontWeight: 400, color: '#64748b', marginLeft: '5px'}}>
-                        ({formatDuration(builderFormData.duration_minutes)})
-                      </span>
-                    </b>
-                 </div>
-                 <div className={styles.metaItem}>
-                    <span>Max Marks:</span> 
-                    <b>
-                      <input 
-                        className={styles.inlineMetaInput} 
-                        type="number" 
-                        value={displayMarks}
-                        placeholder={calculatedTotalMarks}
-                        onChange={e => setBuilderFormData({...builderFormData, total_marks: e.target.value})} 
-                        disabled={isPreviewMode}
-                      />
-                    </b>
-                 </div>
+                <div className={styles.metaItem}>
+                  <span>Duration:</span>
+                  <b style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input
+                      className={styles.inlineMetaInput}
+                      type="number"
+                      value={builderFormData.duration_minutes}
+                      onChange={e => setBuilderFormData({ ...builderFormData, duration_minutes: e.target.value })}
+                      disabled={isPreviewMode}
+                    />
+                    <span style={{ fontSize: '0.9em', fontWeight: 600 }}>
+                      {parseInt(builderFormData.duration_minutes) % 60 === 0 ? (parseInt(builderFormData.duration_minutes) / 60 === 1 ? 'Hr' : 'Hrs') : (parseInt(builderFormData.duration_minutes) < 60 ? 'Mins' : 'Mins')}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#64748b', marginLeft: '5px' }}>
+                      ({formatDuration(builderFormData.duration_minutes)})
+                    </span>
+                  </b>
+                </div>
+                <div className={styles.metaItem}>
+                  <span>Max Marks:</span>
+                  <b>
+                    <input
+                      className={styles.inlineMetaInput}
+                      type="number"
+                      value={displayMarks}
+                      placeholder={calculatedTotalMarks}
+                      onChange={e => setBuilderFormData({ ...builderFormData, total_marks: e.target.value })}
+                      disabled={isPreviewMode}
+                    />
+                  </b>
+                </div>
               </div>
-              <div style={{marginTop: '15px', borderTop: '1px solid #cbd5e1', paddingTop: '10px'}}>
+              <div style={{ marginTop: '15px', borderTop: '1px solid #cbd5e1', paddingTop: '10px' }}>
                 {!isPreviewMode && (
                   <div className={styles.editorToolbar}>
-                    <button onClick={() => document.execCommand('bold', false, null)} title="Bold"><Bold size={14}/></button>
-                    <button onClick={() => document.execCommand('italic', false, null)} title="Italic"><Italic size={14}/></button>
-                    <button onClick={() => document.execCommand('underline', false, null)} title="Underline"><Underline size={14}/></button>
+                    <button onClick={() => document.execCommand('bold', false, null)} title="Bold"><Bold size={14} /></button>
+                    <button onClick={() => document.execCommand('italic', false, null)} title="Italic"><Italic size={14} /></button>
+                    <button onClick={() => document.execCommand('underline', false, null)} title="Underline"><Underline size={14} /></button>
                     <div className={styles.divider}></div>
-                    <button onClick={() => document.execCommand('justifyLeft', false, null)} title="Align Left"><AlignLeft size={14}/></button>
-                    <button onClick={() => document.execCommand('justifyCenter', false, null)} title="Align Center"><AlignCenter size={14}/></button>
-                    <button onClick={() => document.execCommand('justifyRight', false, null)} title="Align Right"><AlignRight size={14}/></button>
+                    <button onClick={() => document.execCommand('justifyLeft', false, null)} title="Align Left"><AlignLeft size={14} /></button>
+                    <button onClick={() => document.execCommand('justifyCenter', false, null)} title="Align Center"><AlignCenter size={14} /></button>
+                    <button onClick={() => document.execCommand('justifyRight', false, null)} title="Align Right"><AlignRight size={14} /></button>
                   </div>
                 )}
-                <div 
+                <div
                   contentEditable={!isPreviewMode}
                   suppressContentEditableWarning={true}
                   className={styles.richTextEditor}
-                  onBlur={(e) => setBuilderFormData({...builderFormData, instructions: e.target.innerHTML})}
-                  dangerouslySetInnerHTML={{__html: builderFormData.instructions}}
+                  onBlur={(e) => setBuilderFormData({ ...builderFormData, instructions: e.target.innerHTML })}
+                  dangerouslySetInnerHTML={{ __html: builderFormData.instructions }}
                 />
               </div>
             </div>
 
             <div className={styles.a4Content}>
-               {(selectedQuestions.length === 0 && sections.length === 0) ? (
-                 <div style={{opacity: 0.4, textAlign: 'center', padding: '40px 0'}}>Empty Document. Add questions below or from the bank.</div>
-               ) : (() => {
-                 // Build rendering order: group by sections if sections exist
-                 let qNum = 0;
-                 const getQId = (q) => q.id || q.tempId;
+              {(selectedQuestions.length === 0 && sections.length === 0) ? (
+                <div style={{ opacity: 0.4, textAlign: 'center', padding: '40px 0' }}>Empty Document. Add questions below or from the bank.</div>
+              ) : (() => {
+                // Build rendering order: group by sections if sections exist
+                let qNum = 0;
+                const getQId = (q) => q.id || q.tempId;
 
-                 const renderQuestion = (sq, globalIndex) => {
-                   const qId = getQId(sq);
+                const renderQuestion = (sq, globalIndex) => {
+                  const qId = getQId(sq);
 
-                   // Text blocks don't get question numbers
-                   if (sq.isTextBlock) {
-                     return (
-                       <div key={qId} className={styles.questionRow} style={{width: '100%', padding: '12px 0'}}>
-                         {isPreviewMode ? (
-                           <div style={{width: '100%'}} dangerouslySetInnerHTML={{__html: sq.text}} />
-                         ) : (
-                           <>
-                             <div 
-                               contentEditable
-                               suppressContentEditableWarning
-                               className={styles.richTextEditor}
-                               style={{minHeight: '40px', padding: '8px 12px', border: '1px dashed #cbd5e1', borderRadius: '4px', background: '#f8fafc', width: '100%'}}
-                               onBlur={e => handleUpdateTextBlock(qId, e.target.innerHTML)}
-                               dangerouslySetInnerHTML={{__html: sq.text}}
-                             />
-                             <div className={styles.questionActions}>
-                               {sections.length > 0 && (
-                                 <select 
-                                   className={styles.inlineSectionSelect}
-                                   value={sections.find(s => s.questionIds?.includes(qId))?.id || ''}
-                                   onChange={(e) => handleAssignToSection(qId, e.target.value)}
-                                   title="Assign to Section"
-                                 >
-                                   <option value="">Unassigned</option>
-                                   {sections.map(s => <option key={s.id} value={s.id}>Sec {s.label}</option>)}
-                                 </select>
-                               )}
-                               <button className={styles.btnRemove} onClick={() => handleMoveQuestion(globalIndex, 'up')} title="Move Up"><ArrowUp size={14}/></button>
-                               <button className={styles.btnRemove} onClick={() => handleMoveQuestion(globalIndex, 'down')} title="Move Down"><ArrowDown size={14}/></button>
-                               <button className={styles.btnRemove} onClick={() => handleToggleQuestion(sq)} title="Remove"><X size={14}/></button>
-                             </div>
-                           </>
-                         )}
-                       </div>
-                     );
-                   }
+                  // Text blocks don't get question numbers
+                  if (sq.isTextBlock) {
+                    return (
+                      <div key={qId} className={styles.questionRow} style={{ width: '100%', padding: '12px 0' }}>
+                        {isPreviewMode ? (
+                          <div style={{ width: '100%' }} dangerouslySetInnerHTML={{ __html: sq.text }} />
+                        ) : (
+                          <>
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              className={styles.richTextEditor}
+                              style={{ minHeight: '40px', padding: '8px 12px', border: '1px dashed #cbd5e1', borderRadius: '4px', background: '#f8fafc', width: '100%' }}
+                              onBlur={e => handleUpdateTextBlock(qId, e.target.innerHTML)}
+                              dangerouslySetInnerHTML={{ __html: sq.text }}
+                            />
+                            <div className={styles.questionActions}>
+                              {sections.length > 0 && (
+                                <select
+                                  className={styles.inlineSectionSelect}
+                                  value={sections.find(s => s.questionIds?.includes(qId))?.id || ''}
+                                  onChange={(e) => handleAssignToSection(qId, e.target.value)}
+                                  title="Assign to Section"
+                                >
+                                  <option value="">Unassigned</option>
+                                  {sections.map(s => <option key={s.id} value={s.id}>Sec {s.label}</option>)}
+                                </select>
+                              )}
+                              <button className={styles.btnRemove} onClick={() => handleMoveQuestion(globalIndex, 'up')} title="Move Up"><ArrowUp size={14} /></button>
+                              <button className={styles.btnRemove} onClick={() => handleMoveQuestion(globalIndex, 'down')} title="Move Down"><ArrowDown size={14} /></button>
+                              <button className={styles.btnRemove} onClick={() => handleToggleQuestion(sq)} title="Remove"><X size={14} /></button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  }
 
-                   qNum++;
-                   const diff = sq.difficulty || 'Medium';
-                   const diffClass = diff === 'Easy' ? styles.diffEasy : diff === 'Hard' ? styles.diffHard : styles.diffMedium;
-                   // Check if there's an OR link AFTER this question
-                   const nextQ = selectedQuestions[globalIndex + 1];
-                   const nextId = nextQ ? getQId(nextQ) : null;
-                   const hasOrAfter = orLinks.some(l => l[0] === qId && l[1] === nextId);
-                   // Check if this question is the second in an OR pair (skip its number)
-                   const prevQ = globalIndex > 0 ? selectedQuestions[globalIndex - 1] : null;
-                   const prevId = prevQ ? getQId(prevQ) : null;
-                   const isOrSecond = orLinks.some(l => l[0] === prevId && l[1] === qId);
-                   if (isOrSecond) qNum--; // Same number as the OR partner
+                  qNum++;
+                  const diff = sq.difficulty || 'Medium';
+                  const diffClass = diff === 'Easy' ? styles.diffEasy : diff === 'Hard' ? styles.diffHard : styles.diffMedium;
+                  // Check if there's an OR link AFTER this question
+                  const nextQ = selectedQuestions[globalIndex + 1];
+                  const nextId = nextQ ? getQId(nextQ) : null;
+                  const hasOrAfter = orLinks.some(l => l[0] === qId && l[1] === nextId);
+                  // Check if this question is the second in an OR pair (skip its number)
+                  const prevQ = globalIndex > 0 ? selectedQuestions[globalIndex - 1] : null;
+                  const prevId = prevQ ? getQId(prevQ) : null;
+                  const isOrSecond = orLinks.some(l => l[0] === prevId && l[1] === qId);
+                  if (isOrSecond) qNum--; // Same number as the OR partner
 
-                   return (
-                     <React.Fragment key={qId}>
-                       <div className={styles.questionRow}>
-                         <div className={styles.qNumber}>Q{qNum}.</div>
-                         <div className={styles.qTextBlock}>
-                           {sq.question_text || sq.text}
-                           {!isPreviewMode && (
-                             <span className={`${styles.diffTag} ${diffClass}`}>{diff}</span>
-                           )}
-                         </div>
-                         <div className={styles.qMarksBlock}>
-                           [<input 
-                              type="number" 
-                              className={styles.inlineMarksInput} 
-                              value={sq.marks} 
-                              onChange={(e) => handleUpdateMarks(sq.tempId || sq.id, e.target.value)} 
-                              disabled={isPreviewMode}
-                            />]
-                         </div>
-                         {!isPreviewMode && (
-                           <div className={styles.questionActions}>
-                             {sections.length > 0 && (
-                               <select 
-                                 className={styles.inlineSectionSelect}
-                                 value={sections.find(s => s.questionIds?.includes(qId))?.id || ''}
-                                 onChange={(e) => handleAssignToSection(qId, e.target.value)}
-                                 title="Assign to Section"
-                               >
-                                 <option value="">Unassigned</option>
-                                 {sections.map(s => <option key={s.id} value={s.id}>Sec {s.label}</option>)}
-                               </select>
-                             )}
-                             <button className={styles.btnRemove} onClick={() => handleMoveQuestion(globalIndex, 'up')} title="Move Up"><ArrowUp size={14}/></button>
-                             <button className={styles.btnRemove} onClick={() => handleMoveQuestion(globalIndex, 'down')} title="Move Down"><ArrowDown size={14}/></button>
-                             {!hasOrAfter && globalIndex < selectedQuestions.length - 1 && (
-                               <button className={styles.btnRemove} onClick={() => handleAddOrLink(globalIndex)} title="Add OR with next question"><GitBranch size={14}/></button>
-                             )}
-                             <button className={styles.btnRemove} onClick={() => handleToggleQuestion(sq)} title="Remove"><X size={14}/></button>
-                           </div>
-                         )}
-                       </div>
-                       {/* Answer space lines */}
-                       {sq.answerLines > 0 && (
-                         <div className={styles.answerLines}>
-                           {Array.from({length: sq.answerLines}).map((_, li) => <div key={li} className={styles.answerLine}/>)}
-                         </div>
-                       )}
-                       {/* OR divider */}
-                       {hasOrAfter && (
-                         <div className={styles.orDivider}>
-                           <div className={styles.orLine}/>
-                           <span className={styles.orText}>OR</span>
-                           <div className={styles.orLine}/>
-                           {!isPreviewMode && (
-                             <button className={styles.btnRemove} style={{color: '#ef4444', fontSize: '0.65rem'}} onClick={() => handleRemoveOrLink(qId, nextId)} title="Remove OR link"><X size={12}/></button>
-                           )}
-                         </div>
-                       )}
-                     </React.Fragment>
-                   );
-                 };
+                  return (
+                    <React.Fragment key={qId}>
+                      <div className={styles.questionRow}>
+                        <div className={styles.qNumber}>Q{qNum}.</div>
+                        <div className={styles.qTextBlock}>
+                          {sq.question_text || sq.text}
+                          {!isPreviewMode && (
+                            <span className={`${styles.diffTag} ${diffClass}`}>{diff}</span>
+                          )}
+                        </div>
+                        <div className={styles.qMarksBlock}>
+                          [<input
+                            type="number"
+                            className={styles.inlineMarksInput}
+                            value={sq.marks}
+                            onChange={(e) => handleUpdateMarks(sq.tempId || sq.id, e.target.value)}
+                            disabled={isPreviewMode}
+                          />]
+                        </div>
+                        {!isPreviewMode && (
+                          <div className={styles.questionActions}>
+                            {sections.length > 0 && (
+                              <select
+                                className={styles.inlineSectionSelect}
+                                value={sections.find(s => s.questionIds?.includes(qId))?.id || ''}
+                                onChange={(e) => handleAssignToSection(qId, e.target.value)}
+                                title="Assign to Section"
+                              >
+                                <option value="">Unassigned</option>
+                                {sections.map(s => <option key={s.id} value={s.id}>Sec {s.label}</option>)}
+                              </select>
+                            )}
+                            <button className={styles.btnRemove} onClick={() => handleMoveQuestion(globalIndex, 'up')} title="Move Up"><ArrowUp size={14} /></button>
+                            <button className={styles.btnRemove} onClick={() => handleMoveQuestion(globalIndex, 'down')} title="Move Down"><ArrowDown size={14} /></button>
+                            {!hasOrAfter && globalIndex < selectedQuestions.length - 1 && (
+                              <button className={styles.btnRemove} onClick={() => handleAddOrLink(globalIndex)} title="Add OR with next question"><GitBranch size={14} /></button>
+                            )}
+                            <button className={styles.btnRemove} onClick={() => handleToggleQuestion(sq)} title="Remove"><X size={14} /></button>
+                          </div>
+                        )}
+                      </div>
+                      {/* Answer space lines */}
+                      {sq.answerLines > 0 && (
+                        <div className={styles.answerLines}>
+                          {Array.from({ length: sq.answerLines }).map((_, li) => <div key={li} className={styles.answerLine} />)}
+                        </div>
+                      )}
+                      {/* OR divider */}
+                      {hasOrAfter && (
+                        <div className={styles.orDivider}>
+                          <div className={styles.orLine} />
+                          <span className={styles.orText}>OR</span>
+                          <div className={styles.orLine} />
+                          {!isPreviewMode && (
+                            <button className={styles.btnRemove} style={{ color: '#ef4444', fontSize: '0.65rem' }} onClick={() => handleRemoveOrLink(qId, nextId)} title="Remove OR link"><X size={12} /></button>
+                          )}
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                };
 
-                 if (sections.length > 0) {
-                   // Render with sections
-                   const assignedIds = new Set(sections.flatMap(s => s.questionIds || []));
-                   const unassigned = selectedQuestions.filter(q => !assignedIds.has(getQId(q)));
+                if (sections.length > 0) {
+                  // Render with sections
+                  const assignedIds = new Set(sections.flatMap(s => s.questionIds || []));
+                  const unassigned = selectedQuestions.filter(q => !assignedIds.has(getQId(q)));
 
-                   return (
-                     <>
-                       {sections.map(sec => {
-                         const secQuestions = (sec.questionIds || []).map(id => selectedQuestions.find(q => getQId(q) === id)).filter(Boolean);
-                         return (
-                           <div key={sec.id}>
-                             <div className={styles.sectionDivider}>
-                               <div className={styles.sectionLabel}>{sec.title}</div>
-                               {isPreviewMode ? (
-                                 <div className={styles.sectionInstruction}>{sec.instruction}</div>
-                               ) : (
-                                 <input 
-                                   className={styles.sectionInstructionInput}
-                                   value={sec.instruction}
-                                   onChange={e => handleUpdateSection(sec.id, 'instruction', e.target.value)}
-                                   placeholder="Section instruction..."
-                                 />
-                               )}
-                               {!isPreviewMode && (
-                                 <button className={styles.btnRemove} onClick={() => handleRemoveSection(sec.id)} title="Remove Section"><X size={14}/></button>
-                               )}
-                             </div>
-                             {secQuestions.map(sq => {
-                               const gi = selectedQuestions.indexOf(sq);
-                               return renderQuestion(sq, gi);
-                             })}
-                             {secQuestions.length === 0 && !isPreviewMode && (
-                               <div style={{opacity: 0.4, fontSize: '0.8rem', padding: '12px', textAlign: 'center'}}>No questions in this section</div>
-                             )}
-                             {!isPreviewMode && (
-                               <div style={{display: 'flex', gap: '8px', marginTop: '10px', justifyContent: 'center'}}>
-                                 <button className={styles.btnSectionAction} onClick={() => { setTargetSectionId(sec.id); setIsBankModalOpen(true); }}>
-                                   <Database size={14} style={{marginRight: '6px'}}/> Pick from Bank
-                                 </button>
-                                 <button className={styles.btnSectionAction} onClick={() => setTargetSectionId(targetSectionId === sec.id ? null : sec.id)}>
-                                   <Plus size={14} style={{marginRight: '6px'}}/> Type New Question
-                                 </button>
-                                 <button className={styles.btnSectionAction} onClick={() => handleAddTextBlock(sec.id)}>
-                                   <Type size={14} style={{marginRight: '6px'}}/> Add Text/Heading
-                                 </button>
-                               </div>
-                             )}
-                             {targetSectionId === sec.id && !isPreviewMode && renderManualEntryBox(sec.id)}
-                           </div>
-                         );
-                       })}
-                       {unassigned.length > 0 && (
-                         <>
-                           {sections.length > 0 && <div style={{marginTop: '20px', paddingTop: '10px', borderTop: '1px dashed #94a3b8', fontSize: '0.75rem', color: '#64748b', fontWeight: 600}}>Unassigned Questions</div>}
-                           {unassigned.map(sq => {
-                             const gi = selectedQuestions.indexOf(sq);
-                             return renderQuestion(sq, gi);
-                           })}
-                         </>
-                       )}
-                     </>
-                   );
-                 } else {
-                   // Flat render (no sections)
-                   return selectedQuestions.map((sq, i) => renderQuestion(sq, i));
-                 }
-               })()}
+                  return (
+                    <>
+                      {sections.map((sec, idx) => {
+                        const secQuestions = (sec.questionIds || []).map(id => selectedQuestions.find(q => getQId(q) === id)).filter(Boolean);
+                        return (
+                          <div key={sec.id}>
+                            <div className={styles.sectionDivider} style={idx === 0 ? { borderTop: 'none', marginTop: 0, paddingTop: 0 } : {}}>
+                              <div className={styles.sectionLabel}>{sec.title}</div>
+                              {isPreviewMode ? (
+                                <div className={styles.sectionInstruction} style={{ flex: 1, textAlign: 'center' }}>{sec.instruction}</div>
+                              ) : (
+                                <input
+                                  className={styles.sectionInstructionInput}
+                                  style={{ flex: 1, textAlign: 'center' }}
+                                  value={sec.instruction}
+                                  onChange={e => handleUpdateSection(sec.id, 'instruction', e.target.value)}
+                                  placeholder="Section instruction..."
+                                />
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#1e293b' }}>
+                                  [ {secQuestions.reduce((sum, q) => {
+                                    const qId = q.id || q.tempId;
+                                    const isOrSecond = orLinks.some(l => l[1] === qId);
+                                    if (isOrSecond || q.isTextBlock) return sum;
+                                    return sum + (parseFloat(q.marks) || 0);
+                                  }, 0)} Marks ]
+                                </span>
+                                {!isPreviewMode && (
+                                  <button className={styles.btnRemove} onClick={() => handleRemoveSection(sec.id)} title="Remove Section"><X size={14} /></button>
+                                )}
+                              </div>
+                            </div>
+                            {secQuestions.map(sq => {
+                              const gi = selectedQuestions.indexOf(sq);
+                              return renderQuestion(sq, gi);
+                            })}
+                            {secQuestions.length === 0 && !isPreviewMode && (
+                              <div style={{ opacity: 0.4, fontSize: '0.8rem', padding: '12px', textAlign: 'center' }}>No questions in this section</div>
+                            )}
+                            {!isPreviewMode && (
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '10px', justifyContent: 'center' }}>
+                                <button className={styles.btnSectionAction} onClick={() => { setTargetSectionId(sec.id); setIsBankModalOpen(true); }}>
+                                  <Database size={14} style={{ marginRight: '6px' }} /> Pick from Bank
+                                </button>
+                                <button className={styles.btnSectionAction} onClick={() => setTargetSectionId(targetSectionId === sec.id ? null : sec.id)}>
+                                  <Plus size={14} style={{ marginRight: '6px' }} /> Type New Question
+                                </button>
+                                <button className={styles.btnSectionAction} onClick={() => handleAddTextBlock(sec.id)}>
+                                  <Type size={14} style={{ marginRight: '6px' }} /> Add Text/Heading
+                                </button>
+                              </div>
+                            )}
+                            {targetSectionId === sec.id && !isPreviewMode && renderManualEntryBox(sec.id)}
+                          </div>
+                        );
+                      })}
+                      {unassigned.length > 0 && (
+                        <>
+                          {sections.length > 0 && <div style={{ marginTop: '20px', paddingTop: '10px', borderTop: '1px dashed #94a3b8', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Unassigned Questions</div>}
+                          {unassigned.map(sq => {
+                            const gi = selectedQuestions.indexOf(sq);
+                            return renderQuestion(sq, gi);
+                          })}
+                        </>
+                      )}
+                    </>
+                  );
+                } else {
+                  // Flat render (no sections)
+                  return selectedQuestions.map((sq, i) => renderQuestion(sq, i));
+                }
+              })()}
             </div>
 
             {/* Section + Blueprint controls below paper */}
             {!isPreviewMode && (
               <>
                 <button className={styles.addSectionBtn} onClick={handleAddSection}>
-                  <Layers size={14}/> Add Section (A, B, C...)
+                  <Layers size={14} /> Add Section (A, B, C...)
                 </button>
 
                 {/* Blueprint Validation */}
                 {blueprint && (
                   <div className={styles.blueprintPanel}>
-                    <div className={styles.blueprintTitle}><BarChart3 size={14}/> Paper Blueprint</div>
+                    <div className={styles.blueprintTitle}><BarChart3 size={14} /> Paper Blueprint</div>
                     <div className={styles.blueprintGrid}>
                       <div className={styles.blueprintItem}>
                         <span className={styles.blueprintLabel}>Total Questions</span>
@@ -1254,14 +1308,14 @@ export default function QuestionPaperTab() {
                       </div>
                       <div className={styles.blueprintItem}>
                         <span className={styles.blueprintLabel}>Question Types</span>
-                        <span className={styles.blueprintValue} style={{fontSize: '0.65rem'}}>{blueprint.mcq > 0 ? `MCQ: ${blueprint.mcq}` : ''}{blueprint.desc > 0 ? ` Desc: ${blueprint.desc}` : ''}{blueprint.tf > 0 ? ` T/F: ${blueprint.tf}` : ''}</span>
+                        <span className={styles.blueprintValue} style={{ fontSize: '0.65rem' }}>{blueprint.mcq > 0 ? `MCQ: ${blueprint.mcq}` : ''}{blueprint.desc > 0 ? ` Desc: ${blueprint.desc}` : ''}{blueprint.tf > 0 ? ` T/F: ${blueprint.tf}` : ''}</span>
                       </div>
                     </div>
                     {/* Difficulty bars */}
-                    <div style={{marginTop: '8px', display: 'flex', gap: '4px', height: '6px', borderRadius: '3px', overflow: 'hidden'}}>
-                      <div style={{flex: blueprint.easyPct || 1, background: '#22c55e', borderRadius: '3px'}} title={`Easy ${blueprint.easyPct}%`}/>
-                      <div style={{flex: blueprint.mediumPct || 1, background: '#eab308', borderRadius: '3px'}} title={`Medium ${blueprint.mediumPct}%`}/>
-                      <div style={{flex: blueprint.hardPct || 1, background: '#ef4444', borderRadius: '3px'}} title={`Hard ${blueprint.hardPct}%`}/>
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '4px', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ flex: blueprint.easyPct || 1, background: '#22c55e', borderRadius: '3px' }} title={`Easy ${blueprint.easyPct}%`} />
+                      <div style={{ flex: blueprint.mediumPct || 1, background: '#eab308', borderRadius: '3px' }} title={`Medium ${blueprint.mediumPct}%`} />
+                      <div style={{ flex: blueprint.hardPct || 1, background: '#ef4444', borderRadius: '3px' }} title={`Hard ${blueprint.hardPct}%`} />
                     </div>
                   </div>
                 )}
@@ -1276,40 +1330,40 @@ export default function QuestionPaperTab() {
         {/* Bank Picker Modal inside Builder */}
         {isBankModalOpen && (
           <div className={styles.modalOverlay}>
-            <div className={styles.modal} style={{maxWidth: '800px', height: '80vh', display: 'flex', flexDirection: 'column'}}>
+            <div className={styles.modal} style={{ maxWidth: '800px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
               <div className={styles.modalHeader}>
                 <h3>Pick from Question Bank</h3>
-                <button onClick={() => setIsBankModalOpen(false)}><X size={20}/></button>
+                <button onClick={() => setIsBankModalOpen(false)}><X size={20} /></button>
               </div>
-              
-              <div className={styles.modalBody} style={{flex: 1, overflow: 'hidden', padding: 0}}>
-                <div className={styles.panelHeader} style={{borderBottom: 'none', background: '#f8fafc', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px'}}>
-                  <div className={styles.searchWrapper} style={{width: '100%', marginBottom: 0}}>
+
+              <div className={styles.modalBody} style={{ flex: 1, overflow: 'hidden', padding: 0 }}>
+                <div className={styles.panelHeader} style={{ borderBottom: 'none', background: '#f8fafc', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className={styles.searchWrapper} style={{ width: '100%', marginBottom: 0 }}>
                     <Search size={16} className={styles.searchIcon} />
-                    <input 
-                      type="text" 
-                      placeholder="Search question bank..." 
-                      className={styles.searchBox} 
-                      style={{marginBottom: 0, background: 'white'}}
+                    <input
+                      type="text"
+                      placeholder="Search question bank..."
+                      className={styles.searchBox}
+                      style={{ marginBottom: 0, background: 'white' }}
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
                     />
                   </div>
-                  
-                  <div style={{display: 'flex', gap: '8px'}}>
-                    <select 
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select
                       className={styles.filterSelect}
-                      style={{background: 'white', flex: 1}}
+                      style={{ background: 'white', flex: 1 }}
                       value={selectedClass}
                       onChange={e => setSelectedClass(e.target.value)}
                     >
                       <option value="">All Classes</option>
                       {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
-                    
-                    <select 
+
+                    <select
                       className={styles.filterSelect}
-                      style={{background: 'white', flex: 1}}
+                      style={{ background: 'white', flex: 1 }}
                       value={selectedSubject}
                       onChange={e => setSelectedSubject(e.target.value)}
                     >
@@ -1318,39 +1372,39 @@ export default function QuestionPaperTab() {
                     </select>
                   </div>
                 </div>
-                <div className={styles.panelBody} style={{paddingTop: 0}}>
-                  <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                <div className={styles.panelBody} style={{ paddingTop: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {loading ? (
-                      <div style={{width: '100%', textAlign: 'center', padding: '20px'}}><Loader2 className="animate-spin" size={24} style={{margin:'0 auto'}}/></div>
+                      <div style={{ width: '100%', textAlign: 'center', padding: '20px' }}><Loader2 className="animate-spin" size={24} style={{ margin: '0 auto' }} /></div>
                     ) : questions.length > 0 ? questions.map(q => {
                       const isSelected = selectedQuestions.some(sq => (sq.id || sq.tempId) === q.id);
                       return (
-                        <div 
-                          key={q.id} 
+                        <div
+                          key={q.id}
                           className={`${styles.qBankItem}`}
-                          style={{borderColor: isSelected ? 'var(--color-primary)' : 'var(--theme-border)', flexDirection: 'row', alignItems: 'center'}}
+                          style={{ borderColor: isSelected ? 'var(--color-primary)' : 'var(--theme-border)', flexDirection: 'row', alignItems: 'center' }}
                           onClick={() => handleToggleQuestion(q)}
                         >
                           <input type="checkbox" className={styles.checkbox} checked={isSelected} readOnly />
-                          <div style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                             <div className={styles.qText}>{q.question_text || q.text}</div>
-                            <div style={{fontSize: '0.75rem', color: 'var(--theme-text-secondary)', marginTop: '4px'}}>Marks: {q.marks} | Type: {q.question_type}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--theme-text-secondary)', marginTop: '4px' }}>Marks: {q.marks} | Type: {q.question_type}</div>
                           </div>
                         </div>
                       );
                     }) : (
-                      <div style={{width: '100%', textAlign: 'center', opacity: 0.5, fontSize: '0.875rem', padding: '20px'}}>No questions found.</div>
+                      <div style={{ width: '100%', textAlign: 'center', opacity: 0.5, fontSize: '0.875rem', padding: '20px' }}>No questions found.</div>
                     )}
                   </div>
                 </div>
               </div>
 
-               {/* Bank Pagination Footer */}
+              {/* Bank Pagination Footer */}
               {paginationInfo.count > 0 && (
                 <div className={styles.panelFooter}>
-                  <div className={styles.pagination} style={{margin: 0, paddingTop: 0, border: 'none'}}>
-                    <button 
-                      className={styles.pageBtn} 
+                  <div className={styles.pagination} style={{ margin: 0, paddingTop: 0, border: 'none' }}>
+                    <button
+                      className={styles.pageBtn}
                       disabled={!paginationInfo.previous}
                       onClick={() => setCurrentPage(prev => prev - 1)}
                     >
@@ -1359,8 +1413,8 @@ export default function QuestionPaperTab() {
                     <div className={styles.pageInfo}>
                       Page {currentPage} of {Math.ceil(paginationInfo.count / 10)}
                     </div>
-                    <button 
-                      className={styles.pageBtn} 
+                    <button
+                      className={styles.pageBtn}
                       disabled={!paginationInfo.next}
                       onClick={() => setCurrentPage(prev => prev + 1)}
                     >
@@ -1382,63 +1436,81 @@ export default function QuestionPaperTab() {
       <div className={styles.leftPanel}>
         <div className={styles.panelHeader}>
           <h3 className={styles.panelTitle}>
-            <Database size={18}/> Question Bank
+            <Database size={18} /> Question Bank
           </h3>
-          <button className={styles.btnIcon} onClick={() => setIsModalOpen(true)} title="Add to Bank">
-            <Plus size={18}/>
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {isAdmin && (
+              <button
+                className={styles.btnWipe}
+                onClick={() => setIsWipeModalOpen(true)}
+                title="Wipe Question Bank for Subject"
+              >
+                <RotateCcw size={14} /> Wipe Subject
+              </button>
+            )}
+            <button className={styles.btnIcon} onClick={() => setIsModalOpen(true)} title="Add to Bank">
+              <Plus size={18} />
+            </button>
+          </div>
         </div>
-        
+
         <div className={styles.panelBody}>
           <div className={styles.searchWrapper}>
             <Search size={16} className={styles.searchIcon} />
-            <input 
-              type="text" 
-              placeholder="Search questions..." 
-              className={styles.searchBox} 
+            <input
+              type="text"
+              placeholder="Search questions..."
+              className={styles.searchBox}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          <div style={{display: 'flex', gap: '12px', marginBottom: '16px'}}>
-            <select 
+
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+            <select
               className={styles.filterSelect}
               value={selectedClass}
               onChange={e => setSelectedClass(e.target.value)}
-              style={{flex: 1}}
+              style={{ flex: 1 }}
             >
               <option value="">All Classes</option>
               {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            
-            <select 
+
+            <select
               className={styles.filterSelect}
               value={selectedSubject}
               onChange={e => setSelectedSubject(e.target.value)}
-              style={{flex: 1}}
+              style={{ flex: 1 }}
             >
               <option value="">All Subjects</option>
               {filteredSubjects.map(s => <option key={s.id} value={s.id}>{s.name} {s.class_name ? `(${s.class_name})` : ''}</option>)}
             </select>
           </div>
 
-          <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {loading ? (
-              <div style={{padding: '20px', textAlign: 'center'}}><Loader2 className="animate-spin" size={24} style={{margin:'0 auto'}}/></div>
+              <div style={{ padding: '20px', textAlign: 'center' }}><Loader2 className="animate-spin" size={24} style={{ margin: '0 auto' }} /></div>
             ) : questions.length > 0 ? questions.map(q => (
               <div key={q.id} className={styles.qBankItem}>
-                <div className={styles.qText}>{q.question_text || q.text}</div>
-                <div className={styles.qMeta}>
-                  <div style={{display: 'flex', gap: '6px'}}>
-                    <span className={`${styles.badge} ${(q.difficulty || 'Medium') === 'Hard' ? styles.badgeHard : (q.difficulty || 'Medium') === 'Easy' ? styles.badgeMemory : ''}`}>{q.difficulty || 'Medium'}</span>
-                    <span className={`${styles.badge} ${styles.badgeApply}`}>{q.question_type || 'Descriptive'}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div className={styles.qText}>{q.question_text || q.text}</div>
+                    <div className={styles.qMeta}>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <span className={`${styles.badge} ${(q.difficulty || 'Medium') === 'Hard' ? styles.badgeHard : (q.difficulty || 'Medium') === 'Easy' ? styles.badgeMemory : ''}`}>{q.difficulty || 'Medium'}</span>
+                        <span className={`${styles.badge} ${styles.badgeApply}`}>{q.question_type || 'Descriptive'}</span>
+                      </div>
+                      <span style={{ fontWeight: 600 }}>{q.marks} Marks</span>
+                    </div>
                   </div>
-                  <span style={{fontWeight: 600}}>{q.marks} Marks</span>
+                  <button className={styles.btnDeleteIcon} onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(q.id); }} title="Delete Question">
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             )) : (
-              <div style={{textAlign: 'center', opacity: 0.5, fontSize: '0.875rem', padding: '20px'}}>No questions found.</div>
+              <div style={{ textAlign: 'center', opacity: 0.5, fontSize: '0.875rem', padding: '20px' }}>No questions found.</div>
             )}
           </div>
         </div>
@@ -1447,8 +1519,8 @@ export default function QuestionPaperTab() {
         {paginationInfo.count > 0 && (
           <div className={styles.panelFooter}>
             <div className={styles.pagination}>
-              <button 
-                className={styles.pageBtn} 
+              <button
+                className={styles.pageBtn}
                 disabled={!paginationInfo.previous}
                 onClick={() => setCurrentPage(prev => prev - 1)}
               >
@@ -1457,8 +1529,8 @@ export default function QuestionPaperTab() {
               <div className={styles.pageInfo}>
                 Page {currentPage} of {Math.ceil(paginationInfo.count / 10)}
               </div>
-              <button 
-                className={styles.pageBtn} 
+              <button
+                className={styles.pageBtn}
                 disabled={!paginationInfo.next}
                 onClick={() => setCurrentPage(prev => prev + 1)}
               >
@@ -1477,23 +1549,24 @@ export default function QuestionPaperTab() {
             Question Papers
           </div>
         </div>
-        
-        <div className={styles.panelBody} style={{background: 'var(--theme-bg)'}}>
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px'}}>
+
+        <div className={styles.panelBody} style={{ background: 'var(--theme-bg)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
             {papers.map(p => (
               <div key={p.id} className={styles.paperCard}>
                 <div className={styles.pTitle}>{p.name}</div>
                 <div className={styles.pSub}>{p.subject_name} | {p.total_marks} Marks</div>
                 <div className={styles.pActions}>
                   <button className={styles.btnSm} onClick={() => handlePreviewPaper(p.id)}>Preview</button>
-                  <button className={styles.btnSm} style={{background: 'var(--color-primary)', color: '#fff'}} onClick={() => handleEditPaper(p.id)}>Edit</button>
+                  <button className={styles.btnSm} style={{ background: 'var(--color-primary)', color: '#fff' }} onClick={() => handleEditPaper(p.id)}>Edit</button>
+                  <button className={styles.btnSm} style={{ background: '#fee2e2', color: '#ef4444', border: '1px solid #fecaca' }} onClick={() => handleDeletePaper(p.id)} title="Delete Paper"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}
-            
+
             <div className={styles.addPaperPlaceholder} onClick={() => setIsBuildingPaper(true)}>
-               <div className={styles.addIcon}><Plus size={32}/></div>
-               <span>Create New Question Paper</span>
+              <div className={styles.addIcon}><Plus size={32} /></div>
+              <span>Create New Question Paper</span>
             </div>
           </div>
         </div>
@@ -1505,13 +1578,13 @@ export default function QuestionPaperTab() {
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h3>Add Question to Bank</h3>
-              <button onClick={() => setIsModalOpen(false)}><X size={20}/></button>
+              <button onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleCreateQuestion} className={styles.modalBody}>
               <div className={styles.formGroup}>
                 <label>Subject</label>
-                <select 
-                  required 
+                <select
+                  required
                   value={formData.subject}
                   onChange={e => setFormData({ ...formData, subject: e.target.value })}
                 >
@@ -1521,8 +1594,8 @@ export default function QuestionPaperTab() {
               </div>
               <div className={styles.formGroup}>
                 <label>Question Text</label>
-                <textarea 
-                  required 
+                <textarea
+                  required
                   value={formData.question_text}
                   onChange={e => setFormData({ ...formData, question_text: e.target.value })}
                   placeholder="Enter the question here..."
@@ -1557,6 +1630,68 @@ export default function QuestionPaperTab() {
                 <button type="submit" className={styles.btnPrimary}>Save Question</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Wipe Bank Confirmation Modal */}
+      {isWipeModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={`${styles.modal} ${styles.wipeModal}`}>
+            <div className={styles.modalHeader}>
+              <h3 style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={20} /> Wipe Question Bank?
+              </h3>
+              <button onClick={() => setIsWipeModalOpen(false)}><X size={20} /></button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.warningBox}>
+                <AlertTriangle size={24} style={{ flexShrink: 0 }} />
+                <div>
+                  <strong>CRITICAL ACTION:</strong> This will permanently delete ALL questions currently in the bank for the filtered subject. This cannot be undone.
+                </div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Reason for Wiping (Min 10 chars)</label>
+                <textarea
+                  className={styles.textarea}
+                  placeholder="Explain why you are deleting these questions..."
+                  value={wipeReason}
+                  onChange={e => setWipeReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <p style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '8px' }}>
+                * This action is restricted to Admins only.
+              </p>
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.btnSecondary} onClick={() => setIsWipeModalOpen(false)}>Cancel</button>
+              <button
+                className={styles.btnPrimary}
+                style={{ background: '#ef4444', borderColor: '#ef4444' }}
+                disabled={wiping || wipeReason.length < 10 || !selectedSubject}
+                onClick={async () => {
+                  setWiping(true);
+                  try {
+                    await adminApi.bulkDeleteQuestions({
+                      subject: selectedSubject,
+                      reason: wipeReason
+                    });
+                    setIsWipeModalOpen(false);
+                    setWipeReason('');
+                    fetchData();
+                  } catch (e) {
+                    alert(e.response?.data?.error || "Error wiping bank");
+                  } finally {
+                    setWiping(false);
+                  }
+                }}
+              >
+                {wiping ? <Loader2 className="animate-spin" size={16} /> : 'CONFIRM WIPE'}
+              </button>
+            </div>
           </div>
         </div>
       )}

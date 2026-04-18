@@ -56,72 +56,6 @@
   transition: all 0.2s;
 }
 
-.actionBtn:hover {
-    background-color: var(--color-primary-dark);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-}
-
-.reportCardPlaceholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 480px;
-    background-color: var(--theme-surface);
-    border-radius: 20px;
-    border: 2px dashed var(--theme-border);
-    margin-top: 20px;
-}
-
-.placeholderInfo {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    color: var(--theme-text-muted);
-    max-width: 400px;
-}
-
-.placeholderInfo h3 {
-    color: var(--theme-text);
-    font-size: 1.25rem;
-    font-weight: 800;
-}
-
-.placeholderInfo p {
-    font-size: 0.9rem;
-    line-height: 1.5;
-    font-weight: 500;
-}
-
-.placeholderInfo .primaryBtn {
-    margin-top: 10px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 24px;
-    background-color: var(--color-primary);
-    color: #fff;
-    border: none;
-    border-radius: 12px;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.primaryBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
-  background-color: var(--color-primary);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
 .tabLinkActive {
   background-color: var(--theme-surface);
   color: var(--theme-text);
@@ -164,6 +98,26 @@
   cursor: pointer;
 }
 
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background-color: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primaryBtn:hover {
+  background-color: var(--color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
 /* Filter Bar */
 .filterRow {
   display: grid;
@@ -184,6 +138,11 @@
   outline: none;
   appearance: none;
   cursor: pointer;
+}
+
+.content {
+  width: 100%;
+  position: relative;
 }
 
 /* Stats */
@@ -220,6 +179,9 @@
   color: var(--theme-text);
 }
 
+.valRisk { color: var(--color-danger); }
+.valTop { color: var(--color-success); }
+
 .trendUp {
   color: var(--color-success);
   font-size: 0.75rem;
@@ -236,9 +198,6 @@
   font-size: 0.75rem;
   color: var(--theme-text-muted);
 }
-
-.valRisk { color: var(--color-danger); }
-.valTop { color: var(--color-success); }
 
 /* Dividers */
 .sectionDivider {
@@ -382,8 +341,6 @@
 .badgeTrack { background-color: rgba(37, 99, 235, 0.1); color: var(--color-secondary); }
 .badgeRisk { background-color: rgba(239, 68, 68, 0.1); color: var(--color-danger); }
 
-/* FAB removed to avoid duplication with global layout */
-
 /* Modal */
 .modalBackdrop {
   position: fixed;
@@ -421,6 +378,27 @@
   margin: 0;
   font-size: 1.25rem;
   color: var(--theme-text);
+  font-weight: 800;
+}
+
+.modalClose {
+  background: var(--theme-bg);
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--theme-text-muted);
+  transition: all 0.2s;
+}
+
+.modalClose:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 .reportCardPanel {

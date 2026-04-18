@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import Navbar from '@/components/layout/Navbar';
+import InteractiveBackground from '@/components/common/InteractiveBackground';
 import styles from './DashboardLayout.module.css';
 import useAuth from '@/hooks/useAuth';
 
@@ -19,6 +20,7 @@ export default function DashboardLayout({ children, role = 'admin', pageTitle = 
 
   return (
     <div className={styles.layout}>
+      <InteractiveBackground />
       <Sidebar
         role={role}
         collapsed={sidebarCollapsed}

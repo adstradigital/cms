@@ -37,7 +37,7 @@ export default function QuestionPaperTab() {
   // OR links: array of [questionId1, questionId2] pairs
   const [orLinks, setOrLinks] = useState([]);
   const [builderFormData, setBuilderFormData] = useState({
-    schoolName: 'BLAZE INTERNATIONAL SCHOOL',
+    schoolName: 'CMS INTERNATIONAL SCHOOL',
     name: '',
     subject: '',
     subjectName: '',
@@ -359,7 +359,7 @@ export default function QuestionPaperTab() {
       const res = await adminApi.getQuestionPaperDetail(paperId);
       const paper = res.data;
       setBuilderFormData({
-        schoolName: 'BLAZE INTERNATIONAL SCHOOL',
+        schoolName: 'CMS INTERNATIONAL SCHOOL',
         name: paper.name,
         subject: paper.subject || '',
         subjectName: paper.subject_name || '',
@@ -383,7 +383,7 @@ export default function QuestionPaperTab() {
       const res = await adminApi.getQuestionPaperDetail(paperId);
       const paper = res.data;
       setBuilderFormData({
-        schoolName: 'BLAZE INTERNATIONAL SCHOOL',
+        schoolName: 'CMS INTERNATIONAL SCHOOL',
         name: paper.name,
         subject: paper.subject || '',
         subjectName: paper.subject_name || '',
@@ -454,7 +454,7 @@ export default function QuestionPaperTab() {
       setSections([]);
       setOrLinks([]);
       setBuilderFormData({ 
-        schoolName: 'BLAZE INTERNATIONAL SCHOOL', 
+        schoolName: 'CMS INTERNATIONAL SCHOOL', 
         name: '', 
         subject: '', 
         subjectName: '',

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
@@ -24,7 +24,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Zap
+  Zap,
+  BrainCircuit,
+  Gamepad2
 } from 'lucide-react';
 import styles from './Sidebar.module.css';
 import useAuth from '@/hooks/useAuth';
@@ -62,8 +64,26 @@ const menuSections = {
         { label: 'Dashboard', href: '/student', icon: LayoutDashboard },
         { label: 'My Profile', href: '/student/profile', icon: Users },
         { label: 'Timetable', href: '/student/timetable', icon: CalendarDays },
-        { label: 'Attendance', href: '/student/attendance', icon: ClipboardCheck },
-        { label: 'Library', href: '/student/library', icon: Library },
+        { 
+          label: 'Attendance', 
+          href: '/student/attendance', 
+          icon: ClipboardCheck,
+          subItems: [
+            { label: 'Attendance Insights', href: '/student/attendance?view=insights' },
+            { label: 'Leave Portal', href: '/student/attendance?view=leaves' },
+            { label: 'Academic Calendar', href: '/student/attendance?view=calendar' }
+          ]
+        },
+        { 
+          label: 'Library', 
+          href: '/student/library', 
+          icon: Library,
+          subItems: [
+            { label: 'Resources Catalog', href: '/student/library?view=catalog' },
+            { label: 'My Holdings', href: '/student/library?view=holdings' },
+            { label: 'Reservations & Help', href: '/student/library?view=help' }
+          ]
+        },
         { 
           label: 'Assignments', 
           href: '/student/assignments', 
@@ -76,6 +96,8 @@ const menuSections = {
           ]
         },
         { label: 'Results', href: '/student/results', icon: BarChart3 },
+        { label: 'Quiz Center', href: '/student/quizzes', icon: BrainCircuit },
+        { label: 'Brain Games', href: '/student/brain-games', icon: Gamepad2 },
         { label: 'Fees', href: '/student/fees', icon: CreditCard },
       ]
     }
@@ -94,6 +116,7 @@ const menuSections = {
 
 export default function Sidebar({ role = 'admin', collapsed = false, onToggle }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { logout } = useAuth();
   const sections = menuSections[role] || menuSections.admin;
   const [expandedItems, setExpandedItems] = useState({});
@@ -110,6 +133,26 @@ export default function Sidebar({ role = 'admin', collapsed = false, onToggle })
     return `/${role}/settings`;
   };
 
+  const getSupportHref = () => {
+    if (role === 'admin') return '/admins/support';
+    return `/${role}/support`;
+  };
+
+  // Improved matcher for active state
+  const isPathActive = (href) => {
+    if (!href) return false;
+    const [base, query] = href.split('?');
+    const pathMatches = pathname === base;
+    
+    if (query) {
+      const queryParams = new URLSearchParams(query);
+      const view = queryParams.get('view');
+      return pathMatches && searchParams.get('view') === view;
+    }
+    
+    return pathMatches;
+  };
+
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
       {/* Brand */}
@@ -119,7 +162,7 @@ export default function Sidebar({ role = 'admin', collapsed = false, onToggle })
         </div>
         {!collapsed && (
           <div className={styles.brandText}>
-            <span className={styles.brandName}>Blaze Edu</span>
+            <span className={styles.brandName}>CMS</span>
             <span className={styles.brandRole}>{role}</span>
           </div>
         )}
@@ -139,7 +182,7 @@ export default function Sidebar({ role = 'admin', collapsed = false, onToggle })
               {section.items.map((item) => {
                 const Icon = item.icon;
                 const hasSubItems = item.subItems && item.subItems.length > 0;
-                const isExpanded = expandedItems[item.label];
+                const isExpanded = expandedItems[item.label] || pathname.startsWith(item.href);
                 const isActive = pathname === item.href;
 
                 return (
@@ -169,7 +212,7 @@ export default function Sidebar({ role = 'admin', collapsed = false, onToggle })
                               <Link 
                                 key={sub.label} 
                                 href={sub.href}
-                                className={`${styles.subMenuItem} ${pathname === sub.href ? styles.subMenuActive : ''}`}
+                                className={`${styles.subMenuItem} ${isPathActive(sub.href) ? styles.subMenuActive : ''}`}
                               >
                                 <div className={styles.subDot} />
                                 <span>{sub.label}</span>
@@ -207,7 +250,7 @@ export default function Sidebar({ role = 'admin', collapsed = false, onToggle })
             {!collapsed && <span className={styles.menuLabel}>Settings</span>}
           </div>
         </Link>
-        <Link href="/support" className={styles.menuItem}>
+        <Link href={getSupportHref()} className={styles.menuItem}>
           <div className={styles.menuLeft}>
             <span className={styles.menuIcon}><HelpCircle size={18} /></span>
             {!collapsed && <span className={styles.menuLabel}>Support</span>}

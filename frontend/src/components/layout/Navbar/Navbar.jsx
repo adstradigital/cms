@@ -6,17 +6,8 @@ import { User, Settings, LogOut, ChevronDown, Shield, Mail, Phone } from 'lucide
 import styles from './Navbar.module.css';
 
 export default function Navbar({ title = '', user = null, onLogout }) {
-  const { colorTheme, setColorTheme } = useTheme();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
-
-  const themes = [
-    { name: 'green', color: '#00a676' },
-    { name: 'blue', color: '#2563eb' },
-    { name: 'red', color: '#dc2626' },
-    { name: 'purple', color: '#7c3aed' },
-    { name: 'orange', color: '#f97316' },
-  ];
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -43,25 +34,7 @@ export default function Navbar({ title = '', user = null, onLogout }) {
       </div>
 
       <div className={styles.right}>
-        {/* Theme Selector */}
-        <div className="flex gap-2 mr-4">
-          {themes.map((t) => (
-            <button
-              key={t.name}
-              onClick={() => setColorTheme(t.name)}
-              style={{
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background: t.color,
-                border: colorTheme === t.name ? '2px solid #fff' : 'none',
-                boxShadow: 'var(--shadow-sm)',
-                cursor: 'pointer',
-              }}
-              title={`${t.name} theme`}
-            />
-          ))}
-        </div>
+
 
         {/* Search */}
         <div className={styles.search}>

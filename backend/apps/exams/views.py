@@ -2,8 +2,9 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.db.models import Sum, Avg, Count
 from decimal import Decimal
+from django.utils import timezone
+from django.db.models import Sum, Avg, Count, F, Q, Max, Min
 
 from apps.students.models import Student
 from .models import (
@@ -553,5 +554,131 @@ def exam_analytics_view(request):
             "subject_performance": list(subject_stats),
             "class_performance": list(class_stats)
         }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Student Quiz Endpoints ───────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def student_quiz_list_view(request):
+    """List all question papers available for the logged-in student's class."""
+    try:
+        try:
+            student = Student.objects.get(user=request.user)
+        except Student.DoesNotExist:
+            return Response({"error": "Student record not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Find QuestionPapers linked to ExamSchedules for the student's class
+        qs = QuestionPaper.objects.filter(
+            exam_schedule__exam__school_class=student.section.school_class
+        ).distinct()
+
+        # Get existing attempts to show status
+        attempts = OnlineTestAttempt.objects.filter(student=student)
+        attempt_map = {att.question_paper_id: att for att in attempts}
+
+        data = []
+        for paper in qs:
+            attempt = attempt_map.get(paper.id)
+            paper_data = QuestionPaperSerializer(paper).data
+            paper_data["attempt_status"] = attempt.status if attempt else "not_started"
+            paper_data["score"] = attempt.score if attempt and attempt.status == "graded" else None
+            data.append(paper_data)
+
+        return Response(data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def student_quiz_detail_view(request, pk):
+    """Retrieve quiz details and start/resume an attempt."""
+    try:
+        try:
+            student = Student.objects.get(user=request.user)
+            paper = QuestionPaper.objects.get(pk=pk)
+        except (Student.DoesNotExist, QuestionPaper.DoesNotExist):
+            return Response({"error": "Quiz or student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get or create attempt
+        attempt, created = OnlineTestAttempt.objects.get_or_create(
+            student=student,
+            question_paper=paper,
+            defaults={"status": "in_progress"}
+        )
+
+        if attempt.status == "submitted" or attempt.status == "graded":
+            return Response({"error": "Quiz already submitted."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Return paper with questions
+        serializer = QuestionPaperSerializer(paper)
+        return Response({
+            "quiz": serializer.data,
+            "attempt_id": attempt.id,
+            "started_at": attempt.started_at
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def student_quiz_submit_view(request, pk):
+    """Submit quiz answers and auto-grade MCQ/True-False questions."""
+    try:
+        try:
+            student = Student.objects.get(user=request.user)
+            paper = QuestionPaper.objects.get(pk=pk)
+            attempt = OnlineTestAttempt.objects.get(student=student, question_paper=paper)
+        except (Student.DoesNotExist, QuestionPaper.DoesNotExist, OnlineTestAttempt.DoesNotExist):
+            return Response({"error": "Attempt not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if attempt.status != "in_progress":
+            return Response({"error": "Quiz already submitted."}, status=status.HTTP_400_BAD_REQUEST)
+
+        answers_data = request.data.get("answers", {}) # {question_id: answer_text}
+        total_score = Decimal(0)
+        
+        # Process each answer
+        questions = paper.questions.all()
+        for q in questions:
+            submitted_answer = answers_data.get(str(q.id), "")
+            is_correct = False
+            marks_awarded = Decimal(0)
+
+            # Auto-grading for MCQ and True/False
+            if q.question_type in ["MCQ", "True/False"]:
+                if str(submitted_answer).strip().lower() == str(q.correct_answer).strip().lower():
+                    is_correct = True
+                    marks_awarded = q.marks
+                    total_score += marks_awarded
+
+            # Save student answer
+            StudentAnswer.objects.update_or_create(
+                attempt=attempt,
+                question=q,
+                defaults={
+                    "submitted_answer": submitted_answer,
+                    "is_correct": is_correct,
+                    "marks_awarded": marks_awarded
+                }
+            )
+
+        # Finalize attempt
+        attempt.status = "graded" # Auto-graded for now
+        attempt.score = total_score
+        attempt.submitted_at = timezone.now()
+        attempt.save()
+
+        return Response({
+            "message": "Quiz submitted successfully.",
+            "score": total_score,
+            "total_marks": paper.questions.aggregate(total=Sum("marks"))["total"]
+        }, status=status.HTTP_200_OK)
+
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -4,7 +4,7 @@ import { ThemeProvider } from '@/context/ThemeContext';
 import '@/styles/global.css';
 
 export const metadata = {
-  title: 'Campus Management System',
+  title: 'CMS',
   description: 'Production-ready school management solution',
 };
 

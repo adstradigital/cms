@@ -119,7 +119,7 @@ export default function Sidebar({ role = 'admin', collapsed = false, onToggle })
         </div>
         {!collapsed && (
           <div className={styles.brandText}>
-            <span className={styles.brandName}>Blaze Edu</span>
+            <span className={styles.brandName}>CMS</span>
             <span className={styles.brandRole}>{role}</span>
           </div>
         )}

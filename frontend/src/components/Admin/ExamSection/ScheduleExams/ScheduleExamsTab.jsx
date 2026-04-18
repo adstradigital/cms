@@ -41,6 +41,9 @@ export default function ScheduleExamsTab() {
     invigilator: ''
   });
 
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [editScheduleData, setEditScheduleData] = useState(null);
+
   const [formData, setFormData] = useState({
     name: '',
     academic_year: '',
@@ -168,12 +171,21 @@ export default function ScheduleExamsTab() {
         return;
       }
 
-      const defaultDate = selectedExamForSchedule.start_date || new Date().toISOString().split('T')[0];
+      // Start from the exam start date or today
+      let currentScheduleDate = new Date(selectedExamForSchedule.start_date || new Date());
+      
+      // We will create schedules one by one to ensure date increment logic
+      for (let i = 0; i < subjectsToPopulate.length; i++) {
+        const s = subjectsToPopulate[i];
+        
+        // Skip Sundays
+        if (currentScheduleDate.getDay() === 0) {
+          currentScheduleDate.setDate(currentScheduleDate.getDate() + 1);
+        }
 
-      await Promise.all(subjectsToPopulate.map(s => 
-        adminApi.createExamSchedule(selectedExamForSchedule.id, {
+        await adminApi.createExamSchedule(selectedExamForSchedule.id, {
           subject: s.id,
-          date: defaultDate,
+          date: currentScheduleDate.toISOString().split('T')[0],
           start_time: '09:30',
           end_time: '12:30',
           max_theory_marks: 80,
@@ -181,17 +193,41 @@ export default function ScheduleExamsTab() {
           pass_marks: 35,
           venue: '',
           invigilator: null
-        })
-      ));
+        });
+
+        // Increment for the next subject
+        currentScheduleDate.setDate(currentScheduleDate.getDate() + 1);
+      }
 
       const res = await adminApi.getExamSchedules(selectedExamForSchedule.id);
       setExamSchedules(res.data);
-      alert(`Successfully added ${subjectsToPopulate.length} subjects. Please update their dates and times.`);
+      alert(`Successfully added ${subjectsToPopulate.length} subjects with incremental dates.`);
     } catch (error) {
       console.error(error);
       alert("Error auto-populating subjects. Some might already be scheduled.");
     } finally {
       setScheduleLoading(false);
+    }
+  };
+
+  const handleEditClick = (schedule) => {
+    setEditingScheduleId(schedule.id);
+    setEditScheduleData({ ...schedule });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingScheduleId(null);
+    setEditScheduleData(null);
+  };
+
+  const handleUpdateSchedule = async (id) => {
+    try {
+      await adminApi.updateExamSchedule(id, editScheduleData);
+      setExamSchedules(prev => prev.map(s => s.id === id ? { ...editScheduleData } : s));
+      setEditingScheduleId(null);
+      setEditScheduleData(null);
+    } catch (error) {
+      alert("Error updating schedule: " + (error.response?.data?.error || error.message));
     }
   };
 
@@ -504,8 +540,102 @@ export default function ScheduleExamsTab() {
                         <td colSpan={8} style={{ padding: '20px', textAlign: 'center' }}><Loader2 className="animate-spin" size={20} /></td>
                       </tr>
                     ) : examSchedules.length > 0 ? examSchedules.map(s => {
+                      const isEditing = editingScheduleId === s.id;
                       const invigilatorName = teachers.find(t => t.user === s.invigilator)?.full_name || 'Not assigned';
                       const subjectCode = subjects.find(sub => sub.id === s.subject)?.code || '---';
+                      
+                      if (isEditing) {
+                        return (
+                          <tr key={s.id} style={{ borderBottom: '1px solid #3b82f6', background: '#eff6ff' }}>
+                            <td style={{ padding: '8px' }}>{s.subject_name}</td>
+                            <td style={{ padding: '8px', textAlign: 'center' }}>{subjectCode}</td>
+                            <td style={{ padding: '8px' }}>
+                              <input 
+                                type="date" 
+                                value={editScheduleData.date}
+                                onChange={e => setEditScheduleData({...editScheduleData, date: e.target.value})}
+                                style={{ width: '100%', padding: '4px' }}
+                              />
+                            </td>
+                            <td style={{ padding: '8px' }}>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <input 
+                                  type="time" 
+                                  value={editScheduleData.start_time.slice(0,5)}
+                                  onChange={e => setEditScheduleData({...editScheduleData, start_time: e.target.value})}
+                                  style={{ width: '70px', padding: '4px' }}
+                                />
+                                <input 
+                                  type="time" 
+                                  value={editScheduleData.end_time.slice(0,5)}
+                                  onChange={e => setEditScheduleData({...editScheduleData, end_time: e.target.value})}
+                                  style={{ width: '70px', padding: '4px' }}
+                                />
+                              </div>
+                            </td>
+                            <td style={{ padding: '8px' }}>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <input 
+                                  type="number" 
+                                  value={editScheduleData.max_theory_marks}
+                                  onChange={e => setEditScheduleData({...editScheduleData, max_theory_marks: e.target.value})}
+                                  style={{ width: '45px', padding: '4px' }}
+                                />
+                                <input 
+                                  type="number" 
+                                  value={editScheduleData.max_internal_marks}
+                                  onChange={e => setEditScheduleData({...editScheduleData, max_internal_marks: e.target.value})}
+                                  style={{ width: '45px', padding: '4px' }}
+                                />
+                              </div>
+                            </td>
+                            <td style={{ padding: '8px' }}>
+                              <input 
+                                type="number" 
+                                value={editScheduleData.pass_marks}
+                                onChange={e => setEditScheduleData({...editScheduleData, pass_marks: e.target.value})}
+                                style={{ width: '45px', padding: '4px' }}
+                              />
+                            </td>
+                            <td style={{ padding: '8px' }}>
+                              <input 
+                                type="text" 
+                                placeholder="Venue"
+                                value={editScheduleData.venue || ''}
+                                onChange={e => setEditScheduleData({...editScheduleData, venue: e.target.value})}
+                                style={{ width: '100%', padding: '4px', marginBottom: '4px' }}
+                              />
+                              <select 
+                                value={editScheduleData.invigilator || ''}
+                                onChange={e => setEditScheduleData({...editScheduleData, invigilator: e.target.value})}
+                                style={{ width: '100%', padding: '4px' }}
+                              >
+                                <option value="">Select Invigilator</option>
+                                {teachers.map(t => <option key={t.id} value={t.user}>{t.full_name}</option>)}
+                              </select>
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                <button 
+                                  className={styles.btnSm} 
+                                  onClick={() => handleUpdateSchedule(s.id)}
+                                  style={{ background: '#10b981', color: 'white' }}
+                                >
+                                  Save
+                                </button>
+                                <button 
+                                  className={styles.btnSm} 
+                                  onClick={handleCancelEdit}
+                                  style={{ background: '#64748b', color: 'white' }}
+                                >
+                                  X
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       return (
                       <tr key={s.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                         <td style={{ padding: '10px 16px', fontWeight: 500 }}>{s.subject_name}</td>
@@ -519,14 +649,24 @@ export default function ScheduleExamsTab() {
                           <div style={{ fontSize: '0.8rem', color: '#64748b' }}><strong>By:</strong> {invigilatorName}</div>
                         </td>
                         <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                          <button 
-                            className={styles.btnSm} 
-                            style={{ color: '#ef4444', border: '1px solid #fecaca', background: '#fee2e2' }}
-                            onClick={() => handleDeleteSchedule(s.id)}
-                            title="Delete Schedule"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                            <button 
+                              className={styles.btnSm} 
+                              style={{ color: '#0ea5e9', border: '1px solid #bae6fd', background: '#f0f9ff' }}
+                              onClick={() => handleEditClick(s)}
+                              title="Edit Schedule"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              className={styles.btnSm} 
+                              style={{ color: '#ef4444', border: '1px solid #fecaca', background: '#fee2e2' }}
+                              onClick={() => handleDeleteSchedule(s.id)}
+                              title="Delete Schedule"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )}) : (

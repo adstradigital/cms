@@ -555,3 +555,290 @@ def exam_analytics_view(request):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Online Test v2 Views ─────────────────────────────────────────────────────
+
+from .models import OnlineTest, TestQuestion, TestChoice, TestAttempt, TestAnswer
+from .serializers import (
+    OnlineTestSerializer, OnlineTestListSerializer,
+    TestQuestionSerializer, TestAttemptSerializer, TestAttemptListSerializer,
+    TestAnswerSerializer,
+)
+from .services import auto_grade_attempt, compute_attempt_scores
+from django.utils import timezone
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def online_test_list_view(request):
+    """List all online tests or create a new one."""
+    try:
+        if request.method == "GET":
+            section_id = request.query_params.get("section")
+            subject_id = request.query_params.get("subject")
+            qs = OnlineTest.objects.select_related("section", "subject", "created_by__user").all()
+            if section_id:
+                qs = qs.filter(section_id=section_id)
+            if subject_id:
+                qs = qs.filter(subject_id=subject_id)
+            return Response(OnlineTestListSerializer(qs, many=True).data)
+
+        serializer = OnlineTestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Auto-set created_by from staff profile
+        staff = getattr(request.user, "staff_profile", None)
+        serializer.save(created_by=staff)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def online_test_detail_view(request, pk):
+    """Get, update, or delete a specific online test."""
+    try:
+        test = OnlineTest.objects.select_related("section", "subject", "created_by__user").prefetch_related(
+            "test_questions__choices"
+        ).get(pk=pk)
+    except OnlineTest.DoesNotExist:
+        return Response({"error": "Test not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        return Response(OnlineTestSerializer(test).data)
+
+    if request.method == "PATCH":
+        serializer = OnlineTestSerializer(test, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+
+    test.delete()
+    return Response({"message": "Test deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def online_test_publish_view(request, pk):
+    """Publish a test so students can see it."""
+    try:
+        test = OnlineTest.objects.get(pk=pk)
+    except OnlineTest.DoesNotExist:
+        return Response({"error": "Test not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if test.test_questions.exclude(question_type="divider").count() == 0:
+        return Response({"error": "Cannot publish a test with no questions."}, status=status.HTTP_400_BAD_REQUEST)
+
+    test.is_published = not test.is_published  # Toggle
+    test.save(update_fields=["is_published"])
+    action = "published" if test.is_published else "unpublished"
+    return Response({"message": f"Test {action} successfully.", "is_published": test.is_published})
+
+
+# ─── Questions ────────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def test_question_list_view(request, test_pk):
+    """List or add questions to a test."""
+    try:
+        test = OnlineTest.objects.get(pk=test_pk)
+    except OnlineTest.DoesNotExist:
+        return Response({"error": "Test not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        questions = test.test_questions.prefetch_related("choices").all()
+        return Response(TestQuestionSerializer(questions, many=True).data)
+
+    data = {**request.data, "test": test.id}
+    # Auto-set order if not provided
+    if "order" not in data:
+        max_order = test.test_questions.aggregate(m=models.Max("order"))["m"] or 0
+        data["order"] = max_order + 1
+
+    serializer = TestQuestionSerializer(data=data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.save()
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def test_question_detail_view(request, pk):
+    """Edit or delete a single question."""
+    try:
+        question = TestQuestion.objects.prefetch_related("choices").get(pk=pk)
+    except TestQuestion.DoesNotExist:
+        return Response({"error": "Question not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "PATCH":
+        serializer = TestQuestionSerializer(question, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+
+    question.delete()
+    return Response({"message": "Question deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+
+# ─── Attempts (Student) ──────────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def test_start_attempt_view(request, test_pk):
+    """Student starts a new attempt."""
+    try:
+        test = OnlineTest.objects.get(pk=test_pk)
+    except OnlineTest.DoesNotExist:
+        return Response({"error": "Test not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not test.is_published:
+        return Response({"error": "This test is not published yet."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Find the student
+    student = Student.objects.filter(user=request.user).first()
+    if not student:
+        return Response({"error": "Student profile not found."}, status=status.HTTP_403_FORBIDDEN)
+
+    # Check attempt limit
+    existing_attempts = TestAttempt.objects.filter(test=test, student=student).count()
+    if existing_attempts >= test.max_attempts:
+        return Response({"error": f"Maximum attempts ({test.max_attempts}) reached."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check time window
+    now = timezone.now()
+    if test.start_at and now < test.start_at:
+        return Response({"error": "This test has not started yet."}, status=status.HTTP_400_BAD_REQUEST)
+    if test.end_at and now > test.end_at:
+        return Response({"error": "This test has already ended."}, status=status.HTTP_400_BAD_REQUEST)
+
+    attempt = TestAttempt.objects.create(
+        test=test,
+        student=student,
+        attempt_number=existing_attempts + 1,
+    )
+
+    # Pre-create empty answer slots for each question
+    for q in test.test_questions.exclude(question_type="divider"):
+        TestAnswer.objects.create(attempt=attempt, question=q)
+
+    return Response(TestAttemptSerializer(attempt).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def test_submit_attempt_view(request, attempt_pk):
+    """Student submits their attempt. Triggers auto-grading."""
+    try:
+        attempt = TestAttempt.objects.select_related("test").get(pk=attempt_pk)
+    except TestAttempt.DoesNotExist:
+        return Response({"error": "Attempt not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if attempt.status != "in_progress":
+        return Response({"error": "This attempt has already been submitted."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Save any answers from the request body
+    answers_data = request.data.get("answers", [])
+    for ans_data in answers_data:
+        try:
+            answer = attempt.answers.get(question_id=ans_data.get("question"))
+            if "text_answer" in ans_data:
+                answer.text_answer = ans_data["text_answer"]
+            if "selected_choice_ids" in ans_data:
+                answer.selected_choices.set(ans_data["selected_choice_ids"])
+            answer.save()
+        except TestAnswer.DoesNotExist:
+            continue
+
+    attempt.submitted_at = timezone.now()
+    attempt.save(update_fields=["submitted_at"])
+
+    # Run auto-grading
+    auto_grade_attempt(attempt)
+
+    # If auto-only and instant visibility, publish immediately
+    if attempt.test.grading_mode == "auto" and attempt.test.result_visibility == "instant":
+        attempt.status = "published"
+        attempt.save(update_fields=["status"])
+
+    attempt.refresh_from_db()
+    return Response(TestAttemptSerializer(attempt).data)
+
+
+# ─── Submissions & Grading (Teacher) ─────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def test_submissions_view(request, test_pk):
+    """Teacher views all submissions for a test."""
+    try:
+        test = OnlineTest.objects.get(pk=test_pk)
+    except OnlineTest.DoesNotExist:
+        return Response({"error": "Test not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    status_filter = request.query_params.get("status")
+    qs = test.attempts.select_related("student__user").all()
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    return Response(TestAttemptListSerializer(qs, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def test_attempt_detail_view(request, attempt_pk):
+    """Get full attempt with all answers (for teacher grading view)."""
+    try:
+        attempt = TestAttempt.objects.select_related(
+            "test", "student__user"
+        ).prefetch_related(
+            "answers__question__choices", "answers__selected_choices"
+        ).get(pk=attempt_pk)
+    except TestAttempt.DoesNotExist:
+        return Response({"error": "Attempt not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response(TestAttemptSerializer(attempt).data)
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def test_grade_answer_view(request, answer_pk):
+    """Teacher grades a single answer (manual score + remark)."""
+    try:
+        answer = TestAnswer.objects.select_related("attempt").get(pk=answer_pk)
+    except TestAnswer.DoesNotExist:
+        return Response({"error": "Answer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if "manual_score" in request.data:
+        answer.manual_score = request.data["manual_score"]
+    if "teacher_remark" in request.data:
+        answer.teacher_remark = request.data["teacher_remark"]
+    if "is_correct" in request.data:
+        answer.is_correct = request.data["is_correct"]
+
+    answer.save()
+
+    # Recompute attempt totals
+    compute_attempt_scores(answer.attempt)
+
+    return Response(TestAnswerSerializer(answer).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def test_publish_result_view(request, attempt_pk):
+    """Publish a graded attempt's result to the student."""
+    try:
+        attempt = TestAttempt.objects.get(pk=attempt_pk)
+    except TestAttempt.DoesNotExist:
+        return Response({"error": "Attempt not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    attempt.status = "published"
+    attempt.save(update_fields=["status"])
+    return Response({"message": "Result published.", "status": "published"})
+

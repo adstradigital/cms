@@ -215,3 +215,152 @@ class StudentAnswer(models.Model):
     class Meta:
         db_table = "student_answers"
         unique_together = ("attempt", "question")
+
+
+# ─── Online Test Module (v2) ──────────────────────────────────────────────────
+
+GRADING_MODE_CHOICES = [
+    ("auto", "Auto"),
+    ("manual", "Manual"),
+    ("mixed", "Mixed"),
+]
+
+RESULT_VISIBILITY_CHOICES = [
+    ("instant", "Publish Immediately"),
+    ("review", "Teacher Reviews First"),
+]
+
+QUESTION_TYPE_CHOICES = [
+    ("mcq_single", "MCQ — Single Choice"),
+    ("mcq_multi", "MCQ — Multiple Choice"),
+    ("short", "Short Answer"),
+    ("long", "Long / Descriptive"),
+    ("truefalse", "True / False"),
+    ("fill", "Fill in the Blank"),
+    ("upload", "File Upload"),
+    ("divider", "Section Divider"),
+]
+
+ATTEMPT_STATUS_CHOICES = [
+    ("in_progress", "In Progress"),
+    ("submitted", "Submitted"),
+    ("graded", "Graded"),
+    ("published", "Published"),
+]
+
+
+class OnlineTest(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        "staff.Staff", on_delete=models.SET_NULL, null=True, blank=True, related_name="online_tests_created"
+    )
+    section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="online_tests")
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="online_tests")
+    grading_mode = models.CharField(max_length=10, choices=GRADING_MODE_CHOICES, default="mixed")
+    result_visibility = models.CharField(max_length=10, choices=RESULT_VISIBILITY_CHOICES, default="review")
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True, help_text="Countdown timer in minutes. Null = no limit.")
+    start_at = models.DateTimeField(null=True, blank=True, help_text="When the test becomes available.")
+    end_at = models.DateTimeField(null=True, blank=True, help_text="When the test closes.")
+    max_attempts = models.PositiveIntegerField(default=1)
+    shuffle_questions = models.BooleanField(default=False)
+    is_published = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "online_tests"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.title} — {self.section}"
+
+    @property
+    def total_marks(self):
+        return self.test_questions.exclude(question_type="divider").aggregate(
+            total=models.Sum("marks")
+        )["total"] or 0
+
+    @property
+    def question_count(self):
+        return self.test_questions.exclude(question_type="divider").count()
+
+
+class TestQuestion(models.Model):
+    test = models.ForeignKey(OnlineTest, on_delete=models.CASCADE, related_name="test_questions")
+    order = models.PositiveIntegerField(default=0)
+    question_type = models.CharField(max_length=20, choices=QUESTION_TYPE_CHOICES, default="mcq_single")
+    text = models.TextField(help_text="The question prompt. Supports markdown.")
+    marks = models.DecimalField(max_digits=6, decimal_places=2, default=1)
+    negative_marks = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    is_required = models.BooleanField(default=True)
+    image = models.ImageField(upload_to="test_questions/", null=True, blank=True)
+    accepted_answers = models.JSONField(
+        default=list, blank=True,
+        help_text='For fill-in-the-blank: ["answer1", "synonym"]. Case-insensitive matching.'
+    )
+
+    class Meta:
+        db_table = "test_questions"
+        ordering = ["order"]
+
+    def __str__(self):
+        return f"Q{self.order}: {self.text[:60]}"
+
+
+class TestChoice(models.Model):
+    question = models.ForeignKey(TestQuestion, on_delete=models.CASCADE, related_name="choices")
+    text = models.CharField(max_length=500)
+    is_correct = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "test_choices"
+        ordering = ["order"]
+
+    def __str__(self):
+        return f"{'✓' if self.is_correct else '✗'} {self.text[:40]}"
+
+
+class TestAttempt(models.Model):
+    test = models.ForeignKey(OnlineTest, on_delete=models.CASCADE, related_name="attempts")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="test_attempts_v2")
+    attempt_number = models.PositiveIntegerField(default=1)
+    started_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    auto_score = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    manual_score = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=ATTEMPT_STATUS_CHOICES, default="in_progress")
+
+    class Meta:
+        db_table = "test_attempts"
+        ordering = ["-started_at"]
+        unique_together = ("test", "student", "attempt_number")
+
+    def __str__(self):
+        return f"{self.student} — Attempt {self.attempt_number} — {self.test.title}"
+
+    @property
+    def final_score(self):
+        auto = self.auto_score or 0
+        manual = self.manual_score or 0
+        return auto + manual
+
+
+class TestAnswer(models.Model):
+    attempt = models.ForeignKey(TestAttempt, on_delete=models.CASCADE, related_name="answers")
+    question = models.ForeignKey(TestQuestion, on_delete=models.CASCADE, related_name="test_answers")
+    selected_choices = models.ManyToManyField(TestChoice, blank=True, related_name="selected_in_answers")
+    text_answer = models.TextField(blank=True)
+    file_answer = models.FileField(upload_to="test_uploads/", null=True, blank=True)
+    auto_score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    manual_score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    teacher_remark = models.TextField(blank=True)
+    is_correct = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        db_table = "test_answers"
+        unique_together = ("attempt", "question")
+
+    def __str__(self):
+        return f"Answer to Q{self.question.order} by {self.attempt.student}"

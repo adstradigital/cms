@@ -105,7 +105,7 @@ def make_user(first, last, portal, school, role=None, is_staff_flag=False):
     u = User.objects.create(
         username=uname, password=PASSWORD,
         first_name=first, last_name=last,
-        email=f"{uname}@blaze.edu.in",
+        email=f"{uname}@cms.edu.in",
         portal=portal, school=school, role=role,
         is_staff=is_staff_flag, is_verified=True,
     )
@@ -118,11 +118,11 @@ def make_user(first, last, portal, school, role=None, is_staff_flag=False):
 print("\n🏫 Phase 1: School, Academic Years, Roles & Admin …")
 
 school = School.objects.create(
-    name="Blaze Education Academy",
+    name="Campus Management Academy",
     tagline="Igniting Minds, Shaping Futures",
     address="123 Knowledge Lane, Kochi, Kerala, India - 682024",
-    phone="+91 484 2345678", email="admin@blaze.edu.in",
-    website="https://blaze.edu.in",
+    phone="+91 484 2345678", email="admin@cms.edu.in",
+    website="https://cms.edu.in",
     primary_color="#0F172A", secondary_color="#4F46E5",
 )
 
@@ -199,7 +199,7 @@ role_librarian.permissions.set([perm_objs["library.view"], perm_objs["library.wr
 admin_user = User.objects.create_superuser(
     username="admin", password="Admin@1234",
     first_name="Super", last_name="Admin",
-    email="superadmin@blaze.edu.in", school=school,
+    email="superadmin@cms.edu.in", school=school,
 )
 admin_user.role = role_admin
 admin_user.portal = "admin"

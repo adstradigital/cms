@@ -18,6 +18,12 @@ const canteenApi = {
   getDailyMenus: (params) => instance.get('/canteen/daily-menu/', { params }),
   createDailyMenu: (data) => instance.post('/canteen/daily-menu/', data),
   updateDailyMenu: (id, data) => instance.patch(`/canteen/daily-menu/${id}/`, data),
+  
+  // Weekly Menu
+  getWeeklyMenus: (params) => instance.get('/canteen/weekly-menu/', { params }),
+  createWeeklyMenu: (data) => instance.post('/canteen/weekly-menu/', data),
+  updateWeeklyMenu: (id, data) => instance.patch(`/canteen/weekly-menu/${id}/`, data),
+  deleteWeeklyMenu: (id) => instance.delete(`/canteen/weekly-menu/${id}/`),
 
   // Complaints
   getComplaints: (params) => instance.get('/canteen/complaints/', { params }),

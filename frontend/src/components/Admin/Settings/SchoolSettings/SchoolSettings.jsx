@@ -52,10 +52,13 @@ const SchoolSettings = () => {
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
   const [activeSchool, setActiveSchool] = useState(null);
   const [academicYears, setAcademicYears] = useState([]);
   const [profileForm, setProfileForm] = useState(EMPTY_PROFILE);
   const [passwordForm, setPasswordForm] = useState(EMPTY_PASSWORD);
+  const [yearModal, setYearModal] = useState({ isOpen: false, name: '', start_date: '', end_date: '', is_active: false });
+  const [termModal, setTermModal] = useState({ isOpen: false, academic_year: null, name: '', start_date: '', end_date: '', is_active: false });
   const [notice, setNotice] = useState(null);
   const { user, fetchProfile } = useAuth();
 
@@ -213,6 +216,65 @@ const SchoolSettings = () => {
     }
   };
 
+  const handleSaveYear = async (e) => {
+    e.preventDefault();
+    try {
+      await schoolApi.createAcademicYear({
+        school: activeSchool.id,
+        name: yearModal.name,
+        start_date: yearModal.start_date,
+        end_date: yearModal.end_date,
+        is_active: yearModal.is_active,
+        working_days: [1,2,3,4,5]
+      });
+      setYearModal({ isOpen: false, name: '', start_date: '', end_date: '', is_active: false });
+      fetchData();
+      pushNotice('success', 'Academic Year created successfully.');
+    } catch (error) {
+      pushNotice('error', 'Failed to create Academic Year.');
+    }
+  };
+
+  const handleDeleteYear = async (id) => {
+    if(!window.confirm("Are you sure you want to delete this Academic Year?")) return;
+    try {
+      await schoolApi.deleteAcademicYear(id);
+      fetchData();
+      pushNotice('success', 'Academic Year deleted.');
+    } catch (error) {
+      pushNotice('error', 'Failed to delete Academic Year.');
+    }
+  };
+
+  const handleSaveTerm = async (e) => {
+    e.preventDefault();
+    try {
+      await schoolApi.createTerm({
+        academic_year: termModal.academic_year,
+        name: termModal.name,
+        start_date: termModal.start_date,
+        end_date: termModal.end_date,
+        is_active: termModal.is_active
+      });
+      setTermModal({ isOpen: false, academic_year: null, name: '', start_date: '', end_date: '', is_active: false });
+      fetchData();
+      pushNotice('success', 'Term created successfully.');
+    } catch (error) {
+      pushNotice('error', 'Failed to create Term.');
+    }
+  };
+
+  const handleDeleteTerm = async (id) => {
+    if(!window.confirm("Are you sure you want to delete this Term?")) return;
+    try {
+      await schoolApi.deleteTerm(id);
+      fetchData();
+      pushNotice('success', 'Term deleted.');
+    } catch (error) {
+      pushNotice('error', 'Failed to delete Term.');
+    }
+  };
+
   if (loading) return <div className={styles.loading}>Loading settings...</div>;
 
   return (
@@ -223,14 +285,18 @@ const SchoolSettings = () => {
           <p className={styles.subtitle}>Manage your profile, account security, school identity, and academic cycles.</p>
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.saveButtonAlt} onClick={handleSaveProfile} disabled={profileSaving}>
-            <UserCircle2 size={18} />
-            {profileSaving ? 'Saving Profile...' : 'Save Profile'}
-          </button>
-          <button className={styles.saveButton} onClick={handleSaveSchool} disabled={saving || !activeSchool}>
-            <Save size={18} />
-            {saving ? 'Saving School...' : 'Save School'}
-          </button>
+          {activeTab === 'profile' && (
+            <button className={styles.saveButton} onClick={handleSaveProfile} disabled={profileSaving}>
+              <UserCircle2 size={18} />
+              {profileSaving ? 'Saving Profile...' : 'Save Profile'}
+            </button>
+          )}
+          {activeTab === 'school' && (
+            <button className={styles.saveButton} onClick={handleSaveSchool} disabled={saving || !activeSchool}>
+              <Save size={18} />
+              {saving ? 'Saving School...' : 'Save School'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -241,10 +307,30 @@ const SchoolSettings = () => {
         </div>
       )}
 
-      <div className={styles.settingsGrid}>
-        <div className={styles.mainColumn}>
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
+      <div className={styles.settingsContainer}>
+        {/* Sidebar Navigation */}
+        <aside className={styles.sidebar}>
+          <ul className={styles.sidebarMenu}>
+            <li className={`${styles.sidebarItem} ${activeTab === 'profile' ? styles.active : ''}`} onClick={() => setActiveTab('profile')}>
+              <UserCircle2 size={18} /> My Profile
+            </li>
+            <li className={`${styles.sidebarItem} ${activeTab === 'school' ? styles.active : ''}`} onClick={() => setActiveTab('school')}>
+              <Building2 size={18} /> School Profile
+            </li>
+            <li className={`${styles.sidebarItem} ${activeTab === 'academic' ? styles.active : ''}`} onClick={() => setActiveTab('academic')}>
+              <Calendar size={18} /> Academic Cycles
+            </li>
+            <li className={`${styles.sidebarItem} ${activeTab === 'security' ? styles.active : ''}`} onClick={() => setActiveTab('security')}>
+              <LockKeyhole size={18} /> Security
+            </li>
+          </ul>
+        </aside>
+
+        {/* Main Content Area */}
+        <div className={styles.mainContent}>
+          {activeTab === 'profile' && (
+            <section className={styles.section}>
+              <div className={styles.sectionHeader}>
               <UserCircle2 size={20} className={styles.sectionIcon} />
               <h2>My Profile</h2>
             </div>
@@ -345,7 +431,9 @@ const SchoolSettings = () => {
               </div>
             </div>
           </section>
+          )}
 
+          {activeTab === 'school' && (
           <section className={styles.section}>
             <div className={styles.sectionHeader}>
               <Building2 size={20} className={styles.sectionIcon} />
@@ -472,9 +560,9 @@ const SchoolSettings = () => {
               </>
             )}
           </section>
-        </div>
+          )}
 
-        <div className={styles.sideColumn}>
+          {activeTab === 'security' && (
           <section className={styles.section}>
             <div className={styles.sectionHeader}>
               <LockKeyhole size={20} className={styles.sectionIcon} />
@@ -500,31 +588,68 @@ const SchoolSettings = () => {
               {passwordSaving ? 'Updating Password...' : 'Update Password'}
             </button>
           </section>
+          )}
 
+          {activeTab === 'academic' && (
           <section className={styles.section}>
             <div className={styles.sectionHeaderBetween}>
               <div className={styles.sectionHeader}>
                 <Calendar size={20} className={styles.sectionIcon} />
-                <h2>Academic Years</h2>
+                <h2>Academic Cycles</h2>
               </div>
-              <button className={styles.addButton}>
-                <Plus size={14} />
+              <button className={styles.addButton} onClick={() => setYearModal({ ...yearModal, isOpen: true })}>
+                <Plus size={14} /> Add Year
               </button>
             </div>
-            <p className={styles.sectionDescription}>Review the cycles currently configured for this school.</p>
+            <p className={styles.sectionDescription}>Manage your academic years and configure semesters/terms within them.</p>
 
             <div className={styles.yearsList}>
               {academicYears.map((year) => (
                 <div key={year.id} className={`${styles.yearCard} ${year.is_active ? styles.activeYear : ''}`}>
-                  <div className={styles.yearInfo}>
-                    <span className={styles.yearName}>{year.name}</span>
-                    <span className={styles.yearDates}>{year.start_date} - {year.end_date}</span>
+                  <div className={styles.yearHeader}>
+                    <div className={styles.yearInfo}>
+                      <span className={styles.yearName}>{year.name}</span>
+                      <span className={styles.yearDates}>{year.start_date} to {year.end_date}</span>
+                    </div>
+                    <div className={styles.yearActions}>
+                      {year.is_active && <span className={styles.activeBadge}>Current Year</span>}
+                      <button className={styles.deleteIcon} onClick={() => handleDeleteYear(year.id)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <div className={styles.yearActions}>
-                    {year.is_active && <span className={styles.activeBadge}>Current</span>}
-                    <button className={styles.deleteIcon}>
-                      <Trash2 size={14} />
-                    </button>
+                  
+                  {/* Nested Terms List */}
+                  <div className={styles.termsContainer}>
+                    <div className={styles.termsHeader}>
+                      <h4>Terms / Semesters</h4>
+                      <button 
+                        className={styles.addTermBtn} 
+                        onClick={() => setTermModal({ ...termModal, isOpen: true, academic_year: year.id })}
+                      >
+                        <Plus size={12} /> Add Term
+                      </button>
+                    </div>
+                    <div className={styles.termsList}>
+                      {year.terms && year.terms.length > 0 ? (
+                        year.terms.map((term) => (
+                          <div key={term.id} className={styles.termItem}>
+                            <div className={styles.termInfo}>
+                              <span className={styles.termName}>{term.name}</span>
+                              <span className={styles.termDates}>{term.start_date} to {term.end_date}</span>
+                            </div>
+                            <div className={styles.termActions}>
+                              {term.is_active && <span className={styles.activeBadgeSmall}>Active</span>}
+                              <button className={styles.deleteIconSmall} onClick={() => handleDeleteTerm(term.id)}>
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className={styles.emptyTerms}>No terms configured for this year.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -535,8 +660,75 @@ const SchoolSettings = () => {
               )}
             </div>
           </section>
+          )}
         </div>
       </div>
+
+      {/* Year Modal */}
+      {yearModal.isOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3>Create Academic Year</h3>
+            <form onSubmit={handleSaveYear}>
+              <div className={styles.formGroup}>
+                <label>Year Name (e.g. 2024-25)</label>
+                <input required value={yearModal.name} onChange={e => setYearModal({...yearModal, name: e.target.value})} />
+              </div>
+              <div className={styles.formGrid}>
+                <div className={styles.formGroup}>
+                  <label>Start Date</label>
+                  <input type="date" required value={yearModal.start_date} onChange={e => setYearModal({...yearModal, start_date: e.target.value})} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>End Date</label>
+                  <input type="date" required value={yearModal.end_date} onChange={e => setYearModal({...yearModal, end_date: e.target.value})} />
+                </div>
+              </div>
+              <div className={styles.checkboxGroup}>
+                <input type="checkbox" id="activeYear" checked={yearModal.is_active} onChange={e => setYearModal({...yearModal, is_active: e.target.checked})} />
+                <label htmlFor="activeYear">Set as Current Academic Year</label>
+              </div>
+              <div className={styles.modalFooter}>
+                <button type="button" className={styles.cancelBtn} onClick={() => setYearModal({...yearModal, isOpen: false})}>Cancel</button>
+                <button type="submit" className={styles.submitBtn}>Save Year</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Term Modal */}
+      {termModal.isOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3>Create Term / Semester</h3>
+            <form onSubmit={handleSaveTerm}>
+              <div className={styles.formGroup}>
+                <label>Term Name (e.g. Term 1, Fall Semester)</label>
+                <input required value={termModal.name} onChange={e => setTermModal({...termModal, name: e.target.value})} />
+              </div>
+              <div className={styles.formGrid}>
+                <div className={styles.formGroup}>
+                  <label>Start Date</label>
+                  <input type="date" required value={termModal.start_date} onChange={e => setTermModal({...termModal, start_date: e.target.value})} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>End Date</label>
+                  <input type="date" required value={termModal.end_date} onChange={e => setTermModal({...termModal, end_date: e.target.value})} />
+                </div>
+              </div>
+              <div className={styles.checkboxGroup}>
+                <input type="checkbox" id="activeTerm" checked={termModal.is_active} onChange={e => setTermModal({...termModal, is_active: e.target.checked})} />
+                <label htmlFor="activeTerm">Set as Active Term</label>
+              </div>
+              <div className={styles.modalFooter}>
+                <button type="button" className={styles.cancelBtn} onClick={() => setTermModal({...termModal, isOpen: false})}>Cancel</button>
+                <button type="submit" className={styles.submitBtn}>Save Term</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -19,8 +19,12 @@ urlpatterns = [
     path("report-templates/", views.report_template_list_view, name="report_template_list"),
 
     path("question-bank/", views.question_bank_list_view, name="question_bank_list"),
+    path("question-bank/bulk-delete/", views.question_bank_bulk_delete_view, name="question_bank_bulk_delete"),
+    path("question-bank/<int:pk>/", views.question_bank_detail_view, name="question_bank_detail"),
     path("question-papers/", views.question_paper_list_view, name="question_paper_list"),
+    path("question-papers/<int:pk>/", views.question_paper_detail_view, name="question_paper_detail"),
     
     path("analytics/", views.exam_analytics_view, name="exam_analytics"),
     path("schedules/", views.exam_schedule_global_list_view, name="exam_schedule_global_list"),
+    path("schedules/<int:pk>/", views.exam_schedule_detail_view, name="exam_schedule_detail"),
 ]

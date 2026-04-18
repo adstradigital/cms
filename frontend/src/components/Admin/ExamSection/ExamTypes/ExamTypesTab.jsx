@@ -9,10 +9,13 @@ export default function ExamTypesTab() {
   const [academicYears, setAcademicYears] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     weightage_percentage: 100,
     passing_percentage: 35,
+    max_theory_marks: 80,
+    max_internal_marks: 20,
     is_online: false,
     academic_year: ''
   });
@@ -43,19 +46,40 @@ export default function ExamTypesTab() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await adminApi.createExamType(formData);
+      if (editingId) {
+        await adminApi.updateExamType(editingId, formData);
+      } else {
+        await adminApi.createExamType(formData);
+      }
       setIsModalOpen(false);
+      setEditingId(null);
       fetchData();
       setFormData({
         name: '',
         weightage_percentage: 100,
         passing_percentage: 35,
+        max_theory_marks: 80,
+        max_internal_marks: 20,
         is_online: false,
         academic_year: formData.academic_year
       });
     } catch (error) {
-      alert("Error creating exam type: " + (error.response?.data?.error || error.message));
+      alert(`Error ${editingId ? 'updating' : 'creating'} exam type: ` + (error.response?.data?.error || error.message));
     }
+  };
+
+  const handleEdit = (et) => {
+    setFormData({
+      name: et.name,
+      weightage_percentage: et.weightage_percentage,
+      passing_percentage: et.passing_percentage,
+      max_theory_marks: et.max_theory_marks,
+      max_internal_marks: et.max_internal_marks,
+      is_online: et.is_online,
+      academic_year: et.academic_year
+    });
+    setEditingId(et.id);
+    setIsModalOpen(true);
   };
 
   const handleDelete = async (id) => {
@@ -117,7 +141,19 @@ export default function ExamTypesTab() {
             <button 
               className={styles.btnSm} 
               style={{background: 'var(--color-primary)', color: '#fff'}}
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                setEditingId(null);
+                setFormData({
+                  name: '',
+                  weightage_percentage: 100,
+                  passing_percentage: 35,
+                  max_theory_marks: 80,
+                  max_internal_marks: 20,
+                  is_online: false,
+                  academic_year: formData.academic_year
+                });
+                setIsModalOpen(true);
+              }}
             >
               <Plus size={14} /> Create Exam Type
             </button>
@@ -130,6 +166,7 @@ export default function ExamTypesTab() {
                 <th>Mode</th>
                 <th>Weightage</th>
                 <th>Passing %</th>
+                <th>Max Marks (T/I)</th>
                 <th style={{textAlign: 'right'}}>Actions</th>
               </tr>
             </thead>
@@ -157,14 +194,21 @@ export default function ExamTypesTab() {
                   </td>
                   <td>{et.passing_percentage}%</td>
                   <td>
+                    <div style={{fontSize: '0.85rem'}}>
+                      Theory: <b>{et.max_theory_marks}</b> <br/>
+                      Internal: <b>{et.max_internal_marks}</b>
+                    </div>
+                  </td>
+                  <td>
                     <div className={styles.actionBtns} style={{justifyContent: 'flex-end'}}>
+                      <button className={styles.iconBtn} onClick={() => handleEdit(et)} style={{color: '#3B82F6'}}><Edit2 size={16}/></button>
                       <button className={styles.iconBtn} onClick={() => handleDelete(et.id)} style={{color: '#EF4444'}}><Trash2 size={16}/></button>
                     </div>
                   </td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'var(--theme-text-secondary)' }}>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: 'var(--theme-text-secondary)' }}>
                     No exam types defined yet. Click "Create Exam Type" to start.
                   </td>
                 </tr>
@@ -179,7 +223,7 @@ export default function ExamTypesTab() {
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
-              <h3>Create New Exam Type</h3>
+              <h3>{editingId ? "Edit Exam Type" : "Create New Exam Type"}</h3>
               <button onClick={() => setIsModalOpen(false)}><X size={20}/></button>
             </div>
             <form onSubmit={handleSubmit} className={styles.modalBody}>
@@ -213,6 +257,26 @@ export default function ExamTypesTab() {
                   />
                 </div>
               </div>
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label>Max Theory Marks</label>
+                  <input 
+                    type="number" 
+                    required 
+                    value={formData.max_theory_marks}
+                    onChange={e => setFormData({ ...formData, max_theory_marks: e.target.value })}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Max Internal Marks</label>
+                  <input 
+                    type="number" 
+                    required 
+                    value={formData.max_internal_marks}
+                    onChange={e => setFormData({ ...formData, max_internal_marks: e.target.value })}
+                  />
+                </div>
+              </div>
               <div className={styles.formGroup}>
                 <label>Academic Year</label>
                 <select 
@@ -221,7 +285,7 @@ export default function ExamTypesTab() {
                   onChange={e => setFormData({ ...formData, academic_year: e.target.value })}
                 >
                   <option value="">Select Year</option>
-                  {academic_years.map(ay => (
+                  {academicYears.map(ay => (
                     <option key={ay.id} value={ay.id}>{ay.name}</option>
                   ))}
                 </select>
@@ -238,7 +302,7 @@ export default function ExamTypesTab() {
               </div>
               <div className={styles.modalFooter}>
                 <button type="button" onClick={() => setIsModalOpen(false)} className={styles.btnSecondary}>Cancel</button>
-                <button type="submit" className={styles.btnPrimary}>Create Type</button>
+                <button type="submit" className={styles.btnPrimary}>{editingId ? "Save Changes" : "Create Type"}</button>
               </div>
             </form>
           </div>

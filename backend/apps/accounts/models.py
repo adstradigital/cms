@@ -32,6 +32,7 @@ class AcademicYear(models.Model):
     end_date = models.DateField()
     is_active = models.BooleanField(default=False)
     working_days = models.JSONField(default=list, help_text="List of working day indices (1=Mon, 7=Sun)")
+    timetable_config = models.JSONField(default=dict, blank=True, help_text="Stores periods, breaks, and time settings")
 
     def save(self, *args, **kwargs):
         if not self.working_days:
@@ -44,6 +45,22 @@ class AcademicYear(models.Model):
     class Meta:
         db_table = "academic_years"
         unique_together = ("school", "name")
+
+
+class Term(models.Model):
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="terms")
+    name = models.CharField(max_length=50)  # e.g. "Term 1", "Semester 1", "Fall"
+    start_date = models.DateField()
+    end_date = models.DateField()
+    is_active = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"{self.academic_year.name} — {self.name}"
+
+    class Meta:
+        db_table = "terms"
+        unique_together = ("academic_year", "name")
+        ordering = ["start_date"]
 
 
 

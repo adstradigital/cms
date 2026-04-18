@@ -22,6 +22,8 @@ class ExamType(models.Model):
     academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="exam_types", null=True, blank=True)
     weightage_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=100.00)
     passing_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=35.00)
+    max_theory_marks = models.PositiveSmallIntegerField(default=80)
+    max_internal_marks = models.PositiveSmallIntegerField(default=20)
     grading_scale = models.ForeignKey(GradingScale, on_delete=models.SET_NULL, null=True, blank=True, related_name="exam_types")
     is_online = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -147,10 +149,13 @@ class QuestionBank(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="questions")
     academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="questions", null=True, blank=True)
     text = models.TextField()
-    question_type = models.CharField(max_length=50, choices=[("MCQ", "Multiple Choice"), ("DESC", "Descriptive")], default="MCQ")
+    question_type = models.CharField(max_length=50, choices=[("MCQ", "Multiple Choice"), ("Descriptive", "Descriptive"), ("True/False", "True/False")], default="MCQ")
     options = models.JSONField(default=list, blank=True) # list of strings or dicts
     correct_answer = models.CharField(max_length=255, blank=True)
     marks = models.DecimalField(max_digits=5, decimal_places=2, default=1.00)
+    difficulty = models.CharField(max_length=20, choices=[
+        ("Easy", "Easy"), ("Medium", "Medium"), ("Hard", "Hard")
+    ], default="Medium")
     bloom_level = models.CharField(max_length=50, blank=True, choices=[
         ("remember", "Remember"), ("understand", "Understand"), 
         ("apply", "Apply"), ("analyze", "Analyze"), 

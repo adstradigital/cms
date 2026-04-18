@@ -3,7 +3,7 @@ from .models import (
     FoodItem, DailyMenu, CanteenComplaint, CanteenSupplier, 
     CanteenInventoryItem, CanteenInventoryLog, CanteenWastageLog, 
     CanteenConsumptionLog, FoodCategory, CanteenOrder,
-    CanteenIngredient, CanteenDish, CanteenCombo
+    CanteenIngredient, CanteenDish, CanteenCombo, WeeklyMenu
 )
 
 class FoodCategorySerializer(serializers.ModelSerializer):
@@ -86,4 +86,9 @@ class CanteenOrderSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CanteenOrder
+        fields = "__all__"
+
+class WeeklyMenuSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WeeklyMenu
         fields = "__all__"

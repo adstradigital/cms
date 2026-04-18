@@ -216,18 +216,9 @@ class TimetableDraftGenerator:
         self._seed_teacher_busy_state(teacher_ids)
         self._prefetch_teachers(teacher_ids)
 
-        total_required = sum(need.weekly_periods for need in allocations)
-        total_slots = len(self.working_days) * (
-            self.periods_per_day - len([period for period in self.break_periods if period <= self.periods_per_day])
-        )
-        if total_required > total_slots:
-            break_count = len(self.break_periods)
-            return {
-                "success": False,
-                "error": f"Subject weekly periods ({total_required}) exceed available teaching slots ({total_slots}). "
-                         f"[Calculation: {len(self.working_days)} days * ({self.periods_per_day} periods - {break_count} breaks)]. "
-                         f"Please increase periods per day or working days.",
-            }
+        # Removed strict validation check for (total_required > total_slots) 
+        # to allow 'best effort' generation as requested by the user. 
+        # Unplaced subjects will still be returned in the 'meta' field.
 
         remaining = {need.subject_id: need.weekly_periods for need in allocations}
         need_map = {need.subject_id: need for need in allocations}

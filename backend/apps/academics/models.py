@@ -132,7 +132,8 @@ class SyllabusTopic(models.Model):
 class SubjectAllocation(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="allocations")
     section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="subject_allocations")
-    teachers = models.ManyToManyField(User, related_name="allocated_subjects", blank=True)
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name="allocated_subjects", null=True, blank=True)
+    substitute_teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="substitute_allocations", help_text="Temporary substitute teacher assignment.")
     academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name="subject_allocations")
 
     def __str__(self):

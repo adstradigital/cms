@@ -34,7 +34,7 @@ export default function AnalyticsTab() {
     const fetchAnalytics = async () => {
       setLoading(true);
       try {
-        const res = await adminApi.getExamAnalytics(selectedExam);
+        const res = await adminApi.getExamAnalytics({ exam: selectedExam });
         setAnalytics(res.data);
       } catch (error) {
         console.error("Error fetching analytics:", error);
@@ -61,7 +61,7 @@ export default function AnalyticsTab() {
     return acc;
   }, {}) || {};
 
-  const uniqueSubjects = [...new Set(analytics?.class_performance?.map(p => p['exam_schedule__subject__name']))] || [];
+  const uniqueSubjects = [...new Set(analytics?.class_performance?.map(p => p['exam_schedule__subject__name']) || [])];
   const uniqueClasses = Object.keys(groupedPerformance);
 
   return (

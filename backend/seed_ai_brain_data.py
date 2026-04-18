@@ -118,7 +118,7 @@ def make_user(first, last, portal, school, role=None, is_staff_flag=False):
 print("\n🏫 Phase 1: School, Academic Years, Roles & Admin …")
 
 school = School.objects.create(
-    name="CMS Education Academy",
+    name="Campus Management Academy",
     tagline="Igniting Minds, Shaping Futures",
     address="123 Knowledge Lane, Kochi, Kerala, India - 682024",
     phone="+91 484 2345678", email="admin@cms.edu.in",

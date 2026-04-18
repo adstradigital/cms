@@ -398,9 +398,24 @@ const TeacherList = () => {
 
               {addTab === 'professional' && (
                 <div className={styles.formGrid}>
+                  <div className={`${styles.formGroup} ${styles.fullRow}`} style={{ marginBottom: 20 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', background: '#f8fafc', padding: '12px 16px', borderRadius: 12, border: '1px solid var(--theme-border)' }}>
+                      <input 
+                        type="checkbox" 
+                        style={{ width: 18, height: 18 }} 
+                        checked={addForm.is_teaching_staff} 
+                        onChange={(e) => setAddForm(p => ({ ...p, is_teaching_staff: e.target.checked }))} 
+                      />
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>Teaching Staff</div>
+                        <div style={{ fontSize: 11, color: 'var(--theme-text-muted)' }}>Enable this if this person will be assigned to classes/subjects.</div>
+                      </div>
+                    </label>
+                  </div>
+
                   <div className={styles.formGroup}>
                     <label>Designation*</label>
-                    <input value={addForm.designation} onChange={(e) => setAddForm(p => ({ ...p, designation: e.target.value }))} />
+                    <input value={addForm.designation} onChange={(e) => setAddForm(p => ({ ...p, designation: e.target.value }))} placeholder="e.g. Senior Teacher, Driver..." />
                   </div>
                   <div className={styles.formGroup}>
                     <label>Joining Date*</label>
@@ -423,27 +438,40 @@ const TeacherList = () => {
                     <label>Total Experience (Years)</label>
                     <input type="number" value={addForm.experience_years} onChange={(e) => setAddForm(p => ({ ...p, experience_years: e.target.value }))} />
                   </div>
-                  <div className={`${styles.formGroup} ${styles.fullRow}`}>
-                    <label>Teaching Subjects*</label>
-                    <select
-                      multiple
-                      size={8}
-                      value={addForm.teaching_subject_ids}
-                      onChange={(e) => {
-                        const values = Array.from(e.target.selectedOptions).map((o) => o.value);
-                        setAddForm((p) => ({ ...p, teaching_subject_ids: values }));
-                      }}
-                    >
-                      {subjects.map((subject) => (
-                        <option key={subject.id} value={subject.id}>
-                          {subject.name} ({subject.code})
-                        </option>
-                      ))}
-                    </select>
-                    <small style={{ color: 'var(--theme-text-muted)' }}>
-                      Hold Ctrl/Cmd to select multiple subjects.
-                    </small>
-                  </div>
+
+                  {addForm.is_teaching_staff && (
+                    <div className={`${styles.formGroup} ${styles.fullRow}`} style={{ animation: 'fadeIn 0.3s ease' }}>
+                      <label style={{ color: 'var(--color-primary)', fontWeight: 700 }}>Qualified Teaching Subjects*</label>
+                      <p style={{ fontSize: 11, color: 'var(--theme-text-muted)', marginBottom: 8, marginTop: -4 }}>
+                        Select the subjects this teacher is qualified to teach. They will appear in the pools for these subjects.
+                      </p>
+                      <select
+                        multiple
+                        size={8}
+                        className={styles.select}
+                        style={{ width: '100%', minHeight: 150 }}
+                        value={addForm.teaching_subject_ids}
+                        onChange={(e) => {
+                          const values = Array.from(e.target.selectedOptions).map((o) => o.value);
+                          setAddForm((p) => ({ ...p, teaching_subject_ids: values }));
+                        }}
+                      >
+                        {subjects.map((subject) => (
+                          <option key={subject.id} value={subject.id}>
+                            {subject.name} ({subject.code})
+                          </option>
+                        ))}
+                      </select>
+                      <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between' }}>
+                        <small style={{ color: 'var(--theme-text-muted)' }}>
+                          Hold Ctrl/Cmd to select multiple.
+                        </small>
+                        <small style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
+                          {addForm.teaching_subject_ids.length} subjects selected
+                        </small>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

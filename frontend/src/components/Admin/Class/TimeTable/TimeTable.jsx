@@ -171,11 +171,11 @@ const TimeTable = () => {
       if (selectedSubject?.id && Number(a.subject) === Number(selectedSubject.id)) return true;
       return a.subject_name === slotForm.subject;
     });
-    const allowedTeacherIdsFromAllocations = new Set(
-      filteredAllocations
-        .flatMap((a) => (Array.isArray(a.teachers) ? a.teachers : []))
-        .map((id) => Number(id))
-    );
+    const allowedTeacherIdsFromAllocations = new Set();
+    filteredAllocations.forEach((a) => {
+      if (a.teacher) allowedTeacherIdsFromAllocations.add(Number(a.teacher));
+      if (a.substitute_teacher) allowedTeacherIdsFromAllocations.add(Number(a.substitute_teacher));
+    });
     const allowedTeacherIdsFromProfile = new Set(
       teachers
         .filter((teacher) =>
@@ -247,8 +247,8 @@ const TimeTable = () => {
         const sameSubject = Number(allocation.subject) === Number(subjectRow.id)
           || allocation.subject_name === subjectRow.name
           || (subjectObj && allocation.subject_name === subjectObj.name);
-        const hasTeachers = Array.isArray(allocation.teachers) && allocation.teachers.length > 0;
-        return sameSubject && hasTeachers;
+        const hasTeacher = Boolean(allocation.teacher || allocation.substitute_teacher);
+        return sameSubject && hasTeacher;
       });
       if (hasAllocationTeacher) return false;
       const hasProfileTeacher = teachers.some((teacher) =>

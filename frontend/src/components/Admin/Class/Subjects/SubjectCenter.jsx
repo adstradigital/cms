@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
   AlertTriangle,
+  Shield,
 } from 'lucide-react';
 import styles from './Subjects.module.css';
 import adminApi from '@/api/adminApi';
@@ -56,9 +57,12 @@ const SubjectCenter = ({ section = null }) => {
   const [isAddingSubject, setIsAddingSubject] = useState(false);
   const [editingAllocation, setEditingAllocation] = useState(null);
 
-  const [newAlloc, setNewAlloc] = useState({ subject: '', section: '', teachers: [], academic_year: '' });
+  const [newAlloc, setNewAlloc] = useState({ subject: '', section: '', teacher: '', substitute_teacher: '', academic_year: '' });
   const [newSubject, setNewSubject] = useState({ name: '', code: '', description: '', school_class: forcedClassId, weekly_periods: 5 });
   const [selectedSectionStats, setSelectedSectionStats] = useState(0);
+  const [showAllTeachers, setShowAllTeachers] = useState(false);
+  const [isViewingAllocations, setIsViewingAllocations] = useState(false);
+  const [subjectForAllocations, setSubjectForAllocations] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -192,13 +196,31 @@ const SubjectCenter = ({ section = null }) => {
     return sections.filter((s) => String(s.school_class || s.school_class_id) === String(selectedClassId));
   }, [isSectionScoped, sectionId, sections, selectedClassId]);
 
+  const filteredTeachers = useMemo(() => {
+    if (showAllTeachers || !newAlloc.subject) return teachers;
+    const selectedSubId = Number(newAlloc.subject);
+    const qualified = teachers.filter(t => 
+      Array.isArray(t.teaching_subject_ids) && t.teaching_subject_ids.includes(selectedSubId)
+    );
+    return qualified.length > 0 ? qualified : teachers;
+  }, [teachers, newAlloc.subject, showAllTeachers]);
+
+  const qualifiedCount = useMemo(() => {
+    if (!newAlloc.subject) return 0;
+    const selectedSubId = Number(newAlloc.subject);
+    return teachers.filter(t => 
+      Array.isArray(t.teaching_subject_ids) && t.teaching_subject_ids.includes(selectedSubId)
+    ).length;
+  }, [teachers, newAlloc.subject]);
+
   const openAllocationModal = (subjectId, allocation = null) => {
     if (allocation) {
       setEditingAllocation(allocation);
       setNewAlloc({
         subject: allocation.subject,
         section: allocation.section,
-        teachers: allocation.teachers || [],
+        teacher: allocation.teacher || '',
+        substitute_teacher: allocation.substitute_teacher || '',
         academic_year: allocation.academic_year || '',
       });
       const sectionObj = sections.find((s) => s.id === allocation.section);
@@ -210,24 +232,31 @@ const SubjectCenter = ({ section = null }) => {
         ...prev,
         subject: subjectId,
         section: isSectionScoped ? sectionId : '',
-        teachers: [],
+        teacher: '',
+        substitute_teacher: '',
         academic_year: prev.academic_year || '',
       }));
       setSelectedSectionStats(isSectionScoped ? (scopedSectionObj?.student_count || 0) : 0);
     }
     setIsAssigning(true);
   };
+  
+  const openSubjectAllocations = (subject) => {
+    setSubjectForAllocations(subject);
+    setIsViewingAllocations(true);
+  };
 
   const saveAllocation = async () => {
-    if (!newAlloc.subject || (!isSectionScoped && !newAlloc.section) || !newAlloc.academic_year || newAlloc.teachers.length === 0) {
-      alert('Please select class, academic year, and at least one teacher.');
+    if (!newAlloc.subject || (!isSectionScoped && !newAlloc.section) || !newAlloc.academic_year || !newAlloc.teacher) {
+      alert('Please select class, academic year, and a primary teacher.');
       return;
     }
     const payload = {
       subject: Number(newAlloc.subject),
       section: Number(isSectionScoped ? sectionId : newAlloc.section),
       academic_year: Number(newAlloc.academic_year),
-      teachers: newAlloc.teachers.map(Number),
+      teacher: Number(newAlloc.teacher),
+      substitute_teacher: newAlloc.substitute_teacher ? Number(newAlloc.substitute_teacher) : null,
     };
     try {
       if (editingAllocation) {
@@ -278,12 +307,26 @@ const SubjectCenter = ({ section = null }) => {
         const currentTopic = topAllocation ? getCurrentTopicForAllocation(topAllocation) : 'No in-progress lesson';
 
         return (
-          <div key={subject.id} className={styles.card}>
+          <div key={subject.id} className={styles.card} style={{ cursor: 'pointer' }} onClick={() => openSubjectAllocations(subject)}>
             <div className={styles.cardHeader}>
               <div className={styles.subjectIcon}>{subject.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}</div>
               <div className={styles.cardInfo} style={{ flex: 1, marginLeft: 16 }}>
                 <h3>{subject.name}</h3>
-                <span>{subject.code}</span>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span>{subject.code}</span>
+                  {subjectAllocations.length > 0 && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: 'var(--color-primary)',
+                      color: 'white',
+                      borderRadius: 20,
+                      padding: '2px 8px'
+                    }}>
+                      {subjectAllocations.length} section{subjectAllocations.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button className={styles.iconBtn} onClick={() => openAllocationModal(subject.id)} title="Assign to Class"><Plus size={16} /></button>
@@ -301,10 +344,53 @@ const SubjectCenter = ({ section = null }) => {
             </div>
 
             <div className={styles.teacherBox}>
-              <div className={styles.avatar}>{(topAllocation?.teacher_names || 'A').split(',')[0].trim().split(' ').map((n) => n[0]).join('')}</div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: 11, color: 'var(--theme-text-muted)', fontWeight: 600 }}>Assigned Teacher(s)</span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{topAllocation?.teacher_names || 'Not Assigned'}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                <span style={{ fontSize: 11, color: 'var(--theme-text-muted)', fontWeight: 600, marginBottom: 6 }}>
+                  Teachers ({subjectAllocations.length} section{subjectAllocations.length !== 1 ? 's' : ''})
+                </span>
+                {subjectAllocations.length === 0 ? (
+                  <span style={{ fontSize: 13, color: 'var(--theme-text-muted)' }}>No sections assigned yet</span>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {subjectAllocations.map((alloc) => (
+                      <div 
+                        key={alloc.id} 
+                        className={styles.teacherRowItem}
+                        onClick={() => openAllocationModal(subject.id, alloc)}
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 8, 
+                          padding: '6px 8px', 
+                          borderRadius: 8, 
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          background: 'rgba(241, 245, 249, 0.5)'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(241, 245, 249, 0.5)'}
+                        title={`Manage teacher for ${alloc.section_name}`}
+                      >
+                        <div className={styles.avatar} style={{ width: 24, height: 24, fontSize: 10, flexShrink: 0, background: alloc.teacher_name ? 'var(--color-primary)' : '#e2e8f0' }}>
+                          {(alloc.teacher_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.2 }}>
+                              {alloc.teacher_name || 'Assign Teacher'}
+                            </span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-primary)', background: '#eff6ff', padding: '1px 4px', borderRadius: 4 }}>
+                              {alloc.section_name}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>
+                            {alloc.teacher_name ? 'Primary Teacher' : 'Click to assign'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -329,7 +415,8 @@ const SubjectCenter = ({ section = null }) => {
             <button
               className={`${styles.btn} ${styles.outline}`}
               style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 setSelectedSubject(subject);
                 setSelectedAllocation(topAllocation || null);
               }}
@@ -348,7 +435,7 @@ const SubjectCenter = ({ section = null }) => {
         <thead>
           <tr>
             <th className={styles.th}>Subject Name</th>
-            <th className={styles.th}>Allocations</th>
+            <th className={styles.th}>Section → Teacher</th>
             <th className={styles.th}>Overall Progress</th>
             <th className={styles.th}>Action</th>
           </tr>
@@ -498,31 +585,55 @@ const SubjectCenter = ({ section = null }) => {
               </div>
 
               <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 8 }}>Teacher(s)</label>
-                <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, padding: 10, maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {teachers.map((t) => {
-                    const checked = newAlloc.teachers.includes(t.id);
-                    const fullName = t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email || `User ${t.id}`;
-                    return (
-                      <label key={t.id} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13 }}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            setNewAlloc((prev) => ({
-                              ...prev,
-                              teachers: e.target.checked ? [...prev.teachers, t.id] : prev.teachers.filter((id) => id !== t.id),
-                            }));
-                          }}
-                        />
-                        <span style={{ display: 'flex', flexDirection: 'column' }}>
-                          <b>{fullName}</b>
-                          <small style={{ color: '#64748b' }}>{t.subject_specialty || t.specialty || 'General'}</small>
-                        </span>
-                      </label>
-                    );
-                  })}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>Section Teacher</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', color: '#64748b' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={showAllTeachers} 
+                      onChange={(e) => setShowAllTeachers(e.target.checked)}
+                    />
+                    Show all staff
+                  </label>
                 </div>
+                <p style={{ fontSize: 11, color: '#64748b', marginBottom: 8, marginTop: 0 }}>
+                  One teacher per section. Different sections can have different teachers.
+                </p>
+                <select 
+                  className={styles.select} 
+                  style={{ width: '100%' }} 
+                  value={newAlloc.teacher} 
+                  onChange={(e) => setNewAlloc((prev) => ({ ...prev, teacher: e.target.value }))}
+                >
+                  <option value="">-- Select primary teacher --</option>
+                  {filteredTeachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email} ({t.subject_specialty || 'General'})
+                    </option>
+                  ))}
+                </select>
+                {!showAllTeachers && qualifiedCount > 0 && (
+                  <p style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>
+                    Showing {qualifiedCount} qualified teachers for this subject.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 8 }}>Substitute Teacher (Optional)</label>
+                <select 
+                  className={styles.select} 
+                  style={{ width: '100%' }} 
+                  value={newAlloc.substitute_teacher} 
+                  onChange={(e) => setNewAlloc((prev) => ({ ...prev, substitute_teacher: e.target.value }))}
+                >
+                  <option value="">-- No substitute --</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id} disabled={String(t.id) === String(newAlloc.teacher)}>
+                      {t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -621,6 +732,111 @@ const SubjectCenter = ({ section = null }) => {
                   Create Master
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {isViewingAllocations && subjectForAllocations && (
+        <div className={styles.modalOverlay} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: 32, borderRadius: 24, width: 700, maxWidth: '95%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--color-primary)' }}>{subjectForAllocations.name} Master Control</h3>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--theme-text-muted)' }}>Manage the qualified teacher pool and section assignments</p>
+              </div>
+              <button className={styles.iconBtn} onClick={() => setIsViewingAllocations(false)}><X size={24} /></button>
+            </div>
+
+            {/* TEACHER POOL SECTION */}
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <div style={{ padding: '6px', background: 'var(--color-primary-light)', borderRadius: 8, color: 'white' }}><Shield size={18} /></div>
+                <h4 style={{ margin: 0, fontSize: 16 }}>Qualified Teacher Pool</h4>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: 20, background: '#f1f5f9', borderRadius: 16, border: '1px dashed #cbd5e1' }}>
+                {teachers.filter(t => Array.isArray(t.teaching_subject_ids) && t.teaching_subject_ids.includes(subjectForAllocations.id)).length === 0 ? (
+                  <div style={{ textAlign: 'center', width: '100%', padding: '10px 0', color: '#64748b', fontSize: 13 }}>
+                    No teachers have been linked to this subject yet. Go to Staff Directory to add them.
+                  </div>
+                ) : (
+                  teachers.filter(t => Array.isArray(t.teaching_subject_ids) && t.teaching_subject_ids.includes(subjectForAllocations.id)).map(t => (
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'white', padding: '8px 12px', borderRadius: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                      <div className={styles.avatar} style={{ width: 32, height: 32, fontSize: 12, background: 'var(--color-primary)' }}>
+                        {(t.full_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{t.full_name}</span>
+                        <span style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>{t.specialization || 'Qualified'}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* ALLOCATIONS SECTION */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <div style={{ padding: '6px', background: '#6366f1', borderRadius: 8, color: 'white' }}><BookOpen size={18} /></div>
+                <h4 style={{ margin: 0, fontSize: 16 }}>Section Assignments</h4>
+              </div>
+              <div className={styles.tableWrapper} style={{ background: '#f8fafc', borderRadius: 16, padding: 8 }}>
+                <table className={styles.table} style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: 12 }}>Section</th>
+                      <th style={{ textAlign: 'left', padding: 12 }}>Current Teacher</th>
+                      <th style={{ textAlign: 'center', padding: 12 }}>Status</th>
+                      <th style={{ textAlign: 'right', padding: 12 }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getSubjectAllocations(subjectForAllocations.id).length === 0 ? (
+                      <tr>
+                        <td colSpan="4" style={{ textAlign: 'center', padding: 40, color: 'var(--theme-text-muted)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                            <AlertTriangle size={32} color="#94a3b8" />
+                            <span>No sections have been assigned to this subject yet.</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      getSubjectAllocations(subjectForAllocations.id).map((alloc) => (
+                        <tr key={alloc.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                          <td style={{ padding: 12, fontWeight: 700 }}>{alloc.section_name}</td>
+                          <td style={{ padding: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div className={styles.avatar} style={{ width: 28, height: 28, fontSize: 11, background: alloc.teacher_name ? 'var(--color-primary)' : '#e2e8f0' }}>
+                                {(alloc.teacher_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <span style={{ fontSize: 14 }}>{alloc.teacher_name || 'Not Assigned'}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: 12, textAlign: 'center' }}>
+                            {alloc.teacher_name ? (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '4px 8px', borderRadius: 12 }}>ACTIVE</span>
+                            ) : (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: '#fef2f2', padding: '4px 8px', borderRadius: 12 }}>UNASSIGNED</span>
+                            )}
+                          </td>
+                          <td style={{ padding: 12, textAlign: 'right' }}>
+                            <button className={styles.iconBtn} onClick={() => { setIsViewingAllocations(false); openAllocationModal(subjectForAllocations.id, alloc); }}>
+                              <Edit3 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button className={styles.btn} onClick={() => setIsViewingAllocations(false)}>Close Overview</button>
+              <button className={`${styles.btn} ${styles.primary}`} onClick={() => { setIsViewingAllocations(false); openAllocationModal(subjectForAllocations.id); }}>
+                <Plus size={16} /> Add New Section
+              </button>
             </div>
           </div>
         </div>

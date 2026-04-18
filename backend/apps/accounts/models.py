@@ -123,9 +123,10 @@ class User(AbstractUser):
     def get_allocated_section_ids(self):
         """Returns IDs of sections where this user has a SubjectAllocation (i.e. teaches a subject)."""
         from apps.academics.models import SubjectAllocation
+        from django.db.models import Q
         return list(
             SubjectAllocation.objects.filter(
-                teachers=self
+                Q(teacher=self) | Q(substitute_teacher=self)
             ).values_list('section_id', flat=True).distinct()
         )
 

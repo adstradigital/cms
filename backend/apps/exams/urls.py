@@ -32,4 +32,17 @@ urlpatterns = [
     path("quizzes/", views.student_quiz_list_view, name="student_quiz_list"),
     path("quizzes/<int:pk>/", views.student_quiz_detail_view, name="student_quiz_detail"),
     path("quizzes/<int:pk>/submit/", views.student_quiz_submit_view, name="student_quiz_submit"),
+
+    # ─── Online Test v2 ───────────────────────────────────────────────
+    path("online-tests/", views.online_test_list_view, name="online_test_list"),
+    path("online-tests/<int:pk>/", views.online_test_detail_view, name="online_test_detail"),
+    path("online-tests/<int:pk>/publish/", views.online_test_publish_view, name="online_test_publish"),
+    path("online-tests/<int:test_pk>/questions/", views.test_question_list_view, name="test_question_list"),
+    path("online-tests/questions/<int:pk>/", views.test_question_detail_view, name="test_question_detail"),
+    path("online-tests/<int:test_pk>/attempt/", views.test_start_attempt_view, name="test_start_attempt"),
+    path("online-tests/attempts/<int:attempt_pk>/submit/", views.test_submit_attempt_view, name="test_submit_attempt"),
+    path("online-tests/attempts/<int:attempt_pk>/", views.test_attempt_detail_view, name="test_attempt_detail"),
+    path("online-tests/<int:test_pk>/submissions/", views.test_submissions_view, name="test_submissions"),
+    path("online-tests/answers/<int:answer_pk>/grade/", views.test_grade_answer_view, name="test_grade_answer"),
+    path("online-tests/attempts/<int:attempt_pk>/publish/", views.test_publish_result_view, name="test_publish_result"),
 ]

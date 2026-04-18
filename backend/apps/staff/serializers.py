@@ -18,6 +18,7 @@ class StaffSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(source='user.last_name', read_only=True)
     teaching_subject_ids = serializers.SerializerMethodField()
     teaching_subject_names = serializers.SerializerMethodField()
+    specialization = serializers.SerializerMethodField()
 
     class Meta:
         model = Staff
@@ -25,8 +26,13 @@ class StaffSerializer(serializers.ModelSerializer):
             'id', 'user', 'full_name', 'email', 'phone', 'employee_id',
             'joining_date', 'status', 'is_teaching_staff', 'role_name',
             'user_role_id', 'is_active', 'experience_years', 'qualification',
-            'first_name', 'last_name', 'teaching_subject_ids', 'teaching_subject_names'
+            'first_name', 'last_name', 'teaching_subject_ids', 'teaching_subject_names',
+            'specialization'
         ]
+
+    def get_specialization(self, obj):
+        detail = getattr(obj, "teacher_detail", None)
+        return detail.specialization if detail else "General"
 
     def get_teaching_subject_ids(self, obj):
         detail = getattr(obj, "teacher_detail", None)
@@ -114,7 +120,10 @@ class TeacherDetailSerializer(serializers.ModelSerializer):
         fields = ['specialization', 'bio', 'allocated_subjects', 'teaching_subject_ids', 'teaching_subject_names']
 
     def get_allocated_subjects(self, obj):
-        allocations = SubjectAllocation.objects.filter(teachers=obj.staff.user)
+        from django.db.models import Q
+        allocations = SubjectAllocation.objects.filter(
+            Q(teacher=obj.staff.user) | Q(substitute_teacher=obj.staff.user)
+        )
         return [
             {
                 'subject_name': a.subject.name,

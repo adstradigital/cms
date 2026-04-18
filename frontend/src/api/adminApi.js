@@ -166,6 +166,30 @@ const adminApi = {
   getClubs: (params) => instance.get('/events/clubs/', { params }),
   createClub: (data) => instance.post('/events/clubs/', data),
   updateClub: (id, data) => instance.patch(`/events/clubs/${id}/`, data),
+
+  // ─── Online Tests v2 ─────────────────────────────────────────────
+  getOnlineTests: (params) => instance.get('/exams/online-tests/', { params }),
+  createOnlineTest: (data) => instance.post('/exams/online-tests/', data),
+  getOnlineTest: (id) => instance.get(`/exams/online-tests/${id}/`),
+  updateOnlineTest: (id, data) => instance.patch(`/exams/online-tests/${id}/`, data),
+  deleteOnlineTest: (id) => instance.delete(`/exams/online-tests/${id}/`),
+  publishOnlineTest: (id) => instance.post(`/exams/online-tests/${id}/publish/`),
+
+  // Questions
+  getTestQuestions: (testId) => instance.get(`/exams/online-tests/${testId}/questions/`),
+  createTestQuestion: (testId, data) => instance.post(`/exams/online-tests/${testId}/questions/`, data),
+  updateTestQuestion: (id, data) => instance.patch(`/exams/online-tests/questions/${id}/`, data),
+  deleteTestQuestion: (id) => instance.delete(`/exams/online-tests/questions/${id}/`),
+
+  // Attempts
+  startTestAttempt: (testId) => instance.post(`/exams/online-tests/${testId}/attempt/`),
+  submitTestAttempt: (attemptId, data) => instance.post(`/exams/online-tests/attempts/${attemptId}/submit/`, data),
+  getTestAttempt: (attemptId) => instance.get(`/exams/online-tests/attempts/${attemptId}/`),
+  getTestSubmissions: (testId, params) => instance.get(`/exams/online-tests/${testId}/submissions/`, { params }),
+
+  // Grading
+  gradeTestAnswer: (answerId, data) => instance.patch(`/exams/online-tests/answers/${answerId}/grade/`, data),
+  publishTestResult: (attemptId) => instance.post(`/exams/online-tests/attempts/${attemptId}/publish/`),
 };
 
 export default adminApi;

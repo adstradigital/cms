@@ -110,8 +110,12 @@ const menuSections = {
       title: 'MAIN',
       items: [
         { label: 'Dashboard', href: '/parent', icon: LayoutDashboard },
-        { label: 'Child Progress', href: '/parent/child-progress', icon: BarChart3 },
-        { label: 'Payments', href: '/parent/payments', icon: CreditCard },
+        { label: 'Child Progress', href: '/parent?tab=academics', icon: BarChart3 },
+        { label: 'Attendance', href: '/parent?tab=attendance', icon: ClipboardCheck },
+        { label: 'Homework', href: '/parent?tab=homework', icon: Edit3 },
+        { label: 'Payments', href: '/parent?tab=fees', icon: CreditCard },
+        { label: 'PTM Scheduler', href: '/parent?tab=ptm', icon: CalendarDays },
+        { label: 'Transport', href: '/parent?tab=transport', icon: School },
       ]
     }
   ],

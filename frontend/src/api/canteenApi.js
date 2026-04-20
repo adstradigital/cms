@@ -88,7 +88,7 @@ const canteenApi = {
   
   // ── Customer Search (Students/Staff) ─────────────────────────────────────────
   searchStudents: (query, params = {}) => instance.get('/students/students/', { params: { search: query, ...params } }),
-  searchStaff: (query, params = {}) => instance.get('/staff/', { params: { search: query, ...params } }),
+  searchStaff: (query, params = {}) => instance.get('/staff/', { params: { q: query, ...params } }),
 };
 
 export default canteenApi;

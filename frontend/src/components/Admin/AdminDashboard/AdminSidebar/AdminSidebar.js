@@ -19,6 +19,7 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
+  Bus,
   Bed,
   Utensils,
   Library
@@ -92,6 +93,7 @@ const AdminSidebar = () => {
     else if (pathname?.startsWith('/admins/examinations')) setExpandedMenu('Examinations');
     else if (pathname?.startsWith('/admins/library')) setExpandedMenu('Library');
     else if (pathname?.startsWith('/admins/canteen')) setExpandedMenu('Canteen');
+    else if (pathname?.startsWith('/admins/transport')) setExpandedMenu('Transport');
   }, [pathname]);
   
   const isStudentsPath = pathname?.startsWith('/admins/students');
@@ -101,6 +103,7 @@ const AdminSidebar = () => {
   const isExaminationsPath = pathname?.startsWith('/admins/examinations');
   const isLibraryPath = pathname?.startsWith('/admins/library');
   const isCanteenPath = pathname?.startsWith('/admins/canteen');
+  const isTransportPath = pathname?.startsWith('/admins/transport');
   
   // ── Flyout hover logic ──────────────────────────────────────────────────────
   const cancelHide = useCallback(() => {
@@ -238,6 +241,21 @@ const AdminSidebar = () => {
         />
 
         <ExpandableSection
+          label="Transport"
+          icon={<Bus size={18} />}
+          sectionKey="Transport"
+          items={SECTIONS.transport}
+          isActivePath={isTransportPath}
+          collapsedHref="/admins/transport/overview"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
+
+        <ExpandableSection
           label="Library"
           icon={<Library size={18} />}
           sectionKey="Library"
@@ -351,6 +369,14 @@ const SECTIONS = {
     { label: "Mess", href: "/admins/hostel/mess" },
     { label: "Fees", href: "/admins/hostel/fees" },
     { label: "Analytics", href: "/admins/hostel/analytics" },
+  ],
+  transport: [
+    { label: "Overview", href: "/admins/transport/overview" },
+    { label: "School Buses", href: "/admins/transport/buses" },
+    { label: "Routes", href: "/admins/transport/routes" },
+    { label: "Live Tracking", href: "/admins/transport/tracking" },
+    { label: "Transport Fees", href: "/admins/transport/fees" },
+    { label: "Complaints", href: "/admins/transport/complaints" },
   ],
   library: [
     { label: "Overview", href: "/admins/library/overview" },

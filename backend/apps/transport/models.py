@@ -1,13 +1,67 @@
 from django.db import models
-from apps.students.models import Student
+from django.utils import timezone
+
 from apps.accounts.models import User
+from apps.students.models import Student
+
+
+class SchoolBus(models.Model):
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("maintenance", "Maintenance"),
+        ("inactive", "Inactive"),
+    ]
+
+    name = models.CharField(max_length=100)
+    bus_number = models.CharField(max_length=30, unique=True)
+    registration_number = models.CharField(max_length=30, blank=True)
+    capacity = models.PositiveSmallIntegerField(default=40)
+    driver = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_buses",
+    )
+    attendant_name = models.CharField(max_length=100, blank=True)
+    attendant_phone = models.CharField(max_length=20, blank=True)
+    tracker_device_id = models.CharField(max_length=100, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.bus_number} - {self.name}"
+
+    class Meta:
+        db_table = "school_buses"
+        ordering = ["bus_number"]
 
 
 class TransportRoute(models.Model):
     name = models.CharField(max_length=100)
-    driver = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="routes")
+    bus = models.ForeignKey(
+        SchoolBus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="routes",
+    )
+    driver = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="routes",
+    )
     vehicle_number = models.CharField(max_length=20, blank=True)
     vehicle_capacity = models.PositiveSmallIntegerField(default=40)
+    source = models.CharField(max_length=120, blank=True)
+    destination = models.CharField(max_length=120, blank=True)
+    distance_km = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    scheduled_pickup_time = models.TimeField(null=True, blank=True)
+    scheduled_drop_time = models.TimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
@@ -27,7 +81,7 @@ class RouteStop(models.Model):
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.route.name} — Stop {self.stop_order}: {self.stop_name}"
+        return f"{self.route.name} - Stop {self.stop_order}: {self.stop_name}"
 
     class Meta:
         db_table = "route_stops"
@@ -41,7 +95,160 @@ class StudentTransport(models.Model):
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.student} — {self.stop.stop_name}"
+        return f"{self.student} - {self.stop.stop_name}"
 
     class Meta:
         db_table = "student_transport"
+
+
+class BusLocationLog(models.Model):
+    SOURCE_CHOICES = [
+        ("gps", "GPS Device"),
+        ("mobile", "Mobile App"),
+        ("manual", "Manual Entry"),
+    ]
+
+    bus = models.ForeignKey(SchoolBus, on_delete=models.CASCADE, related_name="location_logs")
+    route = models.ForeignKey(
+        TransportRoute,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="location_logs",
+    )
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    speed_kmph = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    heading = models.PositiveSmallIntegerField(null=True, blank=True)
+    recorded_at = models.DateTimeField(default=timezone.now, db_index=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="gps")
+    recorded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transport_locations_reported",
+    )
+
+    def __str__(self):
+        return f"{self.bus.bus_number} @ {self.recorded_at}"
+
+    class Meta:
+        db_table = "bus_location_logs"
+        ordering = ["-recorded_at"]
+        indexes = [models.Index(fields=["bus", "recorded_at"])]
+
+
+class TransportFee(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("partial", "Partial"),
+        ("paid", "Paid"),
+        ("overdue", "Overdue"),
+        ("waived", "Waived"),
+    ]
+    PAYMENT_METHOD_CHOICES = [
+        ("cash", "Cash"),
+        ("online", "Online"),
+        ("card", "Card"),
+        ("upi", "UPI"),
+        ("bank_transfer", "Bank Transfer"),
+        ("cheque", "Cheque"),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="transport_fees")
+    route = models.ForeignKey(
+        TransportRoute,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fee_records",
+    )
+    period_label = models.CharField(max_length=50)
+    amount_due = models.DecimalField(max_digits=10, decimal_places=2)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    due_date = models.DateField()
+    payment_date = models.DateField(null=True, blank=True)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True)
+    transaction_id = models.CharField(max_length=120, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    remarks = models.TextField(blank=True)
+    collected_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transport_fees_collected",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.student} - {self.period_label} - {self.status}"
+
+    class Meta:
+        db_table = "transport_fees"
+        ordering = ["-due_date", "-created_at"]
+
+
+class TransportComplaint(models.Model):
+    STATUS_CHOICES = [
+        ("open", "Open"),
+        ("in_progress", "In Progress"),
+        ("resolved", "Resolved"),
+        ("closed", "Closed"),
+    ]
+    PRIORITY_CHOICES = [
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+        ("urgent", "Urgent"),
+    ]
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transport_complaints",
+    )
+    raised_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="transport_complaints",
+    )
+    route = models.ForeignKey(
+        TransportRoute,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="complaints",
+    )
+    bus = models.ForeignKey(
+        SchoolBus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="complaints",
+    )
+    subject = models.CharField(max_length=200)
+    description = models.TextField()
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default="medium")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
+    resolution_note = models.TextField(blank=True)
+    resolved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transport_complaints_resolved",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.subject} - {self.status}"
+
+    class Meta:
+        db_table = "transport_complaints"
+        ordering = ["-created_at"]

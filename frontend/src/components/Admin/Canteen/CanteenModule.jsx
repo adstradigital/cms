@@ -258,6 +258,10 @@ const CanteenModule = ({ activeSegment }) => {
   const [opStudents, setOpStudents] = useState([]);
   const [opSelected, setOpSelected] = useState(null);
   const [opItems, setOpItems] = useState([]);
+  const [opCustomerType, setOpCustomerType] = useState('student');
+  const [opFoodCat, setOpFoodCat] = useState('all');
+  const [stuList, setStuList] = useState([]);
+  const [staList, setStaList] = useState([]);
 
   const loadOrders = useCallback(async () => {
     try { const r = await canteenApi.getOrders({ status: orderStatus }); setOrders(r.data?.results || r.data || []); }
@@ -356,7 +360,7 @@ const CanteenModule = ({ activeSegment }) => {
     const s = activeSegment || 'dashboard';
     if (s === 'dashboard') loadDashboard();
     if (s === 'menu') { loadFoodItems(); loadWeeklyMenus(); }
-    if (s === 'orders') loadOrders();
+    if (s === 'orders') { loadOrders(); loadFoodItems(); }
     if (s === 'payments') loadPayments();
     if (s === 'inventory') loadInventory();
     if (s === 'suppliers') loadSuppliers();
@@ -398,7 +402,7 @@ const CanteenModule = ({ activeSegment }) => {
                     <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fff', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>#{o.token_number}</div>
                     <div>
                       <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{o.student_name || 'Staff'}</p>
-                      <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>{o.items_count} items \u2022 \u20B9{Number(o.total_amount).toFixed(2)}</p>
+                      <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>{o.items_detail?.length || 0} items • ₹{Number(o.total_amount).toFixed(2)}</p>
                     </div>
                   </div>
                   <StatusBadge statusKey={o.status} />
@@ -528,7 +532,7 @@ const CanteenModule = ({ activeSegment }) => {
                  <p style={{ margin: 0, fontSize: 18 }}>{cat.icon || '🍽\uFE0F'}</p>
               </div>
               <h6 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>{cat.name}</h6>
-              <p style={{ margin: 0, fontSize: 12, color: C.muted }}>{cat.items_count || 0} items listed</p>
+              <p style={{ margin: 0, fontSize: 12, color: C.muted }}>{cat.food_items_count || 0} items listed</p>
             </div>
           ))}
           <div onClick={() => setCatModal(true)} style={{ background: '#F8FAFC', padding: 20, borderRadius: 16, border: `1px dashed ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
@@ -569,11 +573,11 @@ const CanteenModule = ({ activeSegment }) => {
 
       {menuSub === 'always-available' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
-          {foodItems.filter(f => ['Snacks', 'Juice'].includes(f.category_name || f.category)).map(f => (
+          {foodItems.filter(f => ['Snacks', 'Snack', 'Juices', 'Juice'].includes(f.category_name || f.category)).map(f => (
             <div key={f.id} style={{ background: '#fff', padding: 24, borderRadius: 20, border: `1px solid ${C.border}`, position: 'relative', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: (f.category_name || f.category) === 'Juice' ? '#FDF2F8' : '#F0F9FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {(f.category_name || f.category) === 'Juice' ? <Coffee size={20} color="#DB2777" /> : <ShoppingBag size={20} color="#0284C7" />}
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: ['Juices', 'Juice'].includes(f.category_name || f.category) ? '#FDF2F8' : '#F0F9FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {['Juices', 'Juice'].includes(f.category_name || f.category) ? <Coffee size={20} color="#DB2777" /> : <ShoppingBag size={20} color="#0284C7" />}
                 </div>
                 <button 
                   onClick={async () => {
@@ -600,11 +604,11 @@ const CanteenModule = ({ activeSegment }) => {
               </div>
             </div>
           ))}
-          {foodItems.filter(f => ['Snacks', 'Juice'].includes(f.category_name || f.category)).length === 0 && (
+          {foodItems.filter(f => ['Snacks', 'Snack', 'Juices', 'Juice'].includes(f.category_name || f.category)).length === 0 && (
             <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 0', background: '#F8FAFC', borderRadius: 20, border: `1px dashed ${C.border}` }}>
               <Eye size={40} color={C.muted} style={{ marginBottom: 16, opacity: 0.5 }} />
               <p style={{ margin: 0, fontWeight: 800, color: C.muted }}>No Items Found</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted }}>Add items to "Snacks" or "Juice" category in the catalog first.</p>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted }}>Add items to "Snacks" or "Juices" category in the catalog first.</p>
             </div>
           )}
         </div>
@@ -1093,27 +1097,81 @@ const CanteenModule = ({ activeSegment }) => {
       <Modal open={opModal} onClose={() => setOpModal(false)} title="Create New Order" Icon={Plus} width="700px">
          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 32 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-               <div style={{ position: 'relative' }}>
-                  <FInput label="Customer Search" placeholder="Student or Staff name..." value={opSearch} onChange={async e => {
-                     setOpSearch(e.target.value);
-                     if (e.target.value.length > 2) {
-                        try {
-                           const r = await canteenApi.searchStudents(e.target.value, { ignore_rls: true });
-                           setOpStudents(r.data?.results || r.data || []);
-                        } catch { setOpStudents([]); }
-                     }
-                  }} />
-                  {opSearch.length > 2 && opStudents.length > 0 && (
-                     <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 10, padding: 8, maxHeight: 200, overflowY: 'auto' }}>
-                        {opStudents.map(s => (
-                           <div key={s.id} onClick={() => { setOpSelected(s); setOpSearch(''); setOpStudents([]); }} style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                              <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{s.full_name}</p>
-                              <p style={{ margin: 0, fontSize: 11, color: C.muted }}>Class: {s.class_name} | ID: {s.student_id}</p>
-                           </div>
-                        ))}
-                     </div>
-                  )}
-               </div>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+                   {['student', 'staff'].map(type => (
+                      <button 
+                        key={type} 
+                        onClick={() => { setOpCustomerType(type); setOpSearch(''); setOpStudents([]); setOpSelected(null); }}
+                        style={{
+                           flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${opCustomerType === type ? C.primary : C.border}`,
+                           background: opCustomerType === type ? C.primary : '#fff', color: opCustomerType === type ? '#fff' : C.text,
+                           fontWeight: 700, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s', textTransform: 'capitalize'
+                        }}
+                      >
+                         {type}
+                      </button>
+                   ))}
+                </div>
+                <div style={{ position: 'relative' }}>
+                   <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>
+                      Select {opCustomerType === 'student' ? 'Student' : 'Staff'}
+                   </label>
+                   <div 
+                     onClick={async () => {
+                        if (opCustomerType === 'student' && stuList.length === 0) {
+                           const r = await canteenApi.searchStudents('', { ignore_rls: true, paginate: 'false' });
+                           setStuList(r.data?.results || r.data || []);
+                        } else if (opCustomerType === 'staff' && staList.length === 0) {
+                           const r = await canteenApi.searchStaff('');
+                           setStaList(r.data || []);
+                        }
+                        setOpSearch('');
+                     }}
+                     style={{ position: 'relative' }}
+                   >
+                      <FInput 
+                        placeholder={`Search ${opCustomerType === 'student' ? 'Students' : 'Staff'}...`} 
+                        value={opSearch} 
+                        onChange={e => setOpSearch(e.target.value)}
+                        onBlur={() => setTimeout(() => setOpSearch(''), 200)}
+                      />
+                      
+                      {/* Dropdown List */}
+                      <div style={{ 
+                        position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', 
+                        borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                        zIndex: 10, padding: 8, maxHeight: 250, overflowY: 'auto' 
+                      }}>
+                         {(opCustomerType === 'student' ? stuList : staList)
+                           .filter(s => {
+                              const name = opCustomerType === 'student' ? (s.full_name || `${s.user?.first_name} ${s.user?.last_name || ''}`.trim()) : s.full_name;
+                              return !opSearch || name.toLowerCase().includes(opSearch.toLowerCase());
+                           })
+                           .map(s => {
+                              const name = opCustomerType === 'student' ? (s.full_name || `${s.user?.first_name} ${s.user?.last_name || ''}`.trim()) : s.full_name;
+                              const secondary = opCustomerType === 'student' 
+                                ? `${s.class_name || 'N/A'} | ${s.admission_number || 'N/A'}` 
+                                : `${s.designation || 'Staff'} | ${s.employee_id || 'N/A'}`;
+                              
+                              return (
+                                 <div 
+                                   key={`${opCustomerType}-${s.id}`} 
+                                   onClick={() => { setOpSelected({ ...s, full_name: name, type: opCustomerType }); setOpSearch(''); }} 
+                                   style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', borderBottom: `1px solid ${C.border}33`, display: 'flex', justifyContent: 'space-between' }}
+                                   onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                 >
+                                    <div>
+                                       <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{name}</p>
+                                       <p style={{ margin: 0, fontSize: 11, color: C.muted }}>{secondary}</p>
+                                    </div>
+                                    {opSelected?.id === s.id && opSelected?.type === opCustomerType && <CheckCircle2 size={16} color={C.accent} />}
+                                 </div>
+                              );
+                           })
+                         }
+                      </div>
+                   </div>
+                </div>
 
                {opSelected && (
                   <div style={{ padding: '12px 16px', background: '#F0FDF4', borderRadius: 12, border: '1px solid #BBF7D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1126,10 +1184,74 @@ const CanteenModule = ({ activeSegment }) => {
                )}
 
                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                  <h6 style={{ margin: '0 0 12px', fontWeight: 800 }}>Select Food Items</h6>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
-                     {foodItems.filter(f => f.status === 'active').map(f => (
-                        <div key={f.id} onClick={() => {
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                     <h6 style={{ margin: 0, fontWeight: 800 }}>Select Food Items</h6>
+                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                        {['all', 'Breakfast', 'Lunch', 'Snacks', 'Juices'].map(cat => (
+                           <button 
+                             key={cat} 
+                             onClick={() => setOpFoodCat(cat)}
+                             style={{
+                                padding: '6px 14px', borderRadius: 8, border: `1px solid ${opFoodCat === cat ? C.primary : C.border}`,
+                                background: opFoodCat === cat ? C.primary : '#fff', color: opFoodCat === cat ? '#fff' : C.muted,
+                                fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s'
+                             }}
+                           >
+                              {cat}
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* Food Item Dropdown */}
+                  <div style={{ position: 'relative', marginBottom: 12 }}>
+                     <FInput 
+                        placeholder="Select food item..." 
+                        onChange={e => {
+                           const q = e.target.value.toLowerCase();
+                           setOpSearch(q); // Reuse opSearch for food filtering
+                        }}
+                     />
+                     <div style={{ 
+                        position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', 
+                        borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                        zIndex: 10, padding: 8, maxHeight: 200, overflowY: 'auto' 
+                     }}>
+                        {foodItems.filter(f => {
+                           const active = f.status === 'active';
+                           const catMatch = opFoodCat === 'all' || (f.category_name || f.category) === opFoodCat;
+                           const searchMatch = !opSearch || f.name.toLowerCase().includes(opSearch.toLowerCase());
+                           return active && catMatch && searchMatch;
+                        }).map(f => (
+                           <div 
+                             key={f.id} 
+                             onClick={() => {
+                                setOpItems(prev => {
+                                   const exists = prev.find(i => i.id === f.id);
+                                   if (exists) return prev.map(i => i.id === f.id ? { ...i, qty: i.qty + 1 } : i);
+                                   return [...prev, { id: f.id, name: f.name, price: Number(f.price), qty: 1 }];
+                                });
+                             }}
+                             style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', borderBottom: `1px solid ${C.border}33`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                             onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                           >
+                              <div>
+                                 <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{f.name}</p>
+                                 <p style={{ margin: 0, fontSize: 11, color: C.accent, fontWeight: 800 }}>₹{Number(f.price).toFixed(2)}</p>
+                              </div>
+                              <Plus size={16} color={C.primary} />
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, maxHeight: 150, overflowY: 'auto', paddingRight: 4 }}>
+                     {foodItems.filter(f => {
+                        const active = f.status === 'active';
+                        const catMatch = opFoodCat === 'all' || (f.category_name || f.category) === opFoodCat;
+                        return active && catMatch;
+                     }).map(f => (
+                        <div key={f.id} className="food-box" onClick={() => {
                            setOpItems(prev => {
                               const exists = prev.find(i => i.id === f.id);
                               if (exists) return prev.map(i => i.id === f.id ? { ...i, qty: i.qty + 1 } : i);
@@ -1172,7 +1294,7 @@ const CanteenModule = ({ activeSegment }) => {
                      if (opItems.length === 0) return alert('Cart is empty');
                      try {
                         const payload = {
-                           student: opSelected.id,
+                           [opSelected.type]: opSelected.id,
                            order_items: opItems.map(i => ({ food_item: i.id, quantity: i.qty, unit_price: i.price })),
                            total_amount: opItems.reduce((acc, curr) => acc + (curr.price * curr.qty), 0),
                            status: 'pending',

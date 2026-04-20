@@ -225,17 +225,18 @@ class CanteenPaymentViewSet(viewsets.ModelViewSet):
         method = self.request.query_params.get('payment_method')
         pay_status = self.request.query_params.get('status')
         if date:
-            qs = qs.filter(created_at__date=date)
+            qs = qs.filter(payment_date__date=date)
         if method:
             qs = qs.filter(payment_method=method)
         if pay_status:
-            qs = qs.filter(status=pay_status)
+            is_refunded = pay_status == 'refunded'
+            qs = qs.filter(is_refunded=is_refunded)
         return qs
 
     @action(detail=False, methods=['get'])
     def daily_summary(self, request):
         date = request.query_params.get('date', timezone.now().date().isoformat())
-        payments = self.queryset.filter(created_at__date=date)
+        payments = self.queryset.filter(payment_date__date=date)
         total = payments.aggregate(total=Sum('amount'))['total'] or 0
         by_method = list(payments.values('payment_method').annotate(total=Sum('amount'), count=Count('id')))
         return Response({
@@ -387,8 +388,8 @@ def canteen_reports_view(request):
     # Payment method breakdown
     payment_breakdown = list(
         CanteenPayment.objects.filter(
-            created_at__date__gte=start_date,
-            status='completed',
+            payment_date__date__gte=start_date,
+            is_refunded=False,
         ).values('payment_method').annotate(total=Sum('amount'), count=Count('id'))
     )
 

@@ -3,8 +3,9 @@
 import React, { useEffect, useRef } from 'react';
 
 /**
- * InteractiveBackground - A high-performance canvas-based particle system.
- * Light balls that float and react to mouse movement.
+ * InteractiveBackground - White Light Edition
+ * A premium, light-themed canvas background that creates a subtle, elegant neural-mesh effect.
+ * Optimized for standard light UI themes.
  */
 const InteractiveBackground = () => {
   const canvasRef = useRef(null);
@@ -16,14 +17,15 @@ const InteractiveBackground = () => {
     const ctx = canvas.getContext('2d');
     let animationFrameId;
     let particles = [];
-    const particleCount = 40;
-    const mouse = { x: null, y: null, radius: 150 };
+    const particleCount = 70;
+    const connectionRadius = 160;
+    const mouseRadius = 240;
+    const mouse = { x: null, y: null };
 
     // Check if background effects are disabled by the user
-    const isDisabled = localStorage.getItem('student_bg_effects') === 'disabled';
+    const isDisabled = typeof window !== 'undefined' && localStorage.getItem('student_bg_effects') === 'disabled';
     
     if (isDisabled) {
-      // Just clear and render the background color once
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
@@ -41,7 +43,13 @@ const InteractiveBackground = () => {
       mouse.y = event.clientY;
     };
 
+    const handleMouseLeave = () => {
+      mouse.x = null;
+      mouse.y = null;
+    };
+
     window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseleave', handleMouseLeave);
 
     class Particle {
       constructor() {
@@ -51,57 +59,84 @@ const InteractiveBackground = () => {
       reset() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 8 + 4;
-        this.baseX = this.x;
-        this.baseY = this.y;
-        this.density = Math.random() * 30 + 1;
-        this.vx = (Math.random() - 0.5) * 0.5;
-        this.vy = (Math.random() - 0.5) * 0.5;
-        // Sharper, more glowing colors
-        this.color = `rgba(99, 102, 241, ${Math.random() * 0.3 + 0.3})`;
+        this.size = Math.random() * 2 + 1;
+        this.vx = (Math.random() - 0.5) * 0.3;
+        this.vy = (Math.random() - 0.5) * 0.3;
+        this.pulse = Math.random() * Math.PI;
+        this.pulseSpeed = 0.01 + Math.random() * 0.02;
       }
 
       update() {
-        // Basic floating movement
         this.x += this.vx;
         this.y += this.vy;
+        this.pulse += this.pulseSpeed;
 
-        // Wrap around screen
         if (this.x > canvas.width) this.x = 0;
         if (this.x < 0) this.x = canvas.width;
         if (this.y > canvas.height) this.y = 0;
         if (this.y < 0) this.y = canvas.height;
-
-        // Mouse interaction
-        if (mouse.x != null && mouse.y != null) {
-          let dx = mouse.x - this.x;
-          let dy = mouse.y - this.y;
-          let distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance < mouse.radius) {
-            const force = (mouse.radius - distance) / mouse.radius;
-            const directionX = dx / distance;
-            const directionY = dy / distance;
-            
-            // Flee effect
-            this.x -= directionX * force * 5;
-            this.y -= directionY * force * 5;
-          }
-        }
       }
 
       draw() {
+        const opacity = 0.2 + Math.sin(this.pulse) * 0.1;
+        
         ctx.beginPath();
-        // Create a radial gradient for each particle to give it a "light ball" glow
-        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 2);
-        gradient.addColorStop(0, this.color);
-        gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
+        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 4);
+        // Using a soft blue-gray for light theme
+        gradient.addColorStop(0, `rgba(79, 70, 229, ${opacity})`);
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
         
         ctx.fillStyle = gradient;
-        ctx.arc(this.x, this.y, this.size * 2, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.size * 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(79, 70, 229, ${opacity + 0.3})`;
         ctx.fill();
       }
     }
+
+    const drawLines = () => {
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < connectionRadius) {
+            const opacity = (1 - distance / connectionRadius) * 0.2;
+            ctx.beginPath();
+            ctx.lineWidth = 0.4;
+            // Soft silver-blue lines
+            ctx.strokeStyle = `rgba(148, 163, 184, ${opacity})`;
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.stroke();
+          }
+        }
+
+        if (mouse.x !== null && mouse.y !== null) {
+          const dx = particles[i].x - mouse.x;
+          const dy = particles[i].y - mouse.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < mouseRadius) {
+            const opacity = (1 - distance / mouseRadius) * 0.3;
+            ctx.beginPath();
+            ctx.lineWidth = 0.6;
+            ctx.strokeStyle = `rgba(79, 70, 229, ${opacity})`;
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(mouse.x, mouse.y);
+            ctx.stroke();
+
+            // Slower magnetic pull for a "gentle" feel
+            particles[i].x -= dx * 0.003;
+            particles[i].y -= dy * 0.003;
+          }
+        }
+      }
+    };
 
     const init = () => {
       particles = [];
@@ -112,6 +147,7 @@ const InteractiveBackground = () => {
 
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawLines();
       particles.forEach((particle) => {
         particle.update();
         particle.draw();
@@ -125,6 +161,7 @@ const InteractiveBackground = () => {
     return () => {
       window.removeEventListener('resize', resizeCanvas);
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseleave', handleMouseLeave);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
@@ -140,7 +177,8 @@ const InteractiveBackground = () => {
         height: '100vh',
         pointerEvents: 'none',
         zIndex: -1,
-        background: 'var(--color-bg)',
+        // Using a very soft light gradient for clean "White Light" aesthetic
+        background: 'radial-gradient(circle at 30% 20%, #ffffff 0%, #f1f5f9 100%)',
       }}
     />
   );

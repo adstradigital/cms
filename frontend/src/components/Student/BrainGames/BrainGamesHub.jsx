@@ -14,7 +14,8 @@ import {
   Eye,
   LayoutDashboard,
   BookOpen,
-  Search
+  Search,
+  LayoutGrid
 } from 'lucide-react';
 import InteractiveBackground from '@/components/common/InteractiveBackground';
 import styles from './BrainGames.module.css';
@@ -26,6 +27,7 @@ import Game2048 from './Games/Game2048';
 import SchulteTable from './Games/SchulteTable';
 import TowersOfHanoi from './Games/TowersOfHanoi';
 import WordScramble from './Games/WordScramble';
+import Categorization from './Games/Categorization';
 
 export default function BrainGamesHub() {
   const [activeGame, setActiveGame] = useState(null);
@@ -82,6 +84,16 @@ export default function BrainGamesHub() {
       difficulty: 'Verbal',
       isDaily: false,
       xp: 120
+    },
+    {
+      id: 'category',
+      name: 'Academic Sorter',
+      description: 'Test your reflexes and academic knowledge by sorting terms into subjects.',
+      icon: <LayoutGrid size={28} />,
+      color: '#8b5cf6',
+      difficulty: 'Speed',
+      isDaily: false,
+      xp: 150
     }
   ];
 
@@ -140,7 +152,18 @@ export default function BrainGamesHub() {
         <button className={styles.backBtn} onClick={() => setActiveGame(null)}>
           <ArrowLeft size={18} /> Back to Hub
         </button>
-        <WordScramble onWin={(xp) => addXP(xp)} />
+        <WordScramble onWin={(pts) => { addXP(120); updateHighScore('scramble', pts); }} />
+      </div>
+    );
+  }
+
+  if (activeGame === 'category') {
+    return (
+      <div className={styles.container}>
+        <button className={styles.backBtn} onClick={() => setActiveGame(null)}>
+          <ArrowLeft size={18} /> Back to Hub
+        </button>
+        <Categorization onWin={(s) => { addXP(Math.floor(s/2)); updateHighScore('category', s); }} />
       </div>
     );
   }

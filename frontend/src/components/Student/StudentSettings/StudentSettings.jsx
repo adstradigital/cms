@@ -281,21 +281,10 @@ function DisplaySettings({ onMessage }) {
       <div className={styles.preferenceItem}>
         <div className={styles.prefInfo}>
           <h4>Floating Background Effects</h4>
-          <p>Toggle the interactive light balls in the background. Disabling this may improve performance on older devices.</p>
+          <p>Toggle the interactive constellation mesh in the background. Disabling this may improve performance on older devices.</p>
         </div>
         <label className={styles.switch}>
           <input type="checkbox" checked={bgEffects} onChange={handleToggleBg} />
-          <span className={styles.slider}></span>
-        </label>
-      </div>
-
-      <div className={styles.preferenceItem}>
-        <div className={styles.prefInfo}>
-          <h4>Dark Appearance</h4>
-          <p>Switch between light and dark console modes (System default is active).</p>
-        </div>
-        <label className={styles.switch}>
-          <input type="checkbox" disabled />
           <span className={styles.slider}></span>
         </label>
       </div>

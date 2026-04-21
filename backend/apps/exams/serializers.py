@@ -137,10 +137,9 @@ class TestChoiceSerializer(serializers.ModelSerializer):
         model = TestChoice
         fields = ["id", "text", "is_correct", "order"]
 
-
 class TestQuestionSerializer(serializers.ModelSerializer):
     choices = TestChoiceSerializer(many=True, read_only=True)
-    choices_data = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
+    choices_data = serializers.JSONField(write_only=True, required=False)
 
     class Meta:
         model = TestQuestion
@@ -273,6 +272,7 @@ class TestAnswerSerializer(serializers.ModelSerializer):
     question_text = serializers.CharField(source="question.text", read_only=True)
     question_type = serializers.CharField(source="question.question_type", read_only=True)
     question_marks = serializers.DecimalField(source="question.marks", max_digits=6, decimal_places=2, read_only=True)
+    question_choices = TestChoiceSerializer(source="question.choices", many=True, read_only=True)
 
     class Meta:
         model = TestAnswer
@@ -280,7 +280,7 @@ class TestAnswerSerializer(serializers.ModelSerializer):
             "id", "attempt", "question", "selected_choice_ids",
             "text_answer", "file_answer", "auto_score", "manual_score",
             "teacher_remark", "is_correct",
-            "question_text", "question_type", "question_marks",
+            "question_text", "question_type", "question_marks", "question_choices",
         ]
 
 
@@ -309,13 +309,16 @@ class TestAttemptListSerializer(serializers.ModelSerializer):
     """Lightweight for list views."""
     student_name = serializers.SerializerMethodField()
     final_score = serializers.ReadOnlyField()
+    test_title = serializers.CharField(source="test.title", read_only=True)
+    subject_name = serializers.CharField(source="test.subject.name", read_only=True, default="")
+    total_marks = serializers.DecimalField(source="test.total_marks", max_digits=8, decimal_places=2, read_only=True)
 
     class Meta:
         model = TestAttempt
         fields = [
             "id", "test", "student", "attempt_number", "started_at",
             "submitted_at", "auto_score", "manual_score", "status",
-            "final_score", "student_name",
+            "final_score", "student_name", "test_title", "subject_name", "total_marks",
         ]
 
     def get_student_name(self, obj):

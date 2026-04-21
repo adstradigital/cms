@@ -12,6 +12,10 @@ import os, sys, random
 from datetime import date, time, timedelta, datetime
 from decimal import Decimal
 
+# Set UTF-8 encoding for Windows console
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 
 import django
@@ -31,7 +35,7 @@ from apps.academics.models import (
     Homework, HomeworkSubmission, Assignment, Material, CourseSession
 )
 from apps.attendance.models import Attendance, LeaveRequest, AttendanceWarning
-from apps.exams.models import Exam, ExamSchedule, HallTicket, ExamResult, ReportCard
+from apps.exams.models import Exam, ExamType, ExamSchedule, HallTicket, ExamResult, ReportCard
 from apps.fees.models import FeeCategory, FeeStructure, FeePayment
 from apps.hostel.models import (
     Hostel, Floor, Room, RoomAllotment, NightAttendance,
@@ -52,9 +56,9 @@ from apps.notifications.models import Notification
 from apps.elections.models import Election, Candidate, Vote
 from apps.ai_brain.models import AIBrainDraft, AIBrainAuditLog
 
-print("═" * 70)
-print("  🧠 COMPREHENSIVE AI-BRAIN TEST DATA SEEDER")
-print("═" * 70)
+print("=" * 70)
+print("  AI-BRAIN TEST DATA SEEDER")
+print("=" * 70)
 
 PASSWORD = make_password("Test@1234")
 
@@ -111,6 +115,16 @@ def make_user(first, last, portal, school, role=None, is_staff_flag=False):
     )
     return u
 
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  PHASE 0: CLEANUP
+# ═════════════════════════════════════════════════════════════════════════════
+print("\n🧹 Phase 0: Cleaning up existing data...")
+# Delete in reverse order of dependencies
+User.objects.all().delete()
+School.objects.all().delete()
+Role.objects.all().delete()
+Permission.objects.all().delete()
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  PHASE 1: FOUNDATIONAL ARCHITECTURE
@@ -326,9 +340,10 @@ for gname, cls_obj in classes.items():
             alloc = SubjectAllocation.objects.create(
                 subject=sub, section=sec, academic_year=ay_curr,
             )
-            # Assign 1-2 teachers
-            assigned = random.sample(teacher_users, min(2, len(teacher_users)))
-            alloc.teachers.set(assigned[:random.randint(1, 2)])
+            # Assign primary teacher
+            assigned = random.sample(teacher_users, 1)
+            alloc.teacher = assigned[0]
+            alloc.save()
             alloc_count += 1
 
 print(f"  ✅ Staff: {Staff.objects.count()} ({len(teacher_users)} teaching)")
@@ -438,16 +453,22 @@ for gname, cls_obj in classes.items():
 print(f"  ✅ Timetables: {tt_count} | Periods: {Period.objects.count()}")
 
 # ── Exams ────────────────────────────────────────────────────────────────────
+# Create Exam Types
+exam_types_map = {}
+for code, name in [("unit_test", "Unit Test"), ("mid_term", "Mid Term"), ("quarterly", "Quarterly")]:
+    et, _ = ExamType.objects.get_or_create(name=name, academic_year=ay_curr)
+    exam_types_map[code] = et
+
 all_exams = []
 for gname, cls_obj in classes.items():
-    for exam_type, exam_name, sd, ed in [
+    for et_code, exam_name, sd, ed in [
         ("unit_test",  f"Unit Test 1 - {gname}",  date(2025, 8, 10), date(2025, 8, 15)),
         ("mid_term",   f"Mid Term - {gname}",      date(2025, 10, 1), date(2025, 10, 10)),
         ("quarterly",  f"Quarterly - {gname}",     date(2025, 12, 5), date(2025, 12, 15)),
     ]:
         exam = Exam.objects.create(
             academic_year=ay_curr, school_class=cls_obj,
-            name=exam_name, exam_type=exam_type,
+            name=exam_name, exam_type=exam_types_map[et_code],
             start_date=sd, end_date=ed, is_published=True,
         )
         all_exams.append(exam)
@@ -457,11 +478,13 @@ for gname, cls_obj in classes.items():
             sub = subjects.get((sname, gname))
             if not sub:
                 continue
-            max_m = 100 if exam_type != "unit_test" else 50
+            max_m = 100 if et_code != "unit_test" else 50
             ExamSchedule.objects.create(
                 exam=exam, subject=sub, date=exam_date,
                 start_time=time(9, 0), end_time=time(12, 0),
-                max_marks=max_m, pass_marks=int(max_m * 0.35),
+                max_theory_marks=int(max_m * 0.8),
+                max_internal_marks=int(max_m * 0.2),
+                pass_marks=int(max_m * 0.35),
                 venue=f"Hall {random.randint(1,5)}",
             )
             exam_date += timedelta(days=1)
@@ -479,15 +502,23 @@ for exam in all_exams:
     for student in stu_in_class:
         for sched in schedules:
             is_absent = random.random() < 0.05
-            marks = 0 if is_absent else round(random.uniform(sched.pass_marks * 0.6, sched.max_marks), 1)
+            total_max = float(sched.max_theory_marks + sched.max_internal_marks)
+            marks = 0 if is_absent else round(random.uniform(float(sched.pass_marks) * 0.6, total_max), 1)
             grade = ""
             if not is_absent:
-                pct = (marks / sched.max_marks) * 100
+                pct = (marks / total_max) * 100
                 grade = "A+" if pct >= 90 else "A" if pct >= 80 else "B+" if pct >= 70 else \
                          "B" if pct >= 60 else "C" if pct >= 50 else "D" if pct >= 35 else "F"
+            
+            theory_m = round(marks * 0.8, 1) if not is_absent else 0
+            internal_m = round(marks * 0.2, 1) if not is_absent else 0
+            
             ExamResult.objects.create(
                 student=student, exam_schedule=sched,
-                marks_obtained=Decimal(str(marks)), grade=grade,
+                theory_marks=Decimal(str(theory_m)),
+                internal_marks=Decimal(str(internal_m)),
+                marks_obtained=Decimal(str(marks)), 
+                grade=grade,
                 is_absent=is_absent, entered_by=admin_user,
             )
             result_count += 1
@@ -700,7 +731,7 @@ food_items_data = [
 ]
 fi_objs = []
 for name, cat, price, veg in food_items_data:
-    fi = FoodItem.objects.create(name=name, category=cat, price=Decimal(str(price)), is_veg=veg, is_available=True)
+    fi = FoodItem.objects.create(name=name, category=cat, price=Decimal(str(price)), is_veg=veg, status="active")
     fi_objs.append(fi)
 
 # Ingredients & Dishes

@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("academics", "0014_merge_20260418_1043"),
+        ("academics", "0014_merge_20260418_1233"),
         ("academics", "0015_remove_subjectallocation_teachers_and_more"),
     ]
 

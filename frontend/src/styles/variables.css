@@ -83,7 +83,7 @@
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 72px;
   --navbar-height: 64px;
-  --content-max-width: 1280px;
+  --content-max-width: none;
 
   /* —— Z-Index —— */
   --z-dropdown: 100;

@@ -5,23 +5,24 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.students.models import Student
 from django.db.models import Sum, Max
-from .models import FeeCategory, FeeStructure, FeePayment
+from apps.students.models import Student
+from .models import FeeCategory, FeeStructure, FeeInstalment, FeePayment, Concession, StudentConcession, Donation, AnnualBudget, BudgetItem
 from .serializers import (
-    FeeCategorySerializer, FeeStructureSerializer,
+    FeeCategorySerializer, FeeStructureSerializer, FeeInstalmentSerializer,
     FeePaymentSerializer, FeePaymentCreateSerializer,
+    ConcessionSerializer, StudentConcessionSerializer,
 )
 
 
-# ─── Fee Category ─────────────────────────────────────────────────────────────
+# ─── Fee Category (Fee Heads) ─────────────────────────────────────────────────
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def fee_category_list_view(request):
     try:
         if request.method == "GET":
-            qs = FeeCategory.objects.all()
+            qs = FeeCategory.objects.all().order_by("fee_type", "name")
             return Response(FeeCategorySerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         serializer = FeeCategorySerializer(data=request.data)
@@ -29,7 +30,6 @@ def fee_category_list_view(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -45,17 +45,14 @@ def fee_category_detail_view(request, pk):
 
         if request.method == "GET":
             return Response(FeeCategorySerializer(category).data, status=status.HTTP_200_OK)
-
         if request.method == "PATCH":
             serializer = FeeCategorySerializer(category, data=request.data, partial=True)
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
-
         category.delete()
         return Response({"message": "Category deleted."}, status=status.HTTP_204_NO_CONTENT)
-
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -71,7 +68,7 @@ def fee_structure_list_view(request):
             class_id = request.query_params.get("class")
             qs = FeeStructure.objects.select_related(
                 "academic_year", "school_class", "category"
-            ).all()
+            ).prefetch_related("instalments").all()
             if academic_year_id:
                 qs = qs.filter(academic_year_id=academic_year_id)
             if class_id:
@@ -83,7 +80,6 @@ def fee_structure_list_view(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -95,23 +91,184 @@ def fee_structure_detail_view(request, pk):
         try:
             structure = FeeStructure.objects.select_related(
                 "academic_year", "school_class", "category"
-            ).get(pk=pk)
+            ).prefetch_related("instalments").get(pk=pk)
         except FeeStructure.DoesNotExist:
             return Response({"error": "Fee structure not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if request.method == "GET":
             return Response(FeeStructureSerializer(structure).data, status=status.HTTP_200_OK)
-
         if request.method == "PATCH":
             serializer = FeeStructureSerializer(structure, data=request.data, partial=True)
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
-
         structure.delete()
         return Response({"message": "Fee structure deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def copy_fee_structure_view(request):
+    """
+    Copy all fee structures from one class to another, with optional % adjustment.
+    Body: { from_class, to_class, academic_year, increase_percent (optional) }
+    """
+    try:
+        from_class_id = request.data.get("from_class")
+        to_class_id = request.data.get("to_class")
+        academic_year_id = request.data.get("academic_year")
+        increase_percent = Decimal(str(request.data.get("increase_percent", 0)))
+
+        if not all([from_class_id, to_class_id, academic_year_id]):
+            return Response({"error": "from_class, to_class and academic_year are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        source = FeeStructure.objects.filter(
+            school_class_id=from_class_id,
+            academic_year_id=academic_year_id,
+        ).select_related("category")
+
+        if not source.exists():
+            return Response({"error": "No structures found for source class."}, status=status.HTTP_404_NOT_FOUND)
+
+        created = []
+        for s in source:
+            new_amount = s.amount
+            if increase_percent:
+                new_amount = s.amount * (1 + increase_percent / 100)
+
+            new_s, _ = FeeStructure.objects.get_or_create(
+                school_class_id=to_class_id,
+                academic_year_id=academic_year_id,
+                category=s.category,
+                defaults={
+                    "amount": round(new_amount, 2),
+                    "due_date": s.due_date,
+                    "term": s.term,
+                    "is_mandatory": s.is_mandatory,
+                    "late_fine_per_day": s.late_fine_per_day,
+                }
+            )
+            created.append(new_s)
+
+        return Response(FeeStructureSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Fee Instalments ─────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def fee_instalment_list_view(request):
+    try:
+        if request.method == "GET":
+            structure_id = request.query_params.get("fee_structure")
+            qs = FeeInstalment.objects.all()
+            if structure_id:
+                qs = qs.filter(fee_structure_id=structure_id)
+            return Response(FeeInstalmentSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+        serializer = FeeInstalmentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def fee_instalment_detail_view(request, pk):
+    try:
+        instalment = FeeInstalment.objects.get(pk=pk)
+        if request.method == "PATCH":
+            serializer = FeeInstalmentSerializer(instalment, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        instalment.delete()
+        return Response({"message": "Instalment deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except FeeInstalment.DoesNotExist:
+        return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Concessions ─────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def concession_list_view(request):
+    try:
+        if request.method == "GET":
+            return Response(ConcessionSerializer(Concession.objects.all(), many=True).data)
+        serializer = ConcessionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def concession_detail_view(request, pk):
+    try:
+        obj = Concession.objects.get(pk=pk)
+        if request.method == "GET":
+            return Response(ConcessionSerializer(obj).data)
+        if request.method == "PATCH":
+            ser = ConcessionSerializer(obj, data=request.data, partial=True)
+            if not ser.is_valid():
+                return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+            ser.save()
+            return Response(ser.data)
+        obj.delete()
+        return Response({"message": "Deleted."}, status=status.HTTP_204_NO_CONTENT)
+    except Concession.DoesNotExist:
+        return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def student_concession_list_view(request):
+    try:
+        if request.method == "GET":
+            student_id = request.query_params.get("student")
+            academic_year_id = request.query_params.get("academic_year")
+            qs = StudentConcession.objects.select_related("student", "student__user", "concession", "approved_by")
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            if academic_year_id:
+                qs = qs.filter(academic_year_id=academic_year_id)
+            return Response(StudentConcessionSerializer(qs, many=True).data)
+
+        serializer = StudentConcessionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save(approved_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def student_concession_detail_view(request, pk):
+    try:
+        obj = StudentConcession.objects.get(pk=pk)
+        obj.delete()
+        return Response({"message": "Concession revoked."}, status=status.HTTP_204_NO_CONTENT)
+    except StudentConcession.DoesNotExist:
+        return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -126,12 +283,14 @@ def fee_payment_list_view(request):
             student_id = request.query_params.get("student")
             pay_status = request.query_params.get("status")
             academic_year_id = request.query_params.get("academic_year")
+            class_id = request.query_params.get("class")
 
             qs = FeePayment.objects.select_related(
                 "student", "student__user",
                 "fee_structure", "fee_structure__category",
+                "fee_structure__school_class",
                 "collected_by",
-            ).all()
+            ).all().order_by("-created_at")
 
             if student_id:
                 qs = qs.filter(student_id=student_id)
@@ -139,6 +298,8 @@ def fee_payment_list_view(request):
                 qs = qs.filter(status=pay_status)
             if academic_year_id:
                 qs = qs.filter(fee_structure__academic_year_id=academic_year_id)
+            if class_id:
+                qs = qs.filter(fee_structure__school_class_id=class_id)
 
             return Response(FeePaymentSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
@@ -152,7 +313,6 @@ def fee_payment_list_view(request):
             receipt_number=f"RCP-{uuid.uuid4().hex[:8].upper()}",
         )
         return Response(FeePaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
-
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -178,10 +338,11 @@ def fee_payment_detail_view(request, pk):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(FeePaymentSerializer(payment).data, status=status.HTTP_200_OK)
-
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+# ─── Student Fee Statement ────────────────────────────────────────────────────
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -221,10 +382,11 @@ def student_fee_statement_view(request, student_id):
             "total_due": max(Decimal("0"), total_due),
             "payments": FeePaymentSerializer(payments, many=True).data,
         }, status=status.HTTP_200_OK)
-
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+# ─── Defaulters ───────────────────────────────────────────────────────────────
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -238,6 +400,7 @@ def fee_defaulters_view(request):
         qs = FeePayment.objects.filter(status__in=["pending", "overdue"]).select_related(
             "student", "student__user",
             "fee_structure", "fee_structure__category",
+            "fee_structure__school_class",
         )
         if academic_year_id:
             qs = qs.filter(fee_structure__academic_year_id=academic_year_id)
@@ -247,18 +410,16 @@ def fee_defaulters_view(request):
             qs = qs.filter(student__section_id=section_id)
 
         return Response(FeePaymentSerializer(qs, many=True).data, status=status.HTTP_200_OK)
-
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ─── Section Fee Overview ─────────────────────────────────────────────────────
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def fee_section_overview_view(request):
-    """
-    Section fee snapshot: per-student due based on structures vs paid.
-    Query params: section (required), academic_year (optional)
-    """
+    """Section fee snapshot: per-student due based on structures vs paid."""
     try:
         section_id = request.query_params.get("section")
         if not section_id:
@@ -315,6 +476,124 @@ def fee_section_overview_view(request):
             "total_fee": total_fee,
             "students": out,
         }, status=status.HTTP_200_OK)
-
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Donations ────────────────────────────────────────────────────────────────
+
+from rest_framework import serializers as ser_module
+
+class DonationSerializer(ser_module.ModelSerializer):
+    recorded_by_name = ser_module.CharField(source="recorded_by.get_full_name", read_only=True)
+    academic_year_name = ser_module.CharField(source="academic_year.name", read_only=True)
+    class Meta:
+        model = Donation
+        fields = "__all__"
+        read_only_fields = ["recorded_by"]
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def donation_list_view(request):
+    try:
+        if request.method == "GET":
+            return Response(DonationSerializer(Donation.objects.select_related("academic_year", "recorded_by").all(), many=True).data)
+        s = DonationSerializer(data=request.data)
+        if not s.is_valid(): return Response(s.errors, status=400)
+        s.save(recorded_by=request.user)
+        return Response(s.data, status=201)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def donation_detail_view(request, pk):
+    try:
+        obj = Donation.objects.get(pk=pk)
+        if request.method == "GET": return Response(DonationSerializer(obj).data)
+        if request.method == "PATCH":
+            s = DonationSerializer(obj, data=request.data, partial=True)
+            if not s.is_valid(): return Response(s.errors, status=400)
+            s.save(); return Response(s.data)
+        obj.delete(); return Response({"message": "Deleted."}, status=204)
+    except Donation.DoesNotExist:
+        return Response({"error": "Not found."}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+# ─── Annual Budget & Budget Items ─────────────────────────────────────────────
+
+class BudgetItemSerializer(ser_module.ModelSerializer):
+    variance = ser_module.SerializerMethodField()
+    class Meta:
+        model = BudgetItem
+        fields = "__all__"
+    def get_variance(self, obj): return float(obj.variance)
+
+class AnnualBudgetSerializer(ser_module.ModelSerializer):
+    academic_year_name = ser_module.CharField(source="academic_year.name", read_only=True)
+    approved_by_name = ser_module.CharField(source="approved_by.get_full_name", read_only=True)
+    class Meta:
+        model = AnnualBudget
+        fields = "__all__"
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def annual_budget_list_view(request):
+    try:
+        if request.method == "GET":
+            return Response(AnnualBudgetSerializer(AnnualBudget.objects.select_related("academic_year", "approved_by").all(), many=True).data)
+        s = AnnualBudgetSerializer(data=request.data)
+        if not s.is_valid(): return Response(s.errors, status=400)
+        s.save(); return Response(s.data, status=201)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def annual_budget_detail_view(request, pk):
+    try:
+        obj = AnnualBudget.objects.get(pk=pk)
+        if request.method == "GET": return Response(AnnualBudgetSerializer(obj).data)
+        s = AnnualBudgetSerializer(obj, data=request.data, partial=True)
+        if not s.is_valid(): return Response(s.errors, status=400)
+        s.save(); return Response(s.data)
+    except AnnualBudget.DoesNotExist:
+        return Response({"error": "Not found."}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def budget_items_view(request, pk):
+    try:
+        items = BudgetItem.objects.filter(budget_id=pk)
+        return Response(BudgetItemSerializer(items, many=True).data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def budget_item_create_view(request):
+    try:
+        s = BudgetItemSerializer(data=request.data)
+        if not s.is_valid(): return Response(s.errors, status=400)
+        s.save(); return Response(s.data, status=201)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def budget_item_detail_view(request, pk):
+    try:
+        obj = BudgetItem.objects.get(pk=pk)
+        if request.method == "PATCH":
+            s = BudgetItemSerializer(obj, data=request.data, partial=True)
+            if not s.is_valid(): return Response(s.errors, status=400)
+            s.save(); return Response(s.data)
+        obj.delete(); return Response({"message": "Deleted."}, status=204)
+    except BudgetItem.DoesNotExist:
+        return Response({"error": "Not found."}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)

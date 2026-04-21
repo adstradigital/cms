@@ -12,12 +12,12 @@ export default function StaffTableView({ filtered, openProfile, assignableRoles 
       <table className={styles.table}>
         <thead>
           <tr>
-            <th style={{ width: 44 }}>ID</th>
+            <th style={{ width: 60 }}>ID</th>
             <th>Name</th>
             <th>Role & Desig.</th>
             <th>Contact</th>
             <th>Status</th>
-            <th style={{ width: 60 }}>Action</th>
+            <th style={{ width: 80, textAlign: 'right' }}>Action</th>
           </tr>
         </thead>
         <tbody>

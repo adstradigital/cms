@@ -16,10 +16,12 @@
   overflow: hidden;
   position: relative;
   margin-left: 1.5rem; /* ml-6 */
+  width: 100%;
 }
 
 .workspaceBody {
   flex: 1;
   overflow-y: auto;
   background-color: var(--theme-bg);
+  width: 100%;
 }

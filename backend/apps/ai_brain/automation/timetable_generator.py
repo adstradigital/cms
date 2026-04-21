@@ -166,7 +166,7 @@ class TimetableConstraintValidator:
         allocation_map: Dict[int, Set[int]] = {}
         allocations = get_subject_allocations(self.section, self.academic_year)
         for allocation in allocations:
-            allocation_map[allocation.subject_id] = set(allocation.teachers.values_list("id", flat=True))
+            allocation_map[allocation.subject_id] = {allocation.teacher_id} if allocation.teacher_id else set()
         return allocation_map
 
 
@@ -395,7 +395,7 @@ class TimetableDraftGenerator:
         allocations = get_subject_allocations(self.section, self.academic_year)
         needs = []
         for allocation in allocations:
-            teacher_ids = list(allocation.teachers.values_list("id", flat=True))
+            teacher_ids = [allocation.teacher_id] if allocation.teacher_id else []
             if not teacher_ids: continue
             needs.append(AllocationNeed(
                 subject_id=allocation.subject_id,

@@ -1,1581 +1,1346 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { 
-  BarChart3, 
-  UtensilsCrossed, 
-  ClipboardList, 
-  MessageSquareWarning, 
-  Boxes, 
-  Truck, 
-  Trash2, 
-  TrendingUp,
-  Plus,
-  Search,
-  RefreshCw,
-  Loader2,
-  Calendar,
-  X
+import { createPortal } from 'react-dom';
+import Link from 'next/link';
+import styles from './CanteenModule.module.css';
+import {
+  LayoutDashboard, UtensilsCrossed, ShoppingCart, CreditCard,
+  Package, Truck, MessageSquare, BarChart3, Bell,
+  Plus, Search, RefreshCw, Loader2, Edit2, Trash2, X, Save,
+  AlertTriangle, ChevronDown, TrendingUp, DollarSign,
+  CheckCircle2, Clock, Leaf, Eye, Calendar, AlertCircle,
+  ArrowUpRight, Filter, ChefHat, Star, Circle, ShoppingBag,
+  Zap, Coffee, ToggleLeft, ToggleRight, FileText, LayoutGrid,
 } from 'lucide-react';
-import styles from '../Hostel/HostelModule.module.css';
 import canteenApi from '@/api/canteenApi';
 
-const pad2 = (value) => String(value).padStart(2, '0');
-
-const today = () => {
+/* ─── Constants ─────────────────────────────────────────────────────────────── */
+const fmtDate = () => {
   const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const MEAL_TYPES = ['Breakfast', 'Lunch'];
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const FOOD_CATEGORIES = ['breakfast', 'lunch', 'snacks', 'dinner', 'juice', 'other'];
-const INVENTORY_LOG_TYPES = ['in', 'out', 'wastage'];
-const FEEDBACK_STATUSES = ['open', 'in_progress', 'resolved'];
-
-const SECTIONS = [
-  { id: 'overview', label: 'Overview', icon: <TrendingUp size={16} /> },
-  { id: 'menu', label: 'Daily Menu', icon: <Calendar size={16} /> },
-  { id: 'dishes', label: 'Dish Library', icon: <UtensilsCrossed size={16} /> },
-  { id: 'combos', label: 'Combos', icon: <Boxes size={16} /> },
-  { id: 'ingredients', label: 'Ingredients', icon: <ClipboardList size={16} /> },
-  { id: 'price-chart', label: 'Price Chart', icon: <TrendingUp size={16} /> },
-  { id: 'inventory', label: 'Raw Inventory', icon: <Boxes size={16} /> },
-  { id: 'stock', label: 'Stock Logs', icon: <ClipboardList size={16} /> },
-  { id: 'suppliers', label: 'Suppliers', icon: <Truck size={16} /> },
-  { id: 'feedback', label: 'Feedback', icon: <MessageSquareWarning size={16} /> },
-  { id: 'logs', label: 'Wastage & Consumption', icon: <BarChart3 size={16} /> },
+const NAV = [
+  { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
+  { id: 'menu', label: 'Menu Management', Icon: UtensilsCrossed },
+  { id: 'orders', label: 'Orders', Icon: ShoppingCart },
+  { id: 'payments', label: 'Payments', Icon: CreditCard },
+  { id: 'inventory', label: 'Inventory', Icon: Package },
+  { id: 'suppliers', label: 'Suppliers', Icon: Truck },
+  { id: 'feedback', label: 'Feedback', Icon: MessageSquare },
+  { id: 'reports', label: 'Reports', Icon: BarChart3 },
 ];
 
+const ORDER_STATUS = {
+  pending:   { label: 'Pending',   color: '#D97706', bg: '#FEF3C7', dot: '#F59E0B' },
+  preparing: { label: 'Preparing', color: '#2563EB', bg: '#EFF6FF', dot: '#3B82F6' },
+  ready:     { label: 'Ready',     color: '#7C3AED', bg: '#F5F3FF', dot: '#8B5CF6' },
+  completed: { label: 'Completed', color: '#059669', bg: '#D1FAE5', dot: '#10B981' },
+  cancelled: { label: 'Cancelled', color: '#DC2626', bg: '#FEE2E2', dot: '#EF4444' },
+};
+
+/* ─── Inline Style Tokens ───────────────────────────────────────────────────── */
+const C = {
+  surface: '#fff',
+  bg: '#F8FAFC',
+  border: '#E2E8F0',
+  text: '#1E293B',
+  muted: '#64748B',
+  primary: '#1E3A5F',
+  accent: '#10B981',
+};
+
+/* ═══════════════════════════ SHARED MICRO-COMPONENTS ═══════════════════════ */
+
+const StatCard = ({ Icon, label, value, sub, color = '#3B82F6' }) => (
+  <div style={{
+    background: C.surface, borderRadius: 16, padding: '24px',
+    border: `1px solid ${C.border}`, display: 'flex', gap: 20, alignItems: 'center',
+    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', flex: 1, minWidth: 0,
+  }}>
+    <div style={{ width: 56, height: 56, borderRadius: 14, background: `${color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <Icon size={24} color={color} />
+    </div>
+    <div>
+      <p style={{ fontSize: 13, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 4 }}>{label}</p>
+      <p style={{ fontSize: 26, fontWeight: 800, color: C.text, lineHeight: 1 }}>{value}</p>
+      {sub && <p style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>{sub}</p>}
+    </div>
+  </div>
+);
+
+const VegDot = ({ isVeg }) => (
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, color: isVeg ? '#15803D' : '#B91C1C', background: isVeg ? '#DCFCE7' : '#FEE2E2' }}>
+    <Leaf size={10} /> {isVeg ? 'Veg' : 'Non-Veg'}
+  </span>
+);
+
+const StatusBadge = ({ statusKey }) => {
+  const s = ORDER_STATUS[statusKey] || { label: statusKey, color: C.muted, bg: '#F1F5F9' };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 99, fontSize: 12, fontWeight: 700, color: s.color, background: s.bg }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.dot || s.color }} />
+      {s.label}
+    </span>
+  );
+};
+
+const Btn = ({ children, variant = 'primary', onClick, disabled, type = 'button', size = 'md', style: sx }) => {
+  const pad = size === 'sm' ? '8px 14px' : '10px 20px';
+  const base = {
+    display: 'inline-flex', alignItems: 'center', gap: 8, padding: pad,
+    border: 'none', borderRadius: 10, fontWeight: 600, fontSize: 14,
+    cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1,
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', ...sx,
+  };
+  const variants = {
+    primary: { background: C.primary, color: '#fff', boxShadow: '0 4px 6px -1px rgba(30,58,95,0.2)' },
+    success: { background: '#10B981', color: '#fff' },
+    danger:  { background: '#EF4444', color: '#fff' },
+    outline: { background: 'transparent', color: C.text, border: `1px solid ${C.border}` },
+    ghost:   { background: '#F1F5F9', color: C.text },
+  };
+  return <button type={type} onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant] }}
+    onMouseEnter={e => !disabled && (e.currentTarget.style.transform = 'translateY(-1px)')}
+    onMouseLeave={e => !disabled && (e.currentTarget.style.transform = 'translateY(0)')}
+  >{children}</button>;
+};
+
+const FInput = ({ label, ...props }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    {label && <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>{label}</label>}
+    <input {...props} style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', fontSize: 14, outline: 'none', color: C.text, ...(props.style || {}) }} />
+  </div>
+);
+
+const FSelect = ({ label, children, ...props }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    {label && <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>{label}</label>}
+    <select {...props} style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', fontSize: 14, outline: 'none', cursor: 'pointer', color: C.text, ...(props.style || {}) }}>{children}</select>
+  </div>
+);
+
+const FTextarea = ({ label, ...props }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    {label && <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>{label}</label>}
+    <textarea {...props} style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', fontSize: 14, outline: 'none', color: C.text, minHeight: 80, fontFamily: 'inherit', ...(props.style || {}) }} />
+  </div>
+);
+
+/* ─── Modal Implementation ───────────────────────────────────────────────────── */
+function Modal({ open, onClose, title, Icon, color = C.primary, width = '560px', children }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!open || !mounted) return null;
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+      <div style={{ background: '#fff', borderRadius: 20, width, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+        <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: `${color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon size={20} color={color} />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: C.text }}>{title}</h3>
+          </div>
+          <button onClick={onClose} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: C.muted }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: 24 }}>{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ═══════════════════════════ MAIN MODULE ═══════════════════════════ */
+
 const CanteenModule = ({ activeSegment }) => {
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState(() => (SECTIONS.some((s) => s.id === activeSegment) ? activeSegment : 'overview'));
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [data, setData] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const [modalType, setModalType] = useState(null);
-  const [editId, setEditId] = useState(null);
-  const [expandedDropdown, setExpandedDropdown] = useState(null);
-
-  // Reference data for forms (so dropdowns work even when the active tab is different)
-  const [foodItemOptions, setFoodItemOptions] = useState([]);
-  const [inventoryItemOptions, setInventoryItemOptions] = useState([]);
-  const [supplierOptions, setSupplierOptions] = useState([]);
-
-  // Simple create forms
-  const [menuForm, setMenuForm] = useState({ 
-    day: 'Monday', 
-    meal_type: 'Breakfast', 
-    title: '', 
-    items: [], 
-    currentItemInput: '' 
+  const [menuSub, setMenuSub] = useState('food-items');
+  const [wmModal, setWmModal] = useState(false);
+  const [wmForm, setWmForm] = useState({ 
+    day: '', 
+    breakfast: { id: null, title: '', items: '' }, 
+    lunch: { id: null, title: '', items: '' } 
   });
-  const [pendingMenuForm, setPendingMenuForm] = useState(null);
-  const [pendingDishForm, setPendingDishForm] = useState(null);
-  const [ingredientForm, setIngredientForm] = useState({ name: '' });
-  const [dishForm, setDishForm] = useState({ name: '', ingredients: [], price: '', is_veg: true, description: '' });
-  const [comboForm, setComboForm] = useState({ name: '', dishes: [], special_price: '', description: '' });
-  const [foodItemForm, setFoodItemForm] = useState({ name: '', category: 'other', price: '', is_veg: true, is_available: true, description: '' });
-  const [inventoryForm, setInventoryForm] = useState({ name: '', category: '', unit: 'kg', current_stock: '', min_stock_level: '' });
-  const [supplierForm, setSupplierForm] = useState({ name: '', contact_person: '', phone: '', email: '', address: '', category: '', is_active: true });
-  const [feedbackForm, setFeedbackForm] = useState({ subject: '', description: '', rating: 5, status: 'open', resolution_note: '' });
-  const [logKind, setLogKind] = useState('wastage');
-  const [wastageForm, setWastageForm] = useState({ date: today(), meal_type: 'breakfast', item_name: '', quantity: '', unit: 'kg', reason: '', cost_loss: '' });
-  const [consumptionForm, setConsumptionForm] = useState({ date: today(), meal_type: 'breakfast', total_servings: '', total_cost: '', average_rating: '' });
-  const [stockLogForm, setStockLogForm] = useState({ item: '', log_type: 'in', quantity: '', supplier: '', reason: '' });
 
-  // Sync tab with route segment (e.g. /admins/canteen/logs)
+  /* ─── Per-section loading states ─── */
+  const [loadingMap, setLoadingMap] = useState({});
+  const setSecLoading = (key, val) => setLoadingMap(p => ({ ...p, [key]: val }));
+
   useEffect(() => {
-    if (SECTIONS.some((s) => s.id === activeSegment)) {
-      setActiveTab(activeSegment);
-    }
+    if (activeSegment) setMenuSub(activeSegment);
   }, [activeSegment]);
 
-  const fetchTabDetails = useCallback(async () => {
-    setLoading(true);
+  /* ─── Dashboard State ─── */
+  const [dash, setDash] = useState(null);
+  const loadDashboard = useCallback(async () => {
+    setSecLoading('dashboard', true);
+    try { const r = await canteenApi.getDashboard(); setDash(r.data); }
+    catch { /* silent */ } finally { setSecLoading('dashboard', false); }
+  }, []);
+
+  /* ─── Food Items Section ─── */
+  const [foodItems, setFoodItems] = useState([]);
+  const [fiModal, setFiModal] = useState(false);
+  const [editingFi, setEditingFi] = useState(null);
+  const [viModal, setViModal] = useState(false);
+  const [selectedVi, setSelectedVi] = useState(null);
+  const [fiForm, setFiForm] = useState({ name: '', price: '', category: '', status: 'active', is_veg: true, description: '' });
+  const [cats, setCats] = useState([]);
+  const [catModal, setCatModal] = useState(false);
+  const [catForm, setCatForm] = useState({ name: '', icon: '🍽️', color: C.primary });
+
+  const loadFoodItems = useCallback(async () => {
     try {
-      let res;
-      switch (activeTab) {
-        case 'overview':
-          res = await canteenApi.getAnalytics();
-          setAnalytics(res.data);
-          break;
-        case 'menu':
-          res = await canteenApi.getWeeklyMenus();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'price-chart':
-          res = await canteenApi.getFoodItems();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'inventory':
-          res = await canteenApi.getInventoryItems();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'stock':
-          res = await canteenApi.getInventoryLogs();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'suppliers':
-          res = await canteenApi.getSuppliers();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'feedback':
-          res = await canteenApi.getComplaints();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'ingredients':
-          res = await canteenApi.getIngredients();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'dishes':
-          res = await canteenApi.getDishes();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'combos':
-          res = await canteenApi.getCombos();
-          setData(res.data?.results || res.data || []);
-          break;
-        case 'logs':
-          const [wastage, consumption] = await Promise.all([
-            canteenApi.getWastageLogs(),
-            canteenApi.getConsumptionLogs()
-          ]);
-          setData({ 
-            wastage: wastage.data?.results || wastage.data || [], 
-            consumption: consumption.data?.results || consumption.data || [] 
-          });
-          break;
-        default:
-          break;
-      }
-    } catch (err) {
-      console.error('Failed to fetch canteen data', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab]);
+      const [ir, cr] = await Promise.all([canteenApi.getFoodItems(), canteenApi.getFoodCategories()]);
+      setFoodItems(ir.data?.results || ir.data || []);
+      const catData = cr.data?.results ?? cr.data;
+      setCats(Array.isArray(catData) ? catData : []);
+    } catch { /* silent */ }
+  }, []);
 
-  useEffect(() => {
-    fetchTabDetails();
-  }, [fetchTabDetails]);
-
-  const closeModal = () => {
-    setModalType(null);
-    setEditId(null);
-    setMenuForm({ 
-      day: 'Monday', 
-      meal_type: 'Breakfast', 
-      title: '', 
-      items: [], 
-      currentItemInput: '' 
-    });
+  const saveCategory = async (e) => {
+    e.preventDefault();
+    try {
+      await canteenApi.createFoodCategory(catForm);
+      setCatModal(false);
+      setCatForm({ name: '', icon: '🍽️', color: C.primary });
+      loadFoodItems(); 
+    } catch { alert('Failed to create category'); }
   };
 
-  const handleAddNew = async () => {
+  const saveFoodItem = async (e) => {
+    e.preventDefault();
     try {
-      if (activeTab === 'menu') {
-        setEditId(null);
-        setMenuForm({ 
-          day: 'Monday', 
-          meal_type: 'Breakfast', 
-          title: '', 
-          items: [], 
-          currentItemInput: '' 
-        });
-        setModalType('menu');
-        return;
-      }
-
-      if (activeTab === 'ingredients') {
-        setIngredientForm({ name: '' });
-        setModalType('ingredient');
-        return;
-      }
-
-      if (activeTab === 'dishes') {
-        const ingredientsRes = await canteenApi.getIngredients();
-        setFoodItemOptions({ ingredients: ingredientsRes.data?.results || ingredientsRes.data || [] });
-        setDishForm({ name: '', dish_type: 'solid', ingredients: [], price: '', is_veg: true, description: '' });
-        setModalType('dish');
-        return;
-      }
-
-      if (activeTab === 'combos') {
-        const dishesRes = await canteenApi.getDishes();
-        setFoodItemOptions({ dishes: dishesRes.data?.results || dishesRes.data || [] });
-        setComboForm({ name: '', dishes: [], special_price: '', description: '' });
-        setModalType('combo');
-        return;
-      }
-
-      if (activeTab === 'price-chart') {
-        setFoodItemForm({ name: '', category: 'other', price: '', is_veg: true, is_available: true, description: '' });
-        setModalType('price-chart');
-        return;
-      }
-
-      if (activeTab === 'inventory') {
-        setInventoryForm({ name: '', category: '', unit: 'kg', current_stock: '', min_stock_level: '' });
-        setModalType('inventory');
-        return;
-      }
-
-      if (activeTab === 'stock') {
-        const [itemsRes, suppliersRes] = await Promise.all([
-          canteenApi.getInventoryItems(),
-          canteenApi.getSuppliers(),
-        ]);
-        setInventoryItemOptions(itemsRes.data?.results || itemsRes.data || []);
-        setSupplierOptions(suppliersRes.data?.results || suppliersRes.data || []);
-        setStockLogForm({ item: '', log_type: 'in', quantity: '', supplier: '', reason: '' });
-        setModalType('stock');
-        return;
-      }
-
-      if (activeTab === 'suppliers') {
-        setSupplierForm({ name: '', contact_person: '', phone: '', email: '', address: '', category: '', is_active: true });
-        setModalType('suppliers');
-        return;
-      }
-
-      if (activeTab === 'feedback') {
-        setFeedbackForm({ subject: '', description: '', rating: 5, status: 'open', resolution_note: '' });
-        setModalType('feedback');
-        return;
-      }
-
-      if (activeTab === 'logs') {
-        setLogKind('wastage');
-        setWastageForm({ date: today(), meal_type: 'breakfast', item_name: '', quantity: '', unit: 'kg', reason: '', cost_loss: '' });
-        setConsumptionForm({ date: today(), meal_type: 'breakfast', total_servings: '', total_cost: '', average_rating: '' });
-        setModalType('logs');
-      }
-    } catch (err) {
-      console.error('Failed to open form modal', err);
-      alert('Failed to open form. Please try again.');
-    }
-  };
-
-  const parseAmount = (value) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const submitDailyMenu = async (e) => {
-    if (e) e.preventDefault();
-    if (submitting) return;
-
-    if (!menuForm.title.trim()) {
-      alert('Menu title is required.');
-      return;
-    }
-    if (menuForm.items.length === 0) {
-      alert('Please add at least one item.');
-      return;
-    }
-
-    // Validation: prevent same day + meal type duplicates
-    const isDuplicate = data.some(m => 
-      String(m.day).toLowerCase() === String(menuForm.day).toLowerCase() && 
-      String(m.meal_type).toLowerCase() === String(menuForm.meal_type).toLowerCase() && 
-      (!editId || m.id !== editId)
-    );
-    
-    if (isDuplicate) {
-        alert(`A menu for ${menuForm.day} ${menuForm.meal_type} already exists.`);
-        return;
-    }
-
-    setSubmitting(true);
-    try {
-      const payload = {
-        day: menuForm.day,
-        meal_type: menuForm.meal_type,
-        title: menuForm.title,
-        items: menuForm.items
-      };
-
-      if (editId) {
-        await canteenApi.updateWeeklyMenu(editId, payload);
-        alert('Weekly menu updated successfully!');
+      if (editingFi) {
+        await canteenApi.updateFoodItem(editingFi.id, fiForm);
       } else {
-        await canteenApi.createWeeklyMenu(payload);
-        alert('Weekly menu created successfully!');
+        await canteenApi.createFoodItem(fiForm);
       }
-      
-      fetchTabDetails();
-      closeModal();
-    } catch (err) {
-      console.error('Error saving menu:', err);
-      alert('Failed to save menu. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+      setFiModal(false);
+      setEditingFi(null);
+      setFiForm({ name: '', price: '', category: '', status: 'active', is_veg: true, description: '' });
+      loadFoodItems();
+    } catch { alert('Failed to save food item'); }
   };
 
-  const handleItemAdd = (e) => {
-      if (e.key === 'Enter' || e.key === ',') {
-          e.preventDefault();
-          const val = menuForm.currentItemInput.trim();
-          if (val && !menuForm.items.includes(val)) {
-              setMenuForm(prev => ({
-                  ...prev,
-                  items: [...prev.items, val],
-                  currentItemInput: ''
-              }));
-          }
+  const handleEditFi = (item) => {
+    setEditingFi(item);
+    setFiForm({
+      name: item.name,
+      price: item.price,
+      category: item.category,
+      status: item.status,
+      is_veg: item.is_veg,
+      description: item.description || ''
+    });
+    setFiModal(true);
+  };
+
+  const deleteFoodItem = async (id) => {
+    if (!confirm('Are you sure you want to delete this item?')) return;
+    try {
+      await canteenApi.deleteFoodItem(id);
+      loadFoodItems();
+    } catch { alert('Failed to delete item'); }
+  };
+
+  const handleViewFi = (item) => {
+    setSelectedVi(item);
+    setViModal(true);
+  };
+
+  /* ─── Orders Section ─── */
+  const [orders, setOrders] = useState([]);
+  const [orderStatus, setOrderStatus] = useState('');
+  const [opModal, setOpModal] = useState(false);
+  const [opSearch, setOpSearch] = useState('');
+  const [opStudents, setOpStudents] = useState([]);
+  const [opSelected, setOpSelected] = useState(null);
+  const [opItems, setOpItems] = useState([]);
+  const [opCustomerType, setOpCustomerType] = useState('student');
+  const [opFoodCat, setOpFoodCat] = useState('all');
+  const [stuList, setStuList] = useState([]);
+  const [staList, setStaList] = useState([]);
+
+  const loadOrders = useCallback(async () => {
+    try { const r = await canteenApi.getOrders({ status: orderStatus }); setOrders(r.data?.results || r.data || []); }
+    catch { /* silent */ }
+  }, [orderStatus]);
+
+  /* ─── Payments Section ─── */
+  const [payments, setPayments] = useState([]);
+  const [paySummary, setPaySummary] = useState(null);
+  const loadPayments = useCallback(async () => {
+    try {
+      const [pr, sr] = await Promise.all([canteenApi.getPayments(), canteenApi.getDailySummary(fmtDate())]);
+      setPayments(pr.data?.results || pr.data || []);
+      setPaySummary(sr.data);
+    } catch { /* silent */ }
+  }, []);
+
+  /* ─── Inventory Section ─── */
+  const [invItems, setInvItems] = useState([]);
+  const [invLogs, setInvLogs] = useState([]);
+  const loadInventory = useCallback(async () => {
+    try {
+      const [ir, lr] = await Promise.all([canteenApi.getInventoryItems(), canteenApi.getInventoryLogs()]);
+      setInvItems(ir.data?.results || ir.data || []);
+      setInvLogs(lr.data?.results || lr.data || []);
+    } catch { /* silent */ }
+  }, []);
+
+  /* ─── Daily Menu Planner ─── */
+  const [weeklyMenus, setWeeklyMenus] = useState([]);
+  const loadWeeklyMenus = useCallback(async () => {
+    try { 
+      const r = await canteenApi.getWeeklyMenus(); 
+      const data = r.data?.results || r.data || [];
+      setWeeklyMenus(Array.isArray(data) ? data : []);
+    } catch { /* silent */ }
+  }, []);
+
+  const openWmModal = (day) => {
+    const dayMenus = weeklyMenus.filter(m => m.day === day);
+    const b = dayMenus.find(m => m.meal_type === 'Breakfast');
+    const l = dayMenus.find(m => m.meal_type === 'Lunch');
+    setWmForm({
+      day,
+      breakfast: { id: b?.id || null, title: b?.title || '', items: (b?.items || []).join(', ') },
+      lunch: { id: l?.id || null, title: l?.title || '', items: (l?.items || []).join(', ') }
+    });
+    setWmModal(true);
+  };
+
+  const saveWmMenu = async () => {
+    try {
+      const data = [
+        { ...wmForm.breakfast, meal_type: 'Breakfast' },
+        { ...wmForm.lunch, meal_type: 'Lunch' }
+      ];
+
+      for (const m of data) {
+        const payload = { 
+          day: wmForm.day, 
+          meal_type: m.meal_type, 
+          title: m.title, 
+          items: m.items.split(',').map(i => i.trim()).filter(Boolean) 
+        };
+        if (m.id) await canteenApi.updateWeeklyMenu(m.id, payload);
+        else await canteenApi.createWeeklyMenu(payload);
       }
+      setWmModal(false);
+      loadWeeklyMenus();
+    } catch (err) { alert('Failed to save menu'); }
   };
 
-  const removeItem = (item) => {
-      setMenuForm(prev => ({
-          ...prev,
-          items: prev.items.filter(i => i !== item)
-      }));
+  /* ─── Suppliers ─── */
+  const [suppliers, setSuppliers] = useState([]);
+  const loadSuppliers = useCallback(async () => {
+    try { const r = await canteenApi.getSuppliers(); setSuppliers(r.data?.results || r.data || []); }
+    catch { /* silent */ }
+  }, []);
+
+  /* ─── Feedback ─── */
+  const [complaints, setComplaints] = useState([]);
+  const loadComplaints = useCallback(async () => {
+    try { const r = await canteenApi.getComplaints(); setComplaints(r.data?.results || r.data || []); }
+    catch { /* silent */ }
+  }, []);
+
+  /* ─── Reports ─── */
+  const [reports, setReports] = useState(null);
+  const loadReports = useCallback(async (period = 'weekly') => {
+    try { const r = await canteenApi.getReports(period); setReports(r.data); }
+    catch { /* silent */ }
+  }, []);
+
+  /* ─── Effects ─── */
+  useEffect(() => {
+    const s = activeSegment || 'dashboard';
+    if (s === 'dashboard') loadDashboard();
+    if (s === 'menu') { loadFoodItems(); loadWeeklyMenus(); }
+    if (s === 'orders') { loadOrders(); loadFoodItems(); }
+    if (s === 'payments') loadPayments();
+    if (s === 'inventory') loadInventory();
+    if (s === 'suppliers') loadSuppliers();
+    if (s === 'feedback') loadComplaints();
+    if (s === 'reports') loadReports();
+  }, [activeSegment, loadDashboard, loadFoodItems, loadWeeklyMenus, loadOrders, loadPayments, loadInventory, loadSuppliers, loadComplaints, loadReports]);
+
+  /* ─── Handlers ─── */
+  const togglePayStatus = async (id) => {
+    if (!confirm('Mark payment as Refunded?')) return;
+    try { await canteenApi.updatePayment(id, { is_refunded: true }); loadPayments(); } catch { /* silent */ }
   };
 
-  const handleQuickAdd = (targetModal) => {
-    // Note: pendingForm state is set by the calling button to distinguish context
-    if (targetModal === 'dish') {
-      canteenApi.getIngredients().then(res => setFoodItemOptions(p => ({ ...p, ingredients: res.data?.results || res.data || [] })));
-    } else if (targetModal === 'combo') {
-      canteenApi.getDishes().then(res => setFoodItemOptions(p => ({ ...p, dishes: res.data?.results || res.data || [] })));
-    } else if (targetModal === 'ingredient') {
-      // Nothing special needed
-    }
-    setModalType(targetModal);
+  const updateOrderStatus = async (id, status) => {
+    try { await canteenApi.updateOrderStatus(id, status); loadOrders(); } catch { /* silent */ }
   };
 
-  const MultiSelect = ({ label, options, selectedValues, onChange, onAddNew }) => {
-    const isOpen = expandedDropdown === label;
-    const selectedCount = selectedValues?.length || 0;
-    
+  /* ═══════════ RENDER SECTIONS ═══════════ */
+
+  const renderDashboard = () => {
+    const t = dash?.today || {};
     return (
-      <div className={styles.formGroup} style={{ position: 'relative', height: 'auto', gridColumn: label === 'Select Dishes' ? '1 / -1' : 'auto' }}>
-        <div className="flex justify-between items-center mb-1">
-          <label className="mb-0">{label}</label>
-          {onAddNew && (
-            <button type="button" className={styles.btnSecondary} style={{padding: '2px 8px', height: '24px', fontSize: '11px'}} onClick={onAddNew}>
-              <Plus size={12} /> Add New
-            </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <StatCard Icon={ShoppingCart} label="Today's Orders" value={t.total_orders || 0} color="#3B82F6" />
+          <StatCard Icon={DollarSign} label="Total Revenue" value={`₹${Number(t.revenue || 0).toLocaleString()}`} color="#10B981" />
+          <StatCard Icon={Clock} label="Pending Orders" value={t.pending || 0} color="#F59E0B" />
+          <StatCard Icon={AlertTriangle} label="Low Stock" value={dash?.low_stock_count || 0} color="#EF4444" sub="Items needing refill" />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: 24 }}>
+          {/* Recent Orders */}
+          <div style={{ background: '#fff', borderRadius: 20, border: `1px solid ${C.border}`, padding: '24px' }}>
+            <h4 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}><RefreshCw size={18} color={C.primary} /> Live Orders Overview</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {(dash?.recent_orders || []).slice(0, 6).map(o => (
+                <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#F8FAFC', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fff', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>#{o.token_number}</div>
+                    <div>
+                      <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{o.student_name || 'Staff'}</p>
+                      <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>{o.items_detail?.length || 0} items • ₹{Number(o.total_amount).toFixed(2)}</p>
+                    </div>
+                  </div>
+                  <StatusBadge statusKey={o.status} />
+                </div>
+              ))}
+              {(dash?.recent_orders || []).length === 0 && <p style={{ textAlign: 'center', color: C.muted, padding: '20px' }}>No orders today yet.</p>}
+            </div>
+          </div>
+
+          {/* Top Items */}
+          <div style={{ background: '#fff', borderRadius: 20, border: `1px solid ${C.border}`, padding: '24px' }}>
+            <h4 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}><Zap size={18} color="#F59E0B" /> Top-Selling Items</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {(dash?.top_items || []).slice(0, 5).map((item, i) => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 18, fontWeight: 900, color: i < 3 ? '#F59E0B' : C.border, width: 24 }}>{i + 1}</span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{item.name}</p>
+                    <div style={{ height: 6, width: '100%', background: '#F1F5F9', borderRadius: 3, marginTop: 4 }}>
+                      <div style={{ height: '100%', width: `${(item.times_ordered / (dash?.top_items[0]?.times_ordered || 1)) * 100}%`, background: '#1E3A5F', borderRadius: 3 }} />
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>{item.times_ordered || item.sales_count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Revenue Trend Visual */}
+        <div style={{ background: '#fff', borderRadius: 20, border: `1px solid ${C.border}`, padding: '24px' }}>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}><BarChart3 size={18} color={C.accent} /> Revenue Trend (Last 7 Days)</h4>
+              <div style={{ display: 'flex', gap: 16 }}>
+                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 10, height: 10, borderRadius: 2, background: C.primary }} /> <span style={{ fontSize: 11, fontWeight: 700, color: C.muted }}>Daily Sales</span></div>
+              </div>
+           </div>
+           <div style={{ height: 200, display: 'flex', alignItems: 'flex-end', gap: 12, paddingBottom: 24 }}>
+              {(dash?.weekly_revenue || []).map((day, i) => {
+                 const maxHeight = Math.max(...(dash?.weekly_revenue || []).map(d => d.revenue), 100);
+                 const h = (day.revenue / maxHeight) * 150;
+                 return (
+                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                       <div style={{ width: '100%', height: h, background: C.primary, borderRadius: '4px 4px 0 0', position: 'relative', transition: 'all 0.3s' }}>
+                          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', padding: '4px 8px', background: '#1E293B', color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 800, marginBottom: 8, whiteSpace: 'nowrap' }}>₹{day.revenue}</div>
+                       </div>
+                       <span style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>{new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                    </div>
+                 );
+              })}
+           </div>
+        </div>
+      </div>
+    );
+  };
+
+
+  const renderMenuManagement = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', gap: 12, borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+        {['food-items', 'categories', 'daily-menu', 'always-available'].map(s => (
+          <button key={s} onClick={() => setMenuSub(s)} style={{
+            background: 'none', border: 'none', padding: '8px 16px', fontSize: 14, fontWeight: 700,
+            color: menuSub === s ? C.primary : C.muted, borderBottom: menuSub === s ? `2px solid ${C.primary}` : 'none', cursor: 'pointer',
+            textTransform: 'capitalize'
+          }}>{s.replace('-', ' ')}</button>
+        ))}
+      </div>
+
+      {menuSub === 'food-items' && (
+        <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC' }}>
+            <h5 style={{ margin: 0, fontWeight: 800 }}>Master Food Catalog</h5>
+            <Btn size="sm" onClick={() => setFiModal(true)}><Plus size={16} /> Add Item</Btn>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: `1px solid ${C.border}` }}>
+                {['Item Name', 'Category', 'Price', 'Type', 'Status', 'Actions'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {foodItems.map(f => (
+                <tr key={f.id} style={{ borderBottom: `1px dashed ${C.border}` }}>
+                  <td style={{ padding: '14px 20px', fontWeight: 700 }}>{f.name}</td>
+                  <td style={{ padding: '14px 20px' }}><span style={{ padding: '3px 8px', borderRadius: 6, background: '#F1F5F9', fontSize: 12 }}>{f.category_name || f.category}</span></td>
+                  <td style={{ padding: '14px 20px', fontWeight: 800, color: C.accent }}>₹{Number(f.price).toFixed(2)}</td>
+                  <td style={{ padding: '14px 20px' }}><VegDot isVeg={f.is_veg} /></td>
+                  <td style={{ padding: '14px 20px' }}><span style={{ padding: '3px 8px', borderRadius: 6, background: f.status === 'active' ? '#DCFCE7' : '#FEE2E2', color: f.status === 'active' ? '#166534' : '#991B1B', fontSize: 11, fontWeight: 700 }}>{f.status}</span></td>
+                  <td style={{ padding: '14px 20px' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button 
+                        onClick={() => handleViewFi(f)} 
+                        style={{ background: 'none', border: 'none', color: C.accent, cursor: 'pointer' }}
+                        title="View Details"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleEditFi(f)} 
+                        style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}
+                        title="Edit Item"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => deleteFoodItem(f.id)} 
+                        style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }}
+                        title="Delete Item"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {menuSub === 'categories' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 20 }}>
+          {cats.map(cat => (
+            <div key={cat.id} style={{ background: '#fff', padding: 20, borderRadius: 16, border: `1px solid ${C.border}`, textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: `${cat.color || C.primary}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: cat.color || C.primary }}>
+                 <p style={{ margin: 0, fontSize: 18 }}>{cat.icon || '🍽\uFE0F'}</p>
+              </div>
+              <h6 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>{cat.name}</h6>
+              <p style={{ margin: 0, fontSize: 12, color: C.muted }}>{cat.food_items_count || 0} items listed</p>
+            </div>
+          ))}
+          <div onClick={() => setCatModal(true)} style={{ background: '#F8FAFC', padding: 20, borderRadius: 16, border: `1px dashed ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+             <Plus size={20} color={C.muted} />
+          </div>
+        </div>
+      )}
+
+      {menuSub === 'daily-menu' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => {
+               const dayMenus = Array.isArray(weeklyMenus) ? weeklyMenus.filter(m => m.day === day) : [];
+               return (
+                <div key={day} style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, padding: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h6 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{day}</h6>
+                    <button onClick={() => openWmModal(day)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit Menu</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {['Breakfast', 'Lunch'].map(type => {
+                       const m = dayMenus.find(menu => menu.meal_type === type);
+                       return (
+                        <div key={type} style={{ background: '#F8FAFC', borderRadius: 12, padding: '12px' }}>
+                          <p style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: 'uppercase', marginBottom: 6 }}>{type}</p>
+                          <p style={{ fontSize: 13, margin: 0, fontWeight: 600 }}>{m?.title || `Standard ${type}`}</p>
+                          <p style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{m?.items?.join(', ') || 'No special items'}</p>
+                        </div>
+                       );
+                    })}
+                  </div>
+                </div>
+               );
+            })}
+          </div>
+        </div>
+      )}
+
+      {menuSub === 'always-available' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 20 }}>
+          {foodItems.filter(f => ['Snacks', 'Snack', 'Juices', 'Juice'].includes(f.category_name || f.category)).map(f => (
+            <div key={f.id} style={{ background: '#fff', padding: 24, borderRadius: 20, border: `1px solid ${C.border}`, position: 'relative', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: ['Juices', 'Juice'].includes(f.category_name || f.category) ? '#FDF2F8' : '#F0F9FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {['Juices', 'Juice'].includes(f.category_name || f.category) ? <Coffee size={20} color="#DB2777" /> : <ShoppingBag size={20} color="#0284C7" />}
+                </div>
+                <button 
+                  onClick={async () => {
+                    try {
+                      await canteenApi.toggleFoodItemAvailability(f.id);
+                      loadFoodItems(); // Refresh
+                    } catch { alert('Failed to toggle status'); }
+                  }}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  {f.status === 'active' ? <ToggleRight size={32} color={C.accent} /> : <ToggleLeft size={32} color={C.muted} />}
+                </button>
+              </div>
+              <div>
+                <h6 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800 }}>{f.name}</h6>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 18, fontWeight: 900, color: C.primary }}>₹{Number(f.price).toFixed(0)}</span>
+                  <VegDot isVeg={f.is_veg} />
+                </div>
+              </div>
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>{f.category_name || f.category}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: f.status === 'active' ? '#059669' : '#DC2626' }}>{f.status === 'active' ? 'AVAILABLE' : 'OUT OF STOCK'}</span>
+              </div>
+            </div>
+          ))}
+          {foodItems.filter(f => ['Snacks', 'Snack', 'Juices', 'Juice'].includes(f.category_name || f.category)).length === 0 && (
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 0', background: '#F8FAFC', borderRadius: 20, border: `1px dashed ${C.border}` }}>
+              <Eye size={40} color={C.muted} style={{ marginBottom: 16, opacity: 0.5 }} />
+              <p style={{ margin: 0, fontWeight: 800, color: C.muted }}>No Items Found</p>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted }}>Add items to "Snacks" or "Juices" category in the catalog first.</p>
+            </div>
           )}
         </div>
-        
-        <div 
-          className={styles.formControl} 
-          style={{ 
-            cursor: 'pointer', 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            minHeight: '42px',
-            background: '#fff',
-            padding: '8px 12px'
-          }}
-          onClick={() => setExpandedDropdown(isOpen ? null : label)}
-        >
-          <span style={{ 
-            color: selectedCount > 0 ? '#111827' : '#9ca3af',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            maxWidth: 'calc(100% - 24px)',
-            fontSize: '14px'
-          }}>
-            {selectedCount > 0 
-              ? options.filter(o => selectedValues.includes(String(o.id))).map(o => o.name).join(', ')
-              : `-- Select ${label} --`}
-          </span>
-          <span style={{ fontSize: '10px', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>▼</span>
-        </div>
+      )}
+    </div>
+  );
 
-        {isOpen && (
-          <>
-            <div 
-              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }} 
-              onClick={() => setExpandedDropdown(null)} 
-            />
-            <div style={{ 
-              position: 'absolute', 
-              top: '100%', 
-              left: 0, 
-              right: 0, 
-              zIndex: 101, 
-              background: '#fff', 
-              border: '1px solid #e5e7eb', 
-              borderRadius: '8px',
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-              marginTop: '4px',
-              maxHeight: '250px',
-              overflowY: 'auto',
-              padding: '8px'
-            }}>
-              {options?.map(opt => (
-                <label key={opt.id} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  padding: '8px', 
-                  cursor: 'pointer',
-                  borderRadius: '4px',
-                  userSelect: 'none',
-                  fontSize: '14px',
-                  transition: 'background 0.2s'
-                }} className="hover:bg-gray-50">
-                  <input 
-                    type="checkbox" 
-                    style={{ marginRight: '10px', width: '16px', height: '16px' }}
-                    checked={selectedValues.includes(String(opt.id))}
-                    onChange={(e) => {
-                      const id = String(opt.id);
-                      if (e.target.checked) {
-                        onChange([...selectedValues, id]);
-                      } else {
-                        onChange(selectedValues.filter(v => v !== id));
-                      }
-                    }}
-                  />
-                  {opt.name} {opt.dish_type ? `(${opt.dish_type})` : ''}
-                </label>
-              ))}
-              {!options?.length && <div style={{ padding: '8px', color: '#9ca3af', textAlign: 'center' }}>No items found</div>}
+
+  const renderOrderManagement = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {['all', 'pending', 'preparing', 'ready', 'completed'].map(s => (
+            <button key={s} onClick={() => setOrderStatus(s === 'all' ? '' : s)} style={{
+              padding: '6px 14px', borderRadius: 8, border: `1px solid ${orderStatus === (s === 'all' ? '' : s) ? C.primary : C.border}`,
+              background: orderStatus === (s === 'all' ? '' : s) ? C.primary : '#fff', color: orderStatus === (s === 'all' ? '' : s) ? '#fff' : C.text,
+              fontSize: 13, fontWeight: 700, cursor: 'pointer', textTransform: 'capitalize'
+            }}>{s}</button>
+          ))}
+        </div>
+        <Btn onClick={() => setOpModal(true)}><Plus size={16} /> Place New Order</Btn>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+        {orders.map(o => (
+          <div key={o.id} style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, padding: '16px', position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ padding: '4px 8px', background: C.primary, color: '#fff', borderRadius: 6, fontWeight: 800, fontSize: 14 }}>#{o.token_number}</div>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>{o.student_name || 'Walk-in'}</span>
+              </div>
+              <StatusBadge statusKey={o.status} />
             </div>
-          </>
-        )}
-      </div>
-    );
-  };
-
-  const submitIngredient = async (e) => {
-    e.preventDefault();
-    if (!ingredientForm.name.trim()) return;
-    setSubmitting(true);
-    try {
-      await canteenApi.createIngredient(ingredientForm);
-      alert('Ingredient added');
-      if (pendingDishForm) {
-        setModalType('dish');
-        setPendingDishForm(null);
-      } else if (pendingMenuForm) {
-        setModalType('menu');
-        // Refresh ingredients list in options
-        canteenApi.getIngredients().then(res => {
-          setFoodItemOptions(p => ({ ...p, ingredients: res.data?.results || res.data || [] }));
-        });
-      } else {
-        closeModal();
-        fetchTabDetails();
-      }
-    } catch (err) {
-      alert('Failed to add ingredient');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitDish = async (e) => {
-    e.preventDefault();
-    if (!dishForm.name.trim()) return;
-    setSubmitting(true);
-    try {
-      await canteenApi.createDish({
-        ...dishForm,
-        price: parseAmount(dishForm.price),
-        ingredients: dishForm.ingredients.map(Number)
-      });
-      alert('Dish added');
-      if (pendingMenuForm) {
-        setModalType('menu');
-        canteenApi.getDishes().then(res => {
-          setFoodItemOptions(p => ({ ...p, dishes: res.data?.results || res.data || [] }));
-        });
-      } else {
-        closeModal();
-        fetchTabDetails();
-      }
-    } catch (err) {
-      alert('Failed to add dish');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitCombo = async (e) => {
-    e.preventDefault();
-    if (!comboForm.name.trim()) return;
-    setSubmitting(true);
-    try {
-      await canteenApi.createCombo({
-        ...comboForm,
-        special_price: comboForm.special_price ? parseAmount(comboForm.special_price) : null,
-        dishes: comboForm.dishes.map(Number)
-      });
-      alert('Combo added');
-      if (pendingMenuForm) {
-        setModalType('menu');
-        canteenApi.getCombos().then(res => {
-          setFoodItemOptions(p => ({ ...p, combos: res.data?.results || res.data || [] }));
-        });
-      } else {
-        closeModal();
-        fetchTabDetails();
-      }
-    } catch (err) {
-      alert('Failed to add combo');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitFoodItem = async (event) => {
-    event.preventDefault();
-
-    if (!foodItemForm.name.trim()) {
-      alert('Item name is required.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await canteenApi.createFoodItem({
-        name: foodItemForm.name.trim(),
-        category: foodItemForm.category,
-        price: parseAmount(foodItemForm.price),
-        is_veg: Boolean(foodItemForm.is_veg),
-        is_available: Boolean(foodItemForm.is_available),
-        description: foodItemForm.description || '',
-      });
-      alert('Food item saved.');
-      closeModal();
-      fetchTabDetails();
-    } catch (err) {
-      console.error('Failed to save food item', err);
-      alert('Failed to save food item.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitInventoryItem = async (event) => {
-    event.preventDefault();
-
-    if (!inventoryForm.name.trim()) {
-      alert('Inventory item name is required.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await canteenApi.createInventoryItem({
-        name: inventoryForm.name.trim(),
-        category: inventoryForm.category || '',
-        unit: inventoryForm.unit || 'kg',
-        current_stock: parseAmount(inventoryForm.current_stock),
-        min_stock_level: parseAmount(inventoryForm.min_stock_level),
-      });
-      alert('Inventory item saved.');
-      closeModal();
-      fetchTabDetails();
-    } catch (err) {
-      console.error('Failed to save inventory item', err);
-      alert('Failed to save inventory item.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitSupplier = async (event) => {
-    event.preventDefault();
-
-    if (!supplierForm.name.trim() || !supplierForm.phone.trim()) {
-      alert('Supplier name and phone are required.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await canteenApi.createSupplier({
-        name: supplierForm.name.trim(),
-        contact_person: supplierForm.contact_person || '',
-        phone: supplierForm.phone,
-        email: supplierForm.email || '',
-        address: supplierForm.address || '',
-        category: supplierForm.category || '',
-        is_active: Boolean(supplierForm.is_active),
-      });
-      alert('Supplier saved.');
-      closeModal();
-      fetchTabDetails();
-    } catch (err) {
-      console.error('Failed to save supplier', err);
-      alert('Failed to save supplier.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitFeedback = async (event) => {
-    event.preventDefault();
-
-    if (!feedbackForm.subject.trim() || !feedbackForm.description.trim()) {
-      alert('Subject and description are required.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await canteenApi.createComplaint({
-        subject: feedbackForm.subject.trim(),
-        description: feedbackForm.description.trim(),
-        rating: Math.max(1, Math.min(5, Math.floor(parseAmount(feedbackForm.rating) || 5))),
-        status: feedbackForm.status,
-        resolution_note: feedbackForm.resolution_note || '',
-      });
-      alert('Feedback saved.');
-      closeModal();
-      fetchTabDetails();
-    } catch (err) {
-      console.error('Failed to save feedback', err);
-      alert('Failed to save feedback.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitStockLog = async (event) => {
-    event.preventDefault();
-
-    if (!stockLogForm.item) {
-      alert('Please select an inventory item.');
-      return;
-    }
-
-    const quantity = parseAmount(stockLogForm.quantity);
-    if (quantity <= 0) {
-      alert('Quantity must be greater than 0.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const payload = {
-        item: Number(stockLogForm.item),
-        log_type: stockLogForm.log_type,
-        quantity,
-        reason: stockLogForm.reason || '',
-      };
-      if (stockLogForm.supplier) payload.supplier = Number(stockLogForm.supplier);
-
-      await canteenApi.createInventoryLog(payload);
-      alert('Stock log saved.');
-      closeModal();
-      fetchTabDetails();
-    } catch (err) {
-      console.error('Failed to save stock log', err);
-      alert('Failed to save stock log.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitLogs = async (event) => {
-    event.preventDefault();
-
-    if (logKind === 'wastage') {
-      if (!wastageForm.item_name.trim()) {
-        alert('Item name is required.');
-        return;
-      }
-
-      const qty = parseAmount(wastageForm.quantity);
-      if (qty <= 0) {
-        alert('Quantity must be greater than 0.');
-        return;
-      }
-    } else {
-      const servings = Math.floor(parseAmount(consumptionForm.total_servings));
-      if (servings <= 0) {
-        alert('Total servings must be greater than 0.');
-        return;
-      }
-    }
-
-    setSubmitting(true);
-    try {
-      if (logKind === 'wastage') {
-        const qty = parseAmount(wastageForm.quantity);
-        await canteenApi.createWastageLog({
-          date: wastageForm.date,
-          meal_type: wastageForm.meal_type,
-          item_name: wastageForm.item_name.trim(),
-          quantity: qty,
-          unit: wastageForm.unit || 'kg',
-          reason: wastageForm.reason || '',
-          cost_loss: parseAmount(wastageForm.cost_loss),
-        });
-        alert('Wastage log saved.');
-      } else {
-        const servings = Math.floor(parseAmount(consumptionForm.total_servings));
-        await canteenApi.createConsumptionLog({
-          date: consumptionForm.date,
-          meal_type: consumptionForm.meal_type,
-          total_servings: servings,
-          total_cost: parseAmount(consumptionForm.total_cost),
-          average_rating: parseAmount(consumptionForm.average_rating),
-        });
-        alert('Consumption log saved.');
-      }
-
-      closeModal();
-      fetchTabDetails();
-    } catch (err) {
-      console.error('Failed to save log', err);
-      alert('Failed to save log.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const renderOverview = () => (
-    <div className={styles.analyticsGrid}>
-      <div className={styles.statCard}>
-        <div className={styles.statInfo}>
-          <span className={styles.statLabel}>Total Servings</span>
-          <span className={styles.statValue}>{analytics?.total_servings || 0}</span>
-        </div>
-        <div className={styles.statIcon} style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
-          <UtensilsCrossed size={24} />
-        </div>
-      </div>
-      <div className={styles.statCard}>
-        <div className={styles.statInfo}>
-          <span className={styles.statLabel}>Total Revenue/Cost</span>
-          <span className={styles.statValue}>₹{Number(analytics?.total_cost || 0).toLocaleString()}</span>
-        </div>
-        <div className={styles.statIcon} style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-          <TrendingUp size={24} />
-        </div>
-      </div>
-      <div className={styles.statCard}>
-        <div className={styles.statInfo}>
-          <span className={styles.statLabel}>Avg Satisfaction</span>
-          <span className={styles.statValue}>{Number(analytics?.average_rating || 0).toFixed(1)} / 5.0</span>
-        </div>
-        <div className={styles.statIcon} style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
-          <MessageSquareWarning size={24} />
-        </div>
+            <div style={{ borderTop: `1px dashed ${C.border}`, paddingTop: 12, marginBottom: 16 }}>
+              {(o.items_detail || []).map(i => (
+                <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                  <span>{i.quantity}x {i.name}</span>
+                  <span style={{ fontWeight: 600 }}>₹{Number(i.subtotal).toFixed(2)}</span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontWeight: 800, color: C.primary, fontSize: 15 }}>
+                <span>Total</span>
+                <span>₹{Number(o.total_amount).toFixed(2)}</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {o.status === 'pending' && <Btn size="sm" variant="success" onClick={() => updateOrderStatus(o.id, 'preparing')} style={{ flex: 1 }}>Accept</Btn>}
+              {o.status === 'preparing' && <Btn size="sm" variant="success" onClick={() => updateOrderStatus(o.id, 'ready')} style={{ flex: 1 }}>Ready</Btn>}
+              {o.status === 'ready' && <Btn size="sm" variant="success" onClick={() => updateOrderStatus(o.id, 'completed')} style={{ flex: 1 }}>Complete</Btn>}
+              {['pending', 'preparing'].includes(o.status) && <Btn size="sm" variant="ghost" onClick={() => updateOrderStatus(o.id, 'cancelled')} style={{ color: '#EF4444' }}>Reject</Btn>}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 
-  const renderTable = (headers, rows, renderRow) => {
-    const safeRows = Array.isArray(rows) ? rows : [];
-    return (
-    <div className={styles.tableContainer}>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            {headers.map(h => <th key={h}>{h}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {loading ? (
-            <tr><td colSpan={headers.length} className="text-center p-8"><Loader2 className="animate-spin mx-auto" /></td></tr>
-          ) : safeRows.length > 0 ? (
-            safeRows.map(renderRow)
-          ) : (
-            <tr><td colSpan={headers.length} className="text-center p-8 text-gray-500">No data found</td></tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-    );
-  };
-
-  return (
-    <div className={styles.tabContent}>
-      <div className={styles.filterBar}>
-        <div className={styles.searchWrapper}>
-          <Search size={18} />
-          <input 
-            type="text" 
-            placeholder={`Search ${activeTab.replace('-', ' ')}...`} 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2">
-          <button className={styles.btnSecondary} onClick={fetchTabDetails}>
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-          <button className={styles.btnPrimary} onClick={handleAddNew} disabled={loading || submitting || activeTab === 'overview'}>
-            <Plus size={16} />
-            Add New
-          </button>
-        </div>
+  const renderPayments = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', gap: 16 }}>
+        <StatCard Icon={Coffee} label="Daily Summary" value={`₹${Number(paySummary?.total_earnings || 0).toLocaleString()}`} color="#10B981" sub={`Collected today (${fmtDate()})`} />
+        <StatCard Icon={CreditCard} label="Online Payments" value={`₹${Number(paySummary?.online_total || 0).toLocaleString()}`} color="#6366F1" />
+        <StatCard Icon={DollarSign} label="Cash Collection" value={`₹${Number(paySummary?.cash_total || 0).toLocaleString()}`} color="#F59E0B" />
       </div>
 
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-        {SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            className={`${styles.btnSecondary} ${activeTab === section.id ? styles.btnPrimary : ''}`}
-            onClick={() => {
-              setActiveTab(section.id);
-              router.push(`/admins/canteen/${section.id}`);
-            }}
-            style={{ whiteSpace: 'nowrap' }}
-          >
-            {section.icon}
-            {section.label}
-          </button>
+      <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ textAlign: 'left', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
+              {['Date', 'Order #', 'Customer', 'Method', 'Amount', 'Status', 'Actions'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 12, fontWeight: 700, color: C.muted }}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {payments.map(p => (
+              <tr key={p.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                <td style={{ padding: '14px 20px', fontSize: 13 }}>{new Date(p.payment_date).toLocaleString()}</td>
+                <td style={{ padding: '14px 20px', fontWeight: 700 }}>#{p.order_token}</td>
+                <td style={{ padding: '14px 20px', fontSize: 14 }}>{p.customer_name}</td>
+                <td style={{ padding: '14px 20px' }}><span style={{ textTransform: 'uppercase', fontSize: 11, fontWeight: 800, color: C.muted }}>{p.payment_method}</span></td>
+                <td style={{ padding: '14px 20px', fontWeight: 800 }}>₹{Number(p.amount).toFixed(2)}</td>
+                <td style={{ padding: '14px 20px' }}>
+                  <span style={{ padding: '4px 10px', borderRadius: 99, background: p.is_refunded ? '#FEE2E2' : '#DCFCE7', color: p.is_refunded ? '#991B1B' : '#166534', fontSize: 12, fontWeight: 700 }}>
+                    {p.is_refunded ? 'Refunded' : 'Paid'}
+                  </span>
+                </td>
+                <td style={{ padding: '14px 20px' }}>
+                  {!p.is_refunded && <Btn size="sm" variant="ghost" onClick={() => togglePayStatus(p.id)} style={{ color: '#EF4444', fontSize: 11 }}>Refund</Btn>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderInventory = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+        {invItems.filter(i => Number(i.current_stock) <= Number(i.min_stock_level)).map(item => (
+          <div key={item.id} style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <AlertCircle color="#EA580C" />
+            <div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#9A3412' }}>Low Stock: {item.name}</p>
+              <p style={{ margin: 0, fontSize: 12, color: '#C2410C' }}>{item.current_stock} {item.unit} remaining</p>
+            </div>
+          </div>
         ))}
       </div>
 
-      <div className={styles.contentArea}>
-        {activeTab === 'overview' && renderOverview()}
-        
-        {activeTab === 'menu' && renderTable(
-          ['Day', 'Meal Type', 'Menu Title', 'Items', 'Actions'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td style={{ fontWeight: '600', color: '#111827' }}>{row.day}</td>
-              <td>
-                <span className={styles.badge} style={{ 
-                  background: row.meal_type === 'Breakfast' ? '#ebf5ff' : '#fef3c7', 
-                  color: row.meal_type === 'Breakfast' ? '#0070f3' : '#92400e',
-                  textTransform: 'capitalize'
-                }}>
-                  {row.meal_type}
-                </span>
-              </td>
-              <td>{row.title}</td>
-              <td>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {row.items?.map((item, idx) => (
-                    <span key={idx} className={styles.badge} style={{ background: '#f3f4f6', color: '#374151', fontSize: '11px' }}>
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </td>
-              <td style={{ textAlign: 'right' }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  <button 
-                    onClick={() => {
-                      setEditId(row.id);
-                      setMenuForm({
-                        day: row.day,
-                        meal_type: row.meal_type,
-                        title: row.title,
-                        items: row.items || [],
-                        currentItemInput: ''
-                      });
-                      setModalType('menu');
-                    }}
-                    className={styles.btnSecondary}
-                    style={{ padding: '4px 8px', fontSize: '12px' }}
-                  >
-                    Edit
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      if (confirm('Are you sure you want to delete this menu?')) {
-                        try {
-                          await canteenApi.deleteWeeklyMenu(row.id);
-                          fetchTabDetails();
-                        } catch (err) {
-                          alert('Failed to delete menu');
-                        }
-                      }
-                    }}
-                    className={styles.btnSecondary}
-                    style={{ padding: '4px 8px', fontSize: '12px', color: '#ef4444', borderColor: '#fee2e2' }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </td>
+      <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between' }}>
+          <h5 style={{ margin: 0, fontWeight: 800 }}>Ingredient Inventory</h5>
+          <Btn size="sm"><Plus size={16} /> Update Stock</Btn>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ textAlign: 'left', borderBottom: `1px solid ${C.border}` }}>
+              {['Ingredient', 'Category', 'Current Stock', 'Min Level', 'Last Updated'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 12, fontWeight: 700, color: C.muted }}>{h}</th>)}
             </tr>
-          )
-        )}
+          </thead>
+          <tbody>
+            {invItems.map(i => (
+              <tr key={i.id} style={{ borderBottom: `1px dashed ${C.border}` }}>
+                <td style={{ padding: '14px 20px', fontWeight: 700 }}>{i.name}</td>
+                <td style={{ padding: '14px 20px' }}>{i.category}</td>
+                <td style={{ padding: '14px 20px', fontWeight: 800, color: Number(i.current_stock) <= Number(i.min_stock_level) ? '#EF4444' : C.accent }}>{i.current_stock} {i.unit}</td>
+                <td style={{ padding: '14px 20px' }}>{i.min_stock_level} {i.unit}</td>
+                <td style={{ padding: '14px 20px', fontSize: 12, color: C.muted }}>{new Date(i.last_updated).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
-        {activeTab === 'dishes' && renderTable(
-          ['Name', 'Price', 'Ingredients', 'Veg/Non-Veg'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td className="font-bold">{row.name}</td>
-              <td>₹{row.price}</td>
-              <td style={{ maxWidth: '300px' }}>
-                <div className="flex flex-wrap gap-1">
-                  {row.ingredients_detail?.map(ing => <span key={ing.id} className={styles.badge}>{ing.name}</span>) || '-'}
-                </div>
-              </td>
-              <td>
-                <span className={`${styles.badge} ${row.is_veg ? styles.badgeSuccess : styles.badgeDanger}`}>
-                  {row.is_veg ? 'Veg' : 'Non-Veg'}
+  const renderSuppliers = () => (
+    <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+      <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC' }}>
+        <h5 style={{ margin: 0, fontWeight: 800 }}>Supplier Directory</h5>
+        <Btn size="sm"><Plus size={16} /> Add Supplier</Btn>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ textAlign: 'left', borderBottom: `1px solid ${C.border}` }}>
+            {['Supplier Name', 'Contact Person', 'Phone', 'Category', 'Status'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 12, fontWeight: 700, color: C.muted }}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {suppliers.map(s => (
+            <tr key={s.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+              <td style={{ padding: '14px 20px', fontWeight: 700 }}>{s.name}</td>
+              <td style={{ padding: '14px 20px' }}>{s.contact_person}</td>
+              <td style={{ padding: '14px 20px' }}>{s.phone}</td>
+              <td style={{ padding: '14px 20px' }}>{s.category}</td>
+              <td style={{ padding: '14px 20px' }}>
+                <span style={{ padding: '3px 8px', borderRadius: 6, background: s.is_active ? '#DCFCE7' : '#FEE2E2', color: s.is_active ? '#166534' : '#991B1B', fontSize: 11, fontWeight: 700 }}>
+                  {s.is_active ? 'Active' : 'Inactive'}
                 </span>
               </td>
             </tr>
-          )
-        )}
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
-        {activeTab === 'combos' && renderTable(
-          ['Combo Name', 'Included Dishes', 'Special Price'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td className="font-bold">{row.name}</td>
-              <td>
-                <div className="flex flex-wrap gap-1">
-                  {row.dishes_detail?.map(d => <span key={d.id} className={styles.badge}>{d.name}</span>) || '-'}
-                </div>
-              </td>
-              <td>{row.special_price ? `₹${row.special_price}` : 'Normal Sum'}</td>
-            </tr>
-          )
-        )}
-
-        {activeTab === 'ingredients' && renderTable(
-          ['Name', 'Used In (Dishes)'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td className="font-bold">{row.name}</td>
-              <td>{data.filter(d => d.ingredients?.includes(row.id)).length} dishes</td>
-            </tr>
-          )
-        )}
-
-        {activeTab === 'price-chart' && renderTable(
-          ['Item Name', 'Category', 'Price', 'Type', 'Status'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td className="font-bold">{row.name}</td>
-              <td className="capitalize">{row.category}</td>
-              <td>₹{row.price}</td>
-              <td>
-                <span className={`${styles.badge} ${row.is_veg ? styles.badgeSuccess : styles.badgeDanger}`}>
-                  {row.is_veg ? 'Veg' : 'Non-Veg'}
-                </span>
-              </td>
-              <td>{row.is_available ? 'Available' : 'Out of Stock'}</td>
-            </tr>
-          )
-        )}
-
-        {activeTab === 'inventory' && renderTable(
-          ['Item', 'Category', 'Stock Level', 'Min Level', 'Status'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td>{row.name}</td>
-              <td>{row.category}</td>
-              <td>{row.current_stock} {row.unit}</td>
-              <td>{row.min_stock_level} {row.unit}</td>
-              <td>
-                <span className={`${styles.badge} ${Number(row.current_stock) <= Number(row.min_stock_level) ? styles.badgeWarning : styles.badgeSuccess}`}>
-                  {Number(row.current_stock) <= Number(row.min_stock_level) ? 'Low Stock' : 'Optimal'}
-                </span>
-              </td>
-            </tr>
-          )
-        )}
-
-        {activeTab === 'stock' && renderTable(
-          ['Date', 'Type', 'Item', 'Quantity', 'Supplier', 'Reason', 'Recorded By'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td>{row.date ? new Date(row.date).toLocaleString() : '-'}</td>
-              <td>
-                <span className={`${styles.badge} ${row.log_type === 'in' ? styles.badgeSuccess : row.log_type === 'out' ? styles.badgeInfo : styles.badgeWarning}`}>
-                  {row.log_type}
-                </span>
-              </td>
-              <td>{row.item_name || row.item}</td>
-              <td>{row.quantity}</td>
-              <td>{row.supplier_name || '-'}</td>
-              <td>{row.reason || '-'}</td>
-              <td>{row.recorded_by_name || '-'}</td>
-            </tr>
-          )
-        )}
-
-        {activeTab === 'suppliers' && renderTable(
-          ['Supplier Name', 'Contact', 'Category', 'Status'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td>{row.name}</td>
-              <td>{row.phone} / {row.email}</td>
-              <td>{row.category}</td>
-              <td>{row.is_active ? 'Active' : 'Inactive'}</td>
-            </tr>
-          )
-        )}
-
-        {activeTab === 'feedback' && renderTable(
-          ['Date', 'User', 'Subject', 'Rating', 'Status'],
-          data,
-          (row) => (
-            <tr key={row.id}>
-              <td>{new Date(row.date).toLocaleDateString()}</td>
-              <td>{row.user_name}</td>
-              <td>{row.subject}</td>
-              <td>{'⭐'.repeat(row.rating)}</td>
-              <td>
-                <span className={`${styles.badge} ${row.status === 'resolved' ? styles.badgeSuccess : styles.badgeWarning}`}>
-                  {row.status}
-                </span>
-              </td>
-            </tr>
-          )
-        )}
-
-        {activeTab === 'logs' && (
-          <div className="space-y-6">
-            {renderTable(
-              ['Date', 'Meal Type', 'Item', 'Qty', 'Unit', 'Cost Loss', 'Reason'],
-              data?.wastage || [],
-              (row) => (
-                <tr key={row.id}>
-                  <td>{row.date ? new Date(row.date).toLocaleDateString() : '-'}</td>
-                  <td className="capitalize">{row.meal_type}</td>
-                  <td>{row.item_name}</td>
-                  <td>{row.quantity}</td>
-                  <td>{row.unit || '-'}</td>
-                  <td>₹{row.cost_loss || 0}</td>
-                  <td>{row.reason || '-'}</td>
-                </tr>
-              )
-            )}
-
-            {renderTable(
-              ['Date', 'Meal Type', 'Total Servings', 'Total Cost', 'Avg Rating'],
-              data?.consumption || [],
-              (row) => (
-                <tr key={row.id}>
-                  <td>{row.date ? new Date(row.date).toLocaleDateString() : '-'}</td>
-                  <td className="capitalize">{row.meal_type}</td>
-                  <td>{row.total_servings}</td>
-                  <td>₹{row.total_cost || 0}</td>
-                  <td>{Number(row.average_rating || 0).toFixed(1)}</td>
-                </tr>
-              )
-            )}
+  const renderFeedback = () => (
+    <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+      <div style={{ padding: '20px', borderBottom: `1px solid ${C.border}` }}><h5 style={{ margin: 0, fontWeight: 800 }}>Customer Feedback & Reviews</h5></div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {complaints.map(c => (
+          <div key={c.id} style={{ padding: '20px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 20 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 24, background: '#F1F5F9', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: C.primary }}>{c.user_name?.charAt(0)}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <h6 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>{c.subject}</h6>
+                <span style={{ fontSize: 12, color: C.muted }}>{new Date(c.created_at).toLocaleDateString()}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 2, marginBottom: 8 }}>
+                {[1, 2, 3, 4, 5].map(i => <Star key={i} size={14} fill={i <= c.rating ? '#F59E0B' : 'none'} color={i <= c.rating ? '#F59E0B' : '#CBD5E1'} />)}
+              </div>
+              <p style={{ fontSize: 14, margin: 0, color: '#475569', lineHeight: 1.5 }}>{c.description}</p>
+              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 4, background: c.status === 'resolved' ? '#DCFCE7' : '#FEE2E2', color: c.status === 'resolved' ? '#166534' : '#991B1B' }}>{c.status}</span>
+                {c.status !== 'resolved' && <button style={{ background: 'none', border: 'none', color: C.primary, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Reply to consumer</button>}
+              </div>
+            </div>
           </div>
-        )}
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderReports = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+         <div style={{ display: 'flex', gap: 8 }}>
+            {['weekly', 'monthly', 'daily'].map(p => (
+               <button key={p} onClick={() => loadReports(p)} style={{
+                  padding: '6px 16px', borderRadius: 10, border: `1px solid ${reports?.period === p ? C.primary : C.border}`,
+                  background: reports?.period === p ? C.primary : '#fff', color: reports?.period === p ? '#fff' : C.muted,
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'capitalize'
+               }}>{p}</button>
+            ))}
+         </div>
+         <Btn variant="outline"><FileText size={16} /> Export PDF Report</Btn>
       </div>
 
-      {modalType && (
-        <div className={styles.modalBackdrop}>
-          <div className={styles.modalContent} role="dialog" aria-modal="true">
-            <div className={styles.modalHeader}>
-              <div className={styles.modalTitle}>
-                {modalType === 'menu' && 'Add Daily Menu'}
-                {modalType === 'price-chart' && 'Add Food Item'}
-                {modalType === 'inventory' && 'Add Inventory Item'}
-                {modalType === 'stock' && 'Add Stock Entry'}
-                {modalType === 'suppliers' && 'Add Supplier'}
-                {modalType === 'feedback' && 'Add Feedback'}
-                {modalType === 'logs' && 'Add Log'}
-              </div>
-              <button className={styles.modalClose} type="button" onClick={closeModal} disabled={submitting} aria-label="Close">
-                <X size={18} />
-              </button>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+         <StatCard Icon={DollarSign} label="Period Revenue" value={`₹${Number(reports?.total_revenue || 0).toLocaleString()}`} color="#10B981" />
+         <StatCard Icon={ShoppingBag} label="Total Orders" value={reports?.total_orders || 0} color="#3B82F6" />
+         <StatCard Icon={TrendingUp} label="Avg Order Value" value={`₹${Number(reports?.avg_order_value || 0).toFixed(2)}`} color="#6366F1" />
+         <StatCard Icon={AlertTriangle} label="Wastage Loss" value={`₹${Number(reports?.wastage_loss || 0).toLocaleString()}`} color="#EF4444" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr', gap: 24 }}>
+         <div style={{ background: '#fff', borderRadius: 20, border: `1px solid ${C.border}`, padding: '24px' }}>
+            <h4 style={{ margin: '0 0 20px', fontSize: 15, fontWeight: 800 }}>Daily Sales Breakdown</h4>
+            <div style={{ overflowX: 'auto' }}>
+               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                     <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
+                        {['Date', 'Orders', 'Revenue', 'Growth'].map(h => <th key={h} style={{ padding: '12px 16px', fontSize: 11, fontWeight: 800, color: C.muted }}>{h}</th>)}
+                     </tr>
+                  </thead>
+                  <tbody>
+                     {(reports?.daily_sales || []).map((d, i, arr) => {
+                        const prev = arr[i+1]?.revenue || 0;
+                        const growth = prev ? ((d.revenue - prev) / prev * 100) : 0;
+                        return (
+                         <tr key={d.date} style={{ borderBottom: `1px solid ${C.border}` }}>
+                            <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600 }}>{new Date(d.date).toLocaleDateString()}</td>
+                            <td style={{ padding: '12px 16px', fontSize: 13 }}>{d.orders}</td>
+                            <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 800 }}>₹{Number(d.revenue).toLocaleString()}</td>
+                            <td style={{ padding: '12px 16px' }}>
+                               {growth !== 0 && (
+                                  <span style={{ fontSize: 11, fontWeight: 800, color: growth > 0 ? '#059669' : '#DC2626', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                     {growth > 0 ? '\u25B4' : '\u25BE'} {Math.abs(growth).toFixed(1)}%
+                                  </span>
+                               )}
+                            </td>
+                         </tr>
+                        );
+                     })}
+                  </tbody>
+               </table>
+            </div>
+         </div>
+
+         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ background: '#fff', borderRadius: 20, border: `1px solid ${C.border}`, padding: '24px' }}>
+               <h4 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 800 }}>Payment Distribution</h4>
+               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {(reports?.payment_breakdown || []).map(p => (
+                     <div key={p.payment_method}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, fontWeight: 700 }}>
+                           <span style={{ textTransform: 'capitalize' }}>{p.payment_method}</span>
+                           <span>₹{Number(p.total).toLocaleString()}</span>
+                        </div>
+                        <div style={{ height: 6, background: '#F1F5F9', borderRadius: 3 }}>
+                           <div style={{ height: '100%', width: `${(p.total / (reports?.total_revenue || 1)) * 100}%`, background: C.primary, borderRadius: 3 }} />
+                        </div>
+                     </div>
+                  ))}
+               </div>
             </div>
 
-            {modalType === 'menu' && (
-              <form className={styles.modalForm} onSubmit={submitDailyMenu}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Day of Week</label>
-                    <select 
-                      className={styles.formControl} 
-                      value={menuForm.day} 
-                      onChange={(e) => setMenuForm(p => ({ ...p, day: e.target.value }))}
-                      required
-                    >
-                      {DAYS.map(day => <option key={day} value={day}>{day}</option>)}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Meal Type</label>
-                    <select 
-                      className={styles.formControl} 
-                      value={menuForm.meal_type} 
-                      onChange={(e) => setMenuForm(p => ({ ...p, meal_type: e.target.value }))}
-                      required
-                    >
-                      {MEAL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Menu Title</label>
-                    <input 
-                      type="text"
-                      className={styles.formControl}
-                      value={menuForm.title}
-                      onChange={(e) => setMenuForm(p => ({ ...p, title: e.target.value }))}
-                      placeholder="e.g., South Indian Special"
-                      required
-                    />
-                  </div>
-                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Menu Items (Type and press Enter or Comma)</label>
-                    <div style={{ 
-                      border: '1px solid #e5e7eb', 
-                      borderRadius: '8px', 
-                      padding: '8px',
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '8px',
-                      minHeight: '42px',
-                      background: '#fff'
-                    }}>
-                      {menuForm.items.map((item, index) => (
-                        <span key={index} style={{
-                          background: '#f3f4f6',
-                          color: '#374151',
-                          padding: '4px 10px',
-                          borderRadius: '16px',
-                          fontSize: '13px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}>
-                          {item}
-                          <button 
-                            type="button" 
-                            onClick={() => removeItem(item)}
-                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
-                          >
-                            <X size={14} color="#9ca3af" />
-                          </button>
-                        </span>
-                      ))}
-                      <input 
-                        className={styles.formControl}
-                        style={{ border: 'none', padding: 0, margin: 0, height: 'auto', flex: 1, minWidth: '120px', boxShadow: 'none' }}
-                        value={menuForm.currentItemInput}
-                        onChange={(e) => setMenuForm(p => ({ ...p, currentItemInput: e.target.value }))}
-                        onKeyDown={handleItemAdd}
-                        placeholder={menuForm.items.length === 0 ? "Add items..." : ""}
+            <div style={{ background: '#fff', borderRadius: 20, border: `1px solid ${C.border}`, padding: '24px' }}>
+               <h4 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 800 }}>Top Category Performance</h4>
+               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {(reports?.popular_items || []).slice(0, 3).map(item => (
+                     <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                           <div style={{ width: 8, height: 8, borderRadius: 2, background: C.accent }} />
+                           <span style={{ fontSize: 13, fontWeight: 600 }}>{item.name}</span>
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: C.muted }}>{item.times_ordered} orders</span>
+                     </div>
+                  ))}
+               </div>
+            </div>
+         </div>
+      </div>
+    </div>
+  );
+
+  /* ═══════════ MAIN LAYOUT ═══════════ */
+
+  const s = activeSegment || 'dashboard';
+
+  return (
+    <div style={{ background: C.bg, display: 'flex', flexDirection: 'column', minHeight: '100%', width: '100%' }}>
+
+
+
+      {/* Content Area */}
+      <div style={{ flex: 1, padding: '24px 30px' }}>
+        <div style={{ width: '100%' }}>
+          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div className={styles.titleSection}>
+              <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, color: C.text, letterSpacing: '-0.02em' }}>
+                Canteen Management
+              </h1>
+              <p style={{ margin: '4px 0 0', color: C.muted, fontWeight: 600, fontSize: 14 }}>
+                Complete oversight of food operations, inventory, and kitchen services.
+              </p>
+            </div>
+          </header>
+
+          <nav className={styles.tabNavigation}>
+            {NAV.map((tab) => (
+              <Link
+                key={tab.id}
+                href={`/admins/canteen/${tab.id}`}
+                className={`${styles.tabButton} ${s === tab.id ? styles.activeTab : ''}`}
+              >
+                <tab.Icon size={18} />
+                {tab.label}
+              </Link>
+            ))}
+          </nav>
+
+          {loadingMap[s] ? (
+            <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loader2 style={{ animation: 'spin 1s linear infinite' }} color={C.primary} size={40} /></div>
+          ) : (
+            <>
+              {s === 'dashboard' && renderDashboard()}
+              {s === 'menu'      && renderMenuManagement()}
+              {s === 'orders'    && renderOrderManagement()}
+              {s === 'payments'  && renderPayments()}
+              {s === 'inventory' && renderInventory()}
+              {s === 'suppliers' && renderSuppliers()}
+              {s === 'feedback'  && renderFeedback()}
+              {s === 'reports'   && renderReports()}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Modals */}
+      <Modal 
+        open={fiModal} 
+        onClose={() => { setFiModal(false); setEditingFi(null); setFiForm({ name: '', price: '', category: '', status: 'active', is_veg: true, description: '' }); }} 
+        title={editingFi ? "Edit Food Item" : "Add Food Item"} 
+        Icon={UtensilsCrossed}
+      >
+        <form onSubmit={saveFoodItem} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <FInput 
+            label="Item Name" 
+            placeholder="e.g. Masala Dosa" 
+            value={fiForm.name}
+            onChange={e => setFiForm(p => ({ ...p, name: e.target.value }))}
+            required
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <FInput 
+              label="Price" 
+              type="number" 
+              step="0.01" 
+              value={fiForm.price}
+              onChange={e => setFiForm(p => ({ ...p, price: e.target.value }))}
+              required
+            />
+            <FSelect 
+              label="Category"
+              value={fiForm.category}
+              onChange={e => setFiForm(p => ({ ...p, category: e.target.value }))}
+              required
+            >
+              <option value="">Select Category</option>
+              {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </FSelect>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <FSelect 
+              label="Dietary Type"
+              value={String(fiForm.is_veg)}
+              onChange={e => setFiForm(p => ({ ...p, is_veg: e.target.value === 'true' }))}
+            >
+              <option value="true">Vegetarian</option>
+              <option value="false">Non-Vegetarian</option>
+            </FSelect>
+            <FSelect 
+              label="Status"
+              value={fiForm.status}
+              onChange={e => setFiForm(p => ({ ...p, status: e.target.value }))}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="out_of_stock">Out of Stock</option>
+            </FSelect>
+          </div>
+          <FTextarea 
+            label="Description (Optional)"
+            placeholder="Describe the dish, ingredients, or allergens..."
+            value={fiForm.description}
+            onChange={e => setFiForm(p => ({ ...p, description: e.target.value }))}
+          />
+          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <Btn variant="outline" onClick={() => { setFiModal(false); setEditingFi(null); setFiForm({ name: '', price: '', category: '', status: 'active', is_veg: true, description: '' }); }}>Cancel</Btn>
+            <Btn type="submit">{editingFi ? "Update Item" : "Save Item"}</Btn>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Food Item Details Modal */}
+      <Modal open={viModal} onClose={() => setViModal(false)} title="Food Item Details" Icon={Eye} color={C.accent}>
+        {selectedVi && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h2 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 900, color: C.text }}>{selectedVi.name}</h2>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <VegDot isVeg={selectedVi.is_veg} />
+                  <span style={{ padding: '4px 10px', borderRadius: 8, background: '#F1F5F9', fontSize: 12, fontWeight: 700, color: C.muted }}>{selectedVi.category_name || 'Category'}</span>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Price</p>
+                <p style={{ margin: 0, fontSize: 28, fontWeight: 900, color: C.accent }}>₹{Number(selectedVi.price).toFixed(2)}</p>
+              </div>
+            </div>
+
+            <div style={{ padding: 20, background: '#F8FAFC', borderRadius: 16, border: `1px solid ${C.border}` }}>
+              <h4 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 800, color: C.primary, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FileText size={16} /> Item Description
+              </h4>
+              <p style={{ margin: 0, fontSize: 15, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {selectedVi.description || 'No description provided for this item.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div style={{ padding: 16, border: `1px solid ${C.border}`, borderRadius: 12 }}>
+                <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800, color: C.muted }}>SYSTEM STATUS</p>
+                <span style={{ padding: '2px 8px', borderRadius: 6, background: selectedVi.status === 'active' ? '#DCFCE7' : '#FEE2E2', color: selectedVi.status === 'active' ? '#166534' : '#991B1B', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>{selectedVi.status}</span>
+              </div>
+              <div style={{ padding: 16, border: `1px solid ${C.border}`, borderRadius: 12 }}>
+                <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800, color: C.muted }}>POPULARITY</p>
+                <p style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{selectedVi.times_ordered || 0} Orders</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+              <Btn onClick={() => setViModal(false)}>Close Summary</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Category Modal */}
+      <Modal open={catModal} onClose={() => setCatModal(false)} title="Create New Category" Icon={LayoutGrid}>
+        <form onSubmit={saveCategory} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <FInput 
+            label="Category Name" 
+            placeholder="e.g. Beverages, Desserts" 
+            value={catForm.name}
+            onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))}
+            required
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+             <FInput 
+               label="Icon (Emoji)" 
+               placeholder="e.g. 🍰, 🥤" 
+               value={catForm.icon}
+               onChange={e => setCatForm(p => ({ ...p, icon: e.target.value }))}
+             />
+             <FInput 
+               label="Brand Color" 
+               type="color"
+               value={catForm.color}
+               onChange={e => setCatForm(p => ({ ...p, color: e.target.value }))}
+               style={{ height: 44, padding: '4px 8px' }}
+             />
+          </div>
+          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <Btn variant="outline" onClick={() => setCatModal(false)}>Cancel</Btn>
+            <Btn type="submit">Create Category</Btn>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Place Order Modal */}
+      <Modal open={opModal} onClose={() => setOpModal(false)} title="Create New Order" Icon={Plus} width="700px">
+         <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 32 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+                   {['student', 'staff'].map(type => (
+                      <button 
+                        key={type} 
+                        onClick={() => { setOpCustomerType(type); setOpSearch(''); setOpStudents([]); setOpSelected(null); }}
+                        style={{
+                           flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${opCustomerType === type ? C.primary : C.border}`,
+                           background: opCustomerType === type ? C.primary : '#fff', color: opCustomerType === type ? '#fff' : C.text,
+                           fontWeight: 700, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s', textTransform: 'capitalize'
+                        }}
+                      >
+                         {type}
+                      </button>
+                   ))}
+                </div>
+                <div style={{ position: 'relative' }}>
+                   <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>
+                      Select {opCustomerType === 'student' ? 'Student' : 'Staff'}
+                   </label>
+                   <div 
+                     onClick={async () => {
+                        if (opCustomerType === 'student' && stuList.length === 0) {
+                           const r = await canteenApi.searchStudents('', { ignore_rls: true, paginate: 'false' });
+                           setStuList(r.data?.results || r.data || []);
+                        } else if (opCustomerType === 'staff' && staList.length === 0) {
+                           const r = await canteenApi.searchStaff('');
+                           setStaList(r.data || []);
+                        }
+                        setOpSearch('');
+                     }}
+                     style={{ position: 'relative' }}
+                   >
+                      <FInput 
+                        placeholder={`Search ${opCustomerType === 'student' ? 'Students' : 'Staff'}...`} 
+                        value={opSearch} 
+                        onChange={e => setOpSearch(e.target.value)}
+                        onBlur={() => setTimeout(() => setOpSearch(''), 200)}
                       />
-                    </div>
-                  </div>
-                </div>
-                <div className={styles.modalActions}>
-                  <button 
-                    className={styles.btnSecondary} 
-                    type="button" 
-                    onClick={() => setMenuForm({ ...menuForm, title: '', items: [], currentItemInput: '' })}
-                  >
-                    Reset
-                  </button>
-                  <div className="flex gap-2">
-                    <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
-                    <button className={styles.btnPrimary} type="submit" disabled={submitting}>
-                      {submitting ? 'Saving...' : (editId ? 'Update Menu' : 'Save Menu')}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'ingredient' && (
-              <form className={styles.modalForm} onSubmit={submitIngredient}>
-                <div className={styles.formGroup}>
-                  <label>Ingredient Name</label>
-                  <input 
-                    className={styles.formControl} 
-                    value={ingredientForm.name} 
-                    onChange={e => setIngredientForm({name: e.target.value})} 
-                    placeholder="e.g. Rice, Urad Dal" 
-                    required 
-                  />
-                </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>Save Ingredient</button>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'dish' && (
-              <form className={styles.modalForm} onSubmit={submitDish}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Dish Name</label>
-                    <input className={styles.formControl} value={dishForm.name} onChange={e => setDishForm(p => ({...p, name: e.target.value}))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Price (₹)</label>
-                    <input className={styles.formControl} type="number" value={dishForm.price} onChange={e => setDishForm(p => ({...p, price: e.target.value}))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Dietary</label>
-                    <select 
-                      className={styles.formControl} 
-                      value={dishForm.is_veg === null ? 'none' : (dishForm.is_veg ? 'veg' : 'nonveg')} 
-                      onChange={e => {
-                        const val = e.target.value;
-                        setDishForm(p => ({...p, is_veg: val === 'none' ? null : (val === 'veg')}));
-                      }}
-                    >
-                      <option value="veg">Veg</option>
-                      <option value="nonveg">Non-Veg</option>
-                      <option value="none">Other / N/A</option>
-                    </select>
-                  </div>
-                  <MultiSelect 
-                    label="Ingredients"
-                    options={foodItemOptions.ingredients}
-                    selectedValues={dishForm.ingredients}
-                    onChange={(vals) => setDishForm(p => ({...p, ingredients: vals}))}
-                    onAddNew={() => {
-                        setPendingDishForm(dishForm);
-                        handleQuickAdd('ingredient');
-                    }}
-                  />
-                </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>Save Dish</button>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'combo' && (
-              <form className={styles.modalForm} onSubmit={submitCombo}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Combo Name</label>
-                    <input className={styles.formControl} value={comboForm.name} onChange={e => setComboForm(p => ({...p, name: e.target.value}))} required />
-                  </div>
-                  <MultiSelect 
-                    label="Dishes in Combo"
-                    options={foodItemOptions.dishes}
-                    selectedValues={comboForm.dishes}
-                    onChange={(vals) => setComboForm(p => ({...p, dishes: vals}))}
-                  />
-                </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>Save Combo</button>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'price-chart' && (
-              <form className={styles.modalForm} onSubmit={submitFoodItem}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Name</label>
-                    <input className={styles.formControl} value={foodItemForm.name} onChange={(e) => setFoodItemForm((prev) => ({ ...prev, name: e.target.value }))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Category</label>
-                    <select className={styles.formControl} value={foodItemForm.category} onChange={(e) => setFoodItemForm((prev) => ({ ...prev, category: e.target.value }))}>
-                      {FOOD_CATEGORIES.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Price</label>
-                    <input className={styles.formControl} type="number" min="0" step="0.01" value={foodItemForm.price} onChange={(e) => setFoodItemForm((prev) => ({ ...prev, price: e.target.value }))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Type</label>
-                    <select className={styles.formControl} value={foodItemForm.is_veg ? 'veg' : 'nonveg'} onChange={(e) => setFoodItemForm((prev) => ({ ...prev, is_veg: e.target.value === 'veg' }))}>
-                      <option value="veg">Veg</option>
-                      <option value="nonveg">Non-Veg</option>
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Availability</label>
-                    <select className={styles.formControl} value={foodItemForm.is_available ? 'yes' : 'no'} onChange={(e) => setFoodItemForm((prev) => ({ ...prev, is_available: e.target.value === 'yes' }))}>
-                      <option value="yes">Available</option>
-                      <option value="no">Out of Stock</option>
-                    </select>
-                  </div>
-                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Description</label>
-                    <textarea className={styles.formControl} value={foodItemForm.description} onChange={(e) => setFoodItemForm((prev) => ({ ...prev, description: e.target.value }))} />
-                  </div>
-                </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Save'}</button>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'inventory' && (
-              <form className={styles.modalForm} onSubmit={submitInventoryItem}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Name</label>
-                    <input className={styles.formControl} value={inventoryForm.name} onChange={(e) => setInventoryForm((prev) => ({ ...prev, name: e.target.value }))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Category</label>
-                    <input className={styles.formControl} value={inventoryForm.category} onChange={(e) => setInventoryForm((prev) => ({ ...prev, category: e.target.value }))} />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Unit</label>
-                    <input className={styles.formControl} value={inventoryForm.unit} onChange={(e) => setInventoryForm((prev) => ({ ...prev, unit: e.target.value }))} />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Current Stock</label>
-                    <input className={styles.formControl} type="number" min="0" step="0.01" value={inventoryForm.current_stock} onChange={(e) => setInventoryForm((prev) => ({ ...prev, current_stock: e.target.value }))} />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Min Stock Level</label>
-                    <input className={styles.formControl} type="number" min="0" step="0.01" value={inventoryForm.min_stock_level} onChange={(e) => setInventoryForm((prev) => ({ ...prev, min_stock_level: e.target.value }))} />
-                  </div>
-                </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Save'}</button>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'suppliers' && (
-              <form className={styles.modalForm} onSubmit={submitSupplier}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Name</label>
-                    <input className={styles.formControl} value={supplierForm.name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, name: e.target.value }))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Contact Person</label>
-                    <input className={styles.formControl} value={supplierForm.contact_person} onChange={(e) => setSupplierForm((prev) => ({ ...prev, contact_person: e.target.value }))} />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Phone</label>
-                    <input className={styles.formControl} value={supplierForm.phone} onChange={(e) => setSupplierForm((prev) => ({ ...prev, phone: e.target.value }))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Email</label>
-                    <input className={styles.formControl} type="email" value={supplierForm.email} onChange={(e) => setSupplierForm((prev) => ({ ...prev, email: e.target.value }))} />
-                  </div>
-                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Address</label>
-                    <textarea className={styles.formControl} value={supplierForm.address} onChange={(e) => setSupplierForm((prev) => ({ ...prev, address: e.target.value }))} />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Category</label>
-                    <input className={styles.formControl} value={supplierForm.category} onChange={(e) => setSupplierForm((prev) => ({ ...prev, category: e.target.value }))} />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Status</label>
-                    <select className={styles.formControl} value={supplierForm.is_active ? 'active' : 'inactive'} onChange={(e) => setSupplierForm((prev) => ({ ...prev, is_active: e.target.value === 'active' }))}>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  </div>
-                </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Save'}</button>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'stock' && (
-              <form className={styles.modalForm} onSubmit={submitStockLog}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Item</label>
-                    <select className={styles.formControl} value={stockLogForm.item} onChange={(e) => setStockLogForm((prev) => ({ ...prev, item: e.target.value }))} required>
-                      <option value="">Select item</option>
-                      {inventoryItemOptions.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Type</label>
-                    <select className={styles.formControl} value={stockLogForm.log_type} onChange={(e) => setStockLogForm((prev) => ({ ...prev, log_type: e.target.value }))}>
-                      {INVENTORY_LOG_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Quantity</label>
-                    <input className={styles.formControl} type="number" min="0" step="0.01" value={stockLogForm.quantity} onChange={(e) => setStockLogForm((prev) => ({ ...prev, quantity: e.target.value }))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Supplier (optional)</label>
-                    <select className={styles.formControl} value={stockLogForm.supplier} onChange={(e) => setStockLogForm((prev) => ({ ...prev, supplier: e.target.value }))}>
-                      <option value="">None</option>
-                      {supplierOptions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Reason</label>
-                    <input className={styles.formControl} value={stockLogForm.reason} onChange={(e) => setStockLogForm((prev) => ({ ...prev, reason: e.target.value }))} />
-                  </div>
-                </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Save'}</button>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'feedback' && (
-              <form className={styles.modalForm} onSubmit={submitFeedback}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Subject</label>
-                    <input className={styles.formControl} value={feedbackForm.subject} onChange={(e) => setFeedbackForm((prev) => ({ ...prev, subject: e.target.value }))} required />
-                  </div>
-                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Description</label>
-                    <textarea className={styles.formControl} value={feedbackForm.description} onChange={(e) => setFeedbackForm((prev) => ({ ...prev, description: e.target.value }))} required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Rating (1-5)</label>
-                    <input className={styles.formControl} type="number" min="1" max="5" step="1" value={feedbackForm.rating} onChange={(e) => setFeedbackForm((prev) => ({ ...prev, rating: e.target.value }))} />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Status</label>
-                    <select className={styles.formControl} value={feedbackForm.status} onChange={(e) => setFeedbackForm((prev) => ({ ...prev, status: e.target.value }))}>
-                      {FEEDBACK_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                    <label>Resolution Note (optional)</label>
-                    <textarea className={styles.formControl} value={feedbackForm.resolution_note} onChange={(e) => setFeedbackForm((prev) => ({ ...prev, resolution_note: e.target.value }))} />
-                  </div>
-                </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Save'}</button>
-                </div>
-              </form>
-            )}
-
-            {modalType === 'logs' && (
-              <form className={styles.modalForm} onSubmit={submitLogs}>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Log Type</label>
-                    <select className={styles.formControl} value={logKind} onChange={(e) => setLogKind(e.target.value)}>
-                      <option value="wastage">Wastage</option>
-                      <option value="consumption">Consumption</option>
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Date</label>
-                    <input
-                      className={styles.formControl}
-                      type="date"
-                      value={logKind === 'wastage' ? wastageForm.date : consumptionForm.date}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (logKind === 'wastage') setWastageForm((prev) => ({ ...prev, date: value }));
-                        else setConsumptionForm((prev) => ({ ...prev, date: value }));
-                      }}
-                      required
-                    />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Meal Type</label>
-                    <select
-                      className={styles.formControl}
-                      value={logKind === 'wastage' ? wastageForm.meal_type : consumptionForm.meal_type}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (logKind === 'wastage') setWastageForm((prev) => ({ ...prev, meal_type: value }));
-                        else setConsumptionForm((prev) => ({ ...prev, meal_type: value }));
-                      }}
-                    >
-                      {MEAL_TYPES.map((meal) => (
-                        <option key={meal} value={meal}>
-                          {meal}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {logKind === 'wastage' ? (
-                    <>
-                      <div className={styles.formGroup}>
-                        <label>Item</label>
-                        <input className={styles.formControl} value={wastageForm.item_name} onChange={(e) => setWastageForm((prev) => ({ ...prev, item_name: e.target.value }))} required />
+                      
+                      {/* Dropdown List */}
+                      <div style={{ 
+                        position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', 
+                        borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                        zIndex: 10, padding: 8, maxHeight: 250, overflowY: 'auto' 
+                      }}>
+                         {(opCustomerType === 'student' ? stuList : staList)
+                           .filter(s => {
+                              const name = opCustomerType === 'student' ? (s.full_name || `${s.user?.first_name} ${s.user?.last_name || ''}`.trim()) : s.full_name;
+                              return !opSearch || name.toLowerCase().includes(opSearch.toLowerCase());
+                           })
+                           .map(s => {
+                              const name = opCustomerType === 'student' ? (s.full_name || `${s.user?.first_name} ${s.user?.last_name || ''}`.trim()) : s.full_name;
+                              const secondary = opCustomerType === 'student' 
+                                ? `${s.class_name || 'N/A'} | ${s.admission_number || 'N/A'}` 
+                                : `${s.designation || 'Staff'} | ${s.employee_id || 'N/A'}`;
+                              
+                              return (
+                                 <div 
+                                   key={`${opCustomerType}-${s.id}`} 
+                                   onClick={() => { setOpSelected({ ...s, full_name: name, type: opCustomerType }); setOpSearch(''); }} 
+                                   style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', borderBottom: `1px solid ${C.border}33`, display: 'flex', justifyContent: 'space-between' }}
+                                   onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                 >
+                                    <div>
+                                       <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{name}</p>
+                                       <p style={{ margin: 0, fontSize: 11, color: C.muted }}>{secondary}</p>
+                                    </div>
+                                    {opSelected?.id === s.id && opSelected?.type === opCustomerType && <CheckCircle2 size={16} color={C.accent} />}
+                                 </div>
+                              );
+                           })
+                         }
                       </div>
-                      <div className={styles.formGroup}>
-                        <label>Quantity</label>
-                        <input className={styles.formControl} type="number" min="0" step="0.01" value={wastageForm.quantity} onChange={(e) => setWastageForm((prev) => ({ ...prev, quantity: e.target.value }))} required />
-                      </div>
-                      <div className={styles.formGroup}>
-                        <label>Unit</label>
-                        <input className={styles.formControl} value={wastageForm.unit} onChange={(e) => setWastageForm((prev) => ({ ...prev, unit: e.target.value }))} />
-                      </div>
-                      <div className={styles.formGroup}>
-                        <label>Cost Loss</label>
-                        <input className={styles.formControl} type="number" min="0" step="0.01" value={wastageForm.cost_loss} onChange={(e) => setWastageForm((prev) => ({ ...prev, cost_loss: e.target.value }))} />
-                      </div>
-                      <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                        <label>Reason</label>
-                        <textarea className={styles.formControl} value={wastageForm.reason} onChange={(e) => setWastageForm((prev) => ({ ...prev, reason: e.target.value }))} />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className={styles.formGroup}>
-                        <label>Total Servings</label>
-                        <input className={styles.formControl} type="number" min="0" step="1" value={consumptionForm.total_servings} onChange={(e) => setConsumptionForm((prev) => ({ ...prev, total_servings: e.target.value }))} required />
-                      </div>
-                      <div className={styles.formGroup}>
-                        <label>Total Cost</label>
-                        <input className={styles.formControl} type="number" min="0" step="0.01" value={consumptionForm.total_cost} onChange={(e) => setConsumptionForm((prev) => ({ ...prev, total_cost: e.target.value }))} required />
-                      </div>
-                      <div className={styles.formGroup}>
-                        <label>Avg Rating</label>
-                        <input className={styles.formControl} type="number" min="0" max="5" step="0.1" value={consumptionForm.average_rating} onChange={(e) => setConsumptionForm((prev) => ({ ...prev, average_rating: e.target.value }))} />
-                      </div>
-                    </>
-                  )}
+                   </div>
                 </div>
-                <div className={styles.modalActions}>
-                  <button className={styles.btnSecondary} type="button" onClick={closeModal} disabled={submitting}>Cancel</button>
-                  <button className={styles.btnPrimary} type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Save'}</button>
-                </div>
-              </form>
-            )}
+
+               {opSelected && (
+                  <div style={{ padding: '12px 16px', background: '#F0FDF4', borderRadius: 12, border: '1px solid #BBF7D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <div>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#166534' }}>Currently Selecting for:</p>
+                        <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: '#14532D' }}>{opSelected.full_name}</p>
+                     </div>
+                     <button onClick={() => setOpSelected(null)} style={{ background: '#DCFCE7', border: 'none', borderRadius: 8, color: '#166534', cursor: 'pointer', padding: 4, display: 'flex' }}><X size={16} /></button>
+                  </div>
+               )}
+
+               <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                     <h6 style={{ margin: 0, fontWeight: 800 }}>Select Food Items</h6>
+                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                        {['all', 'Breakfast', 'Lunch', 'Snacks', 'Juices'].map(cat => (
+                           <button 
+                             key={cat} 
+                             onClick={() => setOpFoodCat(cat)}
+                             style={{
+                                padding: '6px 14px', borderRadius: 8, border: `1px solid ${opFoodCat === cat ? C.primary : C.border}`,
+                                background: opFoodCat === cat ? C.primary : '#fff', color: opFoodCat === cat ? '#fff' : C.muted,
+                                fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s'
+                             }}
+                           >
+                              {cat}
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* Food Item Dropdown */}
+                  <div style={{ position: 'relative', marginBottom: 12 }}>
+                     <FInput 
+                        placeholder="Select food item..." 
+                        onChange={e => {
+                           const q = e.target.value.toLowerCase();
+                           setOpSearch(q); // Reuse opSearch for food filtering
+                        }}
+                     />
+                     <div style={{ 
+                        position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', 
+                        borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                        zIndex: 10, padding: 8, maxHeight: 200, overflowY: 'auto' 
+                     }}>
+                        {foodItems.filter(f => {
+                           const active = f.status === 'active';
+                           const catMatch = opFoodCat === 'all' || (f.category_name || f.category) === opFoodCat;
+                           const searchMatch = !opSearch || f.name.toLowerCase().includes(opSearch.toLowerCase());
+                           return active && catMatch && searchMatch;
+                        }).map(f => (
+                           <div 
+                             key={f.id} 
+                             onClick={() => {
+                                setOpItems(prev => {
+                                   const exists = prev.find(i => i.id === f.id);
+                                   if (exists) return prev.map(i => i.id === f.id ? { ...i, qty: i.qty + 1 } : i);
+                                   return [...prev, { id: f.id, name: f.name, price: Number(f.price), qty: 1 }];
+                                });
+                             }}
+                             style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', borderBottom: `1px solid ${C.border}33`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                             onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                           >
+                              <div>
+                                 <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{f.name}</p>
+                                 <p style={{ margin: 0, fontSize: 11, color: C.accent, fontWeight: 800 }}>₹{Number(f.price).toFixed(2)}</p>
+                              </div>
+                              <Plus size={16} color={C.primary} />
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, maxHeight: 150, overflowY: 'auto', paddingRight: 4 }}>
+                     {foodItems.filter(f => {
+                        const active = f.status === 'active';
+                        const catMatch = opFoodCat === 'all' || (f.category_name || f.category) === opFoodCat;
+                        return active && catMatch;
+                     }).map(f => (
+                        <div key={f.id} className="food-box" onClick={() => {
+                           setOpItems(prev => {
+                              const exists = prev.find(i => i.id === f.id);
+                              if (exists) return prev.map(i => i.id === f.id ? { ...i, qty: i.qty + 1 } : i);
+                              return [...prev, { id: f.id, name: f.name, price: Number(f.price), qty: 1 }];
+                           });
+                        }} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', background: '#fff', textAlign: 'center', transition: 'border-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.borderColor = C.primary} onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+                           <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</p>
+                           <p style={{ margin: 0, fontSize: 13, fontWeight: 900, color: C.accent }}>₹{Number(f.price).toFixed(0)}</p>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+            </div>
+
+            <div style={{ background: '#F8FAFC', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+               <h6 style={{ margin: 0, fontWeight: 800, textTransform: 'uppercase', fontSize: 11, color: C.muted }}>Cart Details</h6>
+               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', maxHeight: 300 }}>
+                  {opItems.map(item => (
+                     <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                           <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{item.name}</p>
+                           <p style={{ margin: 0, fontSize: 12, color: C.muted }}>₹{item.price} x {item.qty}</p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                           <button onClick={() => setOpItems(prev => prev.map(i => i.id === item.id ? { ...i, qty: Math.max(0, i.qty - 1) } : i).filter(i => i.qty > 0))} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer' }}>-</button>
+                           <span style={{ fontSize: 14, fontWeight: 800, width: 20, textAlign: 'center' }}>{item.qty}</span>
+                           <button onClick={() => setOpItems(prev => prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i))} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer' }}>+</button>
+                        </div>
+                     </div>
+                  ))}
+                  {opItems.length === 0 && <p style={{ textAlign: 'center', color: C.muted, marginTop: 40 }}>Cart is empty</p>}
+               </div>
+               <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+                     <span style={{ fontWeight: 700, color: C.muted }}>Grand Total</span>
+                     <span style={{ fontSize: 24, fontWeight: 900, color: C.primary }}>₹{opItems.reduce((acc, curr) => acc + (curr.price * curr.qty), 0).toFixed(2)}</span>
+                  </div>
+                  <Btn onClick={async () => {
+                     if (!opSelected) return alert('Please select a customer');
+                     if (opItems.length === 0) return alert('Cart is empty');
+                     try {
+                        const payload = {
+                           [opSelected.type]: opSelected.id,
+                           order_items: opItems.map(i => ({ food_item: i.id, quantity: i.qty, unit_price: i.price })),
+                           total_amount: opItems.reduce((acc, curr) => acc + (curr.price * curr.qty), 0),
+                           status: 'pending',
+                           payment_status: 'paid'
+                        };
+                        await canteenApi.createOrder(payload);
+                        alert('Order Placed Successfully');
+                        setOpModal(false);
+                        setOpItems([]);
+                        setOpSelected(null);
+                        loadOrders();
+                     } catch { alert('Failed to place order'); }
+                  }} style={{ width: '100%', justifyContent: 'center', height: 48, fontSize: 16 }}>Confirm Order</Btn>
+               </div>
+            </div>
+         </div>
+      </Modal>
+
+      {/* Weekly Menu Modal */}
+      <Modal open={wmModal} onClose={() => setWmModal(false)} title={`Edit Menu: ${wmForm.day}`} Icon={Calendar} width="600px">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {['breakfast', 'lunch'].map(key => (
+            <div key={key} style={{ padding: 16, background: '#F8FAFC', borderRadius: 16, border: `1px solid ${C.border}` }}>
+              <h6 style={{ margin: '0 0 16px', fontWeight: 800, textTransform: 'uppercase', color: C.primary, fontSize: 13 }}>{key} Menu</h6>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <FInput 
+                  label="Menu Title" 
+                  placeholder="e.g. Special Breakfast" 
+                  value={wmForm[key].title} 
+                  onChange={e => setWmForm(p => ({ ...p, [key]: { ...p[key], title: e.target.value } }))} 
+                />
+                <FTextarea 
+                  label="Dishes / Items" 
+                  placeholder="Enter items separated by commas..." 
+                  value={wmForm[key].items} 
+                  onChange={e => setWmForm(p => ({ ...p, [key]: { ...p[key], items: e.target.value } }))} 
+                />
+              </div>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 8 }}>
+            <Btn variant="outline" onClick={() => setWmModal(false)}>Cancel</Btn>
+            <Btn onClick={saveWmMenu}><Save size={18} /> Save Changes</Btn>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { 
   Search, Filter, BookOpen, BarChart2, FileText, ChevronRight, 
   Award, AlertCircle, TrendingUp, Download, Send, MoreHorizontal,
@@ -36,12 +38,32 @@ const PerformanceAd = () => {
     const [bulkBusy, setBulkBusy] = useState(false);
     const [bulkMsg, setBulkMsg] = useState('');
 
+    const handleExportPDF = async () => {
+        const element = document.getElementById('performance-content-area');
+        if (!element) return;
+        
+        try {
+            const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`performance_report_${selectedClass}_${new Date().getTime()}.pdf`);
+        } catch (error) {
+            console.error('PDF Export failed:', error);
+            alert('PDF Export failed. Please try again.');
+        }
+    };
+
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
                 const [studRes, examRes] = await Promise.all([
                     instance.get('/students/students/'),
-                    instance.get('/exams/exams/')
+                    instance.get('/exams/')
                 ]);
                 const allStudents = studRes.data.results || (Array.isArray(studRes.data) ? studRes.data : []);
                 setStudents(allStudents);
@@ -106,7 +128,8 @@ const PerformanceAd = () => {
             const endpoints = [
                 '/exams/report-cards/generate-bulk/',
                 '/exams/report-cards/bulk-upload/',
-                '/exams/results/bulk-upload/'
+                '/exams/results/bulk-upload/',
+                '/exams/results/bulk/'
             ];
 
             let ok = false;
@@ -154,7 +177,7 @@ const PerformanceAd = () => {
                 </div>
                 <div className={styles.headerRight}>
                     <button className={styles.ghostBtn}>Re-calc ranks</button>
-                    <button className={styles.ghostBtn}><Download size={14} /> Export PDF</button>
+                    <button className={styles.ghostBtn} onClick={handleExportPDF}><Download size={14} /> Export PDF</button>
                     <button className={styles.actionBtn}>+ Enter marks</button>
                 </div>
             </div>
@@ -181,7 +204,7 @@ const PerformanceAd = () => {
             </div>
 
             {/* Content Area */}
-            <div className={styles.content}>
+            <div className={styles.content} id="performance-content-area">
                 {activeTab === 'overview' && (
                     <>
                         <div className={styles.statsGrid}>
@@ -386,15 +409,13 @@ const PerformanceAd = () => {
                 )}
             </div>
 
-            {/* Floating Action Button removed - managed by global layout */}
-
-            {/* Modal & Trend - Same logic as before but with aligned styles */}
+            {/* Modal & Trend */}
             {showTrendPopup && (
                 <div className={styles.modalBackdrop}>
                     <div className={styles.modalContent}>
                         <div className={styles.modalHeader}>
                             <h3>Performance Trend</h3>
-                            <button onClick={() => setShowTrendPopup(false)}><X /></button>
+                            <button className={styles.modalClose} onClick={() => setShowTrendPopup(false)}><X size={20} /></button>
                         </div>
                         <div style={{ padding: '20px' }}>
                             <ResponsiveContainer width="100%" height={300}>

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -18,6 +19,7 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
+  Bus,
   Bed,
   Utensils,
   Library
@@ -25,49 +27,109 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import styles from './AdminSidebar.module.css';
 
+const STORAGE_KEY = 'cms_admin_sidebar_collapsed';
+
+// ─── Flyout Portal ────────────────────────────────────────────────────────────
+function FlyoutPortal({ label, items, top, left, pathname, onClose, onMouseEnter, onMouseLeave }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) return null;
+
+  const estimatedHeight = items.length * 40 + 50;
+  const clampedTop = Math.min(top, window.innerHeight - estimatedHeight - 20);
+
+  return createPortal(
+    <div 
+      className={styles.flyoutPortal} 
+      style={{ top: `${clampedTop}px`, left: `${left}px` }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <div className={styles.flyoutHeader}>{label}</div>
+      <div className={styles.flyoutList}>
+        {items.map((sub, idx) => (
+          <Link 
+            key={idx} 
+            href={sub.href}
+            className={`${styles.flyoutItem} ${pathname === sub.href ? styles.flyoutItemActive : ''}`}
+            onClick={onClose}
+          >
+            <div className={pathname === sub.href ? styles.bulletActive : styles.bulletInactive} />
+            <span>{sub.label}</span>
+          </Link>
+        ))}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 const AdminSidebar = () => {
   const pathname = usePathname();
   const { logout } = useAuth();
   
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(STORAGE_KEY) === 'true';
+  });
   const [expandedMenu, setExpandedMenu] = useState(null);
+  const [activeFlyout, setActiveFlyout] = useState(null);
+  const hideTimer = useRef(null);
 
-  // Sync expanded state with path navigation
+  const handleToggle = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEY, String(next));
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (pathname?.startsWith('/admins/students')) setExpandedMenu('Students');
     else if (pathname?.startsWith('/admins/classes')) setExpandedMenu('Classes');
     else if (pathname?.startsWith('/admins/staff')) setExpandedMenu('Staff');
     else if (pathname?.startsWith('/admins/hostel')) setExpandedMenu('Hostel');
-
     else if (pathname?.startsWith('/admins/examinations')) setExpandedMenu('Examinations');
-
     else if (pathname?.startsWith('/admins/library')) setExpandedMenu('Library');
-
+    else if (pathname?.startsWith('/admins/canteen')) setExpandedMenu('Canteen');
+    else if (pathname?.startsWith('/admins/transport')) setExpandedMenu('Transport');
   }, [pathname]);
   
   const isStudentsPath = pathname?.startsWith('/admins/students');
   const isClassesPath = pathname?.startsWith('/admins/classes');
   const isStaffPath = pathname?.startsWith('/admins/staff');
   const isHostelPath = pathname?.startsWith('/admins/hostel');
-
   const isExaminationsPath = pathname?.startsWith('/admins/examinations');
-
   const isLibraryPath = pathname?.startsWith('/admins/library');
-
+  const isCanteenPath = pathname?.startsWith('/admins/canteen');
+  const isTransportPath = pathname?.startsWith('/admins/transport');
   
-  const isStudentsExpanded = expandedMenu === 'Students';
-  const isClassesExpanded = expandedMenu === 'Classes';
-  const isStaffExpanded = expandedMenu === 'Staff';
-  const isHostelExpanded = expandedMenu === 'Hostel';
+  // ── Flyout hover logic ──────────────────────────────────────────────────────
+  const cancelHide = useCallback(() => {
+    clearTimeout(hideTimer.current);
+  }, []);
 
-  const isExaminationsExpanded = expandedMenu === 'Examinations';
+  const scheduleHide = useCallback(() => {
+    hideTimer.current = setTimeout(() => setActiveFlyout(null), 120);
+  }, []);
 
-  const isLibraryExpanded = expandedMenu === 'Library';
+  const showFlyout = useCallback((e, label, items) => {
+    if (!isCollapsed || !items?.length) return;
+    cancelHide();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setActiveFlyout({
+      label,
+      items,
+      top: rect.top,
+      left: rect.right + 8,
+    });
+  }, [isCollapsed, cancelHide]);
 
+  useEffect(() => () => clearTimeout(hideTimer.current), []);
 
   return (
     <div className={`${styles.sidebar} ${isCollapsed ? styles.sidebarCollapsed : ''}`}>
-      
       {/* Logo */}
       <div className={`${styles.logoContainer} ${isCollapsed ? styles.logoContainerCollapsed : ''}`}>
         <div className={styles.logoIcon}>
@@ -82,7 +144,7 @@ const AdminSidebar = () => {
         <button
           type="button"
           className={styles.collapseButton}
-          onClick={() => setIsCollapsed((prev) => !prev)}
+          onClick={handleToggle}
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
@@ -93,6 +155,7 @@ const AdminSidebar = () => {
       {/* Navigation */}
       <nav className={styles.nav}>
         {!isCollapsed && <p className={styles.sectionLabel}>Main</p>}
+
         <NavItem 
           icon={<Home size={18} />} 
           label="Dashboard" 
@@ -102,188 +165,110 @@ const AdminSidebar = () => {
           onClick={() => setExpandedMenu(null)}
         />
 
-        {/* Staff Section */}
-        {isCollapsed ? (
-          <NavItem 
-            icon={<Users size={18} />} 
-            label="Staff" 
-            collapsed={isCollapsed}
-            active={isStaffPath} 
-            href="/admins/staff/all"
-          />
-        ) : (
-          <div className={styles.expandableMenuContainer}>
-            <div 
-              onClick={() => setExpandedMenu(isStaffExpanded ? null : 'Staff')}
-              className={`${styles.expandableMenu} ${isStaffExpanded ? styles.expanded : styles.collapsed}`}
-            >
-              <div className={styles.expandableMenuContent}>
-                <div className={`${styles.expandableMenuIcon} ${isStaffExpanded ? styles.expanded : styles.collapsed}`}>
-                  <Users size={18} />
-                </div>
-                <span>Staff</span>
-              </div>
-              <ChevronDown size={14} className={`${styles.expandableChevron} ${isStaffExpanded ? styles.rotated : ''}`} />
-            </div>
-
-            <div className={`${styles.subItemsContainer} ${isStaffExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="All Staff" active={pathname === '/admins/staff/all'} href="/admins/staff/all" />
-              <SubNavItem label="Teachers" active={pathname === '/admins/staff/teachers'} href="/admins/staff/teachers" />
-              <SubNavItem label="Roles & Permissions" active={pathname === '/admins/staff/roles'} href="/admins/staff/roles" />
-              <SubNavItem label="Attendance & HR" active={pathname === '/admins/staff/hr'} href="/admins/staff/hr" />
-              <SubNavItem label="Teacher Leaderboard" active={pathname === '/admins/staff/leaderboard'} href="/admins/staff/leaderboard" />
-              <SubNavItem label="Tasks & Events" active={pathname === '/admins/staff/tasks'} href="/admins/staff/tasks" />
-            </div>
-          </div>
-        )}
-
-        {/* Students Section */}
-        {isCollapsed ? (
-          <NavItem
-            icon={<GraduationCap size={18} />}
-            label="Students"
-            collapsed={isCollapsed}
-            active={isStudentsPath}
-            href="/admins/students/directory"
-          />
-        ) : (
-          <div className={styles.expandableMenuContainer}>
-            <div 
-              onClick={() => setExpandedMenu(isStudentsExpanded ? null : 'Students')}
-              className={`${styles.expandableMenu} ${isStudentsExpanded ? styles.expanded : styles.collapsed}`}
-            >
-              <div className={styles.expandableMenuContent}>
-                <div className={`${styles.expandableMenuIcon} ${isStudentsExpanded ? styles.expanded : styles.collapsed}`}>
-                  <GraduationCap size={18} />
-                </div>
-                <span>Students</span>
-              </div>
-              <ChevronDown size={14} className={`${styles.expandableChevron} ${isStudentsExpanded ? styles.rotated : ''}`} />
-            </div>
-
-            <div className={`${styles.subItemsContainer} ${isStudentsExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="Directory" active={pathname === '/admins/students/directory'} href="/admins/students/directory" />
-              <SubNavItem label="Attendance" active={pathname === '/admins/students/attendance'} href="/admins/students/attendance" />
-              <SubNavItem label="Performance" active={pathname === '/admins/students/performance'} href="/admins/students/performance" />
-            </div>
-          </div>
-        )}
-
-        {/* Classes Section */}
-        {isCollapsed ? (
-          <NavItem 
-            icon={<LayoutGrid size={18} />} 
-            label="Classes" 
-            collapsed={isCollapsed}
-            active={isClassesPath} 
-            href="/admins/classes/management"
-          />
-        ) : (
-          <div className={styles.expandableMenuContainer}>
-            <div 
-              onClick={() => setExpandedMenu(isClassesExpanded ? null : 'Classes')}
-              className={`${styles.expandableMenu} ${isClassesExpanded ? styles.expanded : styles.collapsed}`}
-            >
-              <div className={styles.expandableMenuContent}>
-                <div className={`${styles.expandableMenuIcon} ${isClassesExpanded ? styles.expanded : styles.collapsed}`}>
-                  <LayoutGrid size={18} />
-                </div>
-                <span>Classes</span>
-              </div>
-              <ChevronDown size={14} className={`${styles.expandableChevron} ${isClassesExpanded ? styles.rotated : ''}`} />
-            </div>
-
-            <div className={`${styles.subItemsContainer} ${isClassesExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="Class" active={pathname === '/admins/classes/management'} href="/admins/classes/management" />
-              <SubNavItem label="Subject" active={pathname === '/admins/classes/subjects'} href="/admins/classes/subjects" />
-              <SubNavItem label="Elections" active={pathname === '/admins/classes/elections'} href="/admins/classes/elections" />
-              <SubNavItem label="Timetable Builder" active={pathname === '/admins/classes/timetable'} href="/admins/classes/timetable" />
-            </div>
-          </div>
-        )}
-
-        {/* Canteen Section */}
-        <NavItem 
-          icon={<Utensils size={18} />} 
-          label="Canteen" 
-          collapsed={isCollapsed}
-          active={pathname?.startsWith('/admins/canteen')} 
-          href="/admins/canteen/overview"
-          onClick={() => setExpandedMenu(null)}
+        <ExpandableSection
+          label="Staff"
+          icon={<Users size={18} />}
+          sectionKey="Staff"
+          items={SECTIONS.staff}
+          isActivePath={isStaffPath}
+          collapsedHref="/admins/staff/all"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
         />
 
-        {/* Hostel Section */}
-        {isCollapsed ? (
-          <NavItem 
-            icon={<Bed size={18} />} 
-            label="Hostel" 
-            collapsed={isCollapsed}
-            active={isHostelPath} 
-            href="/admins/hostel/overview"
-          />
-        ) : (
-          <div className={styles.expandableMenuContainer}>
-            <div 
-              onClick={() => setExpandedMenu(isHostelExpanded ? null : 'Hostel')}
-              className={`${styles.expandableMenu} ${isHostelExpanded ? styles.expanded : styles.collapsed}`}
-            >
-              <div className={styles.expandableMenuContent}>
-                <div className={`${styles.expandableMenuIcon} ${isHostelExpanded ? styles.expanded : styles.collapsed}`}>
-                  <Bed size={18} />
-                </div>
-                <span>Hostel</span>
-              </div>
-              <ChevronDown size={14} className={`${styles.expandableChevron} ${isHostelExpanded ? styles.rotated : ''}`} />
-            </div>
+        <ExpandableSection
+          label="Students"
+          icon={<GraduationCap size={18} />}
+          sectionKey="Students"
+          items={SECTIONS.students}
+          isActivePath={isStudentsPath}
+          collapsedHref="/admins/students/directory"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
 
-            <div className={`${styles.subItemsContainer} ${isHostelExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="Overview" active={pathname === '/admins/hostel/overview'} href="/admins/hostel/overview" />
-              <SubNavItem label="Hostel List" active={pathname === '/admins/hostel/directory'} href="/admins/hostel/directory" />
-              <SubNavItem label="Rooms" active={pathname === '/admins/hostel/rooms'} href="/admins/hostel/rooms" />
-              <SubNavItem label="Allocations" active={pathname === '/admins/hostel/allocations'} href="/admins/hostel/allocations" />
-              <SubNavItem label="Attendance" active={pathname === '/admins/hostel/attendance'} href="/admins/hostel/attendance" />
-              <SubNavItem label="Visitors" active={pathname === '/admins/hostel/visitors'} href="/admins/hostel/visitors" />
-              <SubNavItem label="Mess" active={pathname === '/admins/hostel/mess'} href="/admins/hostel/mess" />
-              <SubNavItem label="Fees" active={pathname === '/admins/hostel/fees'} href="/admins/hostel/fees" />
-              <SubNavItem label="Analytics" active={pathname === '/admins/hostel/analytics'} href="/admins/hostel/analytics" />
-            </div>
-          </div>
-        )}
-        
-        {/* Library Section */}
-        {isCollapsed ? (
-          <NavItem 
-            icon={<Library size={18} />} 
-            label="Library" 
-            collapsed={isCollapsed}
-            active={isLibraryPath} 
-            href="/admins/library/overview"
-          />
-        ) : (
-          <div className={styles.expandableMenuContainer}>
-            <div 
-              onClick={() => setExpandedMenu(isLibraryExpanded ? null : 'Library')}
-              className={`${styles.expandableMenu} ${isLibraryExpanded ? styles.expanded : styles.collapsed}`}
-            >
-              <div className={styles.expandableMenuContent}>
-                <div className={`${styles.expandableMenuIcon} ${isLibraryExpanded ? styles.expanded : styles.collapsed}`}>
-                  <Library size={18} />
-                </div>
-                <span>Library</span>
-              </div>
-              <ChevronDown size={14} className={`${styles.expandableChevron} ${isLibraryExpanded ? styles.rotated : ''}`} />
-            </div>
+        <ExpandableSection
+          label="Classes"
+          icon={<LayoutGrid size={18} />}
+          sectionKey="Classes"
+          items={SECTIONS.classes}
+          isActivePath={isClassesPath}
+          collapsedHref="/admins/classes/management"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
 
-            <div className={`${styles.subItemsContainer} ${isLibraryExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="Overview" active={pathname === '/admins/library/overview'} href="/admins/library/overview" />
-              <SubNavItem label="Book Management" active={pathname === '/admins/library/management'} href="/admins/library/management" />
-              <SubNavItem label="Shelf Management" active={pathname === '/admins/library/shelves'} href="/admins/library/shelves" />
-              <SubNavItem label="Issue System" active={pathname === '/admins/library/issue'} href="/admins/library/issue" />
-              <SubNavItem label="Fine Management" active={pathname === '/admins/library/fines'} href="/admins/library/fines" />
-              <SubNavItem label="Reports" active={pathname === '/admins/library/reports'} href="/admins/library/reports" />
-            </div>
-          </div>
-        )}
+        <ExpandableSection
+          label="Canteen"
+          icon={<Utensils size={18} />}
+          sectionKey="Canteen"
+          items={SECTIONS.canteen}
+          isActivePath={isCanteenPath}
+          collapsedHref="/admins/canteen/dashboard"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
+
+        <ExpandableSection
+          label="Hostel"
+          icon={<Bed size={18} />}
+          sectionKey="Hostel"
+          items={SECTIONS.hostel}
+          isActivePath={isHostelPath}
+          collapsedHref="/admins/hostel/overview"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
+
+        <ExpandableSection
+          label="Transport"
+          icon={<Bus size={18} />}
+          sectionKey="Transport"
+          items={SECTIONS.transport}
+          isActivePath={isTransportPath}
+          collapsedHref="/admins/transport/overview"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
+
+        <ExpandableSection
+          label="Library"
+          icon={<Library size={18} />}
+          sectionKey="Library"
+          items={SECTIONS.library}
+          isActivePath={isLibraryPath}
+          collapsedHref="/admins/library/overview"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
 
         <NavItem 
           icon={<Calendar size={18} />} 
@@ -301,54 +286,41 @@ const AdminSidebar = () => {
           href="/admins/leads"
           onClick={() => setExpandedMenu(null)}
         />
-        {isCollapsed ? (
-          <NavItem 
-            icon={<FileText size={18} />} 
-            label="Examinations" 
-            collapsed={isCollapsed}
-            active={isExaminationsPath} 
-            href="/admins/examinations/types"
-          />
-        ) : (
-          <div className={styles.expandableMenuContainer}>
-            <div 
-              onClick={() => setExpandedMenu(expandedMenu === 'Examinations' ? null : 'Examinations')}
-              className={`${styles.expandableMenu} ${isExaminationsExpanded ? styles.expanded : styles.collapsed}`}
-            >
-              <div className={styles.expandableMenuContent}>
-                <div className={`${styles.expandableMenuIcon} ${isExaminationsExpanded ? styles.expanded : styles.collapsed}`}>
-                  <FileText size={18} />
-                </div>
-                <span>Examinations</span>
-              </div>
-              <ChevronDown size={14} className={`${styles.expandableChevron} ${isExaminationsExpanded ? styles.rotated : ''}`} />
-            </div>
 
-            <div className={`${styles.subItemsContainer} ${isExaminationsExpanded ? styles.expanded : styles.collapsed}`}>
-              <SubNavItem label="Exam Types" active={pathname === '/admins/examinations/types'} href="/admins/examinations/types" />
-              <SubNavItem label="Schedule" active={pathname === '/admins/examinations/schedule'} href="/admins/examinations/schedule" />
-              <SubNavItem label="Timetable" active={pathname === '/admins/examinations/timetable'} href="/admins/examinations/timetable" />
-              <SubNavItem label="Question Paper" active={pathname === '/admins/examinations/question-paper'} href="/admins/examinations/question-paper" />
-              <SubNavItem label="Marks Entry" active={pathname === '/admins/examinations/marks'} href="/admins/examinations/marks" />
-              <SubNavItem label="Result" active={pathname === '/admins/examinations/results'} href="/admins/examinations/results" />
-              <SubNavItem label="Report Card" active={pathname === '/admins/examinations/report-card'} href="/admins/examinations/report-card" />
-              <SubNavItem label="Online Test" active={pathname === '/admins/examinations/online-test'} href="/admins/examinations/online-test" />
-              <SubNavItem label="Analytics" active={pathname === '/admins/examinations/analytics'} href="/admins/examinations/analytics" />
-            </div>
-          </div>
-        )}
+        <ExpandableSection
+          label="Examinations"
+          icon={<FileText size={18} />}
+          sectionKey="Examinations"
+          items={SECTIONS.examinations}
+          isActivePath={isExaminationsPath}
+          collapsedHref="/admins/examinations/types"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
       </nav>
+
+      {/* Flyout Portal — rendered into body, outside sidebar overflow */}
+      {activeFlyout && (
+        <FlyoutPortal
+          label={activeFlyout.label}
+          items={activeFlyout.items}
+          top={activeFlyout.top}
+          left={activeFlyout.left}
+          pathname={pathname}
+          onClose={() => setActiveFlyout(null)}
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
+        />
+      )}
 
       {/* Bottom Navigation */}
       <div className={styles.bottomNav}>
         {!isCollapsed && <p className={styles.sectionLabel}>Workspace</p>}
-        <NavItem 
-          icon={<Settings size={18} />} 
-          label="Settings" 
-          collapsed={isCollapsed} 
-          active={pathname === '/admins/settings'}
-          href="/admins/settings"
-        />
+        <NavItem icon={<Settings size={18} />} label="Settings" collapsed={isCollapsed} active={pathname === '/admins/settings'} href="/admins/settings" />
         <NavItem icon={<HelpCircle size={18} />} label="Support" collapsed={isCollapsed} active={pathname === '/admins/support'} href="/admins/support" />
         <NavItem icon={<LogOut size={18} />} label="Log out" collapsed={isCollapsed} onClick={logout} />
       </div>
@@ -356,83 +328,161 @@ const AdminSidebar = () => {
   );
 };
 
-// Sub-component for Sidebar Links to keep code clean
-const NavItem = ({ icon, label, collapsed = false, active = false, onClick, href }) => {
+// ── Sections Configuration ──────────────────────────────────────────────────
+const SECTIONS = {
+  staff: [
+    { label: "All Staff", href: "/admins/staff/all" },
+    { label: "Teachers", href: "/admins/staff/teachers" },
+    { label: "Roles & Permissions", href: "/admins/staff/roles" },
+    { label: "Attendance & HR", href: "/admins/staff/hr" },
+    { label: "Teacher Leaderboard", href: "/admins/staff/leaderboard" },
+    { label: "Tasks & Events", href: "/admins/staff/tasks" },
+  ],
+  students: [
+    { label: "Directory", href: "/admins/students/directory" },
+    { label: "Attendance", href: "/admins/students/attendance" },
+    { label: "Performance", href: "/admins/students/performance" },
+  ],
+  classes: [
+    { label: "Class", href: "/admins/classes/management" },
+    { label: "Subject", href: "/admins/classes/subjects" },
+    { label: "Elections", href: "/admins/classes/elections" },
+    { label: "Timetable Builder", href: "/admins/classes/timetable" },
+  ],
+  canteen: [
+    { label: "Overview", href: "/admins/canteen/dashboard" },
+    { label: "Menu Management", href: "/admins/canteen/menu" },
+    { label: "Orders", href: "/admins/canteen/orders" },
+    { label: "Payments", href: "/admins/canteen/payments" },
+    { label: "Inventory", href: "/admins/canteen/inventory" },
+    { label: "Suppliers", href: "/admins/canteen/suppliers" },
+    { label: "Feedback", href: "/admins/canteen/feedback" },
+    { label: "Reports", href: "/admins/canteen/reports" },
+  ],
+  hostel: [
+    { label: "Overview", href: "/admins/hostel/overview" },
+    { label: "Hostel List", href: "/admins/hostel/directory" },
+    { label: "Rooms", href: "/admins/hostel/rooms" },
+    { label: "Allocations", href: "/admins/hostel/allocations" },
+    { label: "Attendance", href: "/admins/hostel/attendance" },
+    { label: "Visitors", href: "/admins/hostel/visitors" },
+    { label: "Mess", href: "/admins/hostel/mess" },
+    { label: "Fees", href: "/admins/hostel/fees" },
+    { label: "Analytics", href: "/admins/hostel/analytics" },
+  ],
+  transport: [
+    { label: "Overview", href: "/admins/transport/overview" },
+    { label: "School Buses", href: "/admins/transport/buses" },
+    { label: "Routes", href: "/admins/transport/routes" },
+    { label: "Live Tracking", href: "/admins/transport/tracking" },
+    { label: "Transport Fees", href: "/admins/transport/fees" },
+    { label: "Complaints", href: "/admins/transport/complaints" },
+  ],
+  library: [
+    { label: "Overview", href: "/admins/library/overview" },
+    { label: "Book Management", href: "/admins/library/management" },
+    { label: "Shelf Management", href: "/admins/library/shelves" },
+    { label: "Issue System", href: "/admins/library/issue" },
+    { label: "Fine Management", href: "/admins/library/fines" },
+    { label: "Reports", href: "/admins/library/reports" },
+  ],
+  examinations: [
+    { label: "Exam Types", href: "/admins/examinations/types" },
+    { label: "Schedule", href: "/admins/examinations/schedule" },
+    { label: "Timetable", href: "/admins/examinations/timetable" },
+    { label: "Question Paper", href: "/admins/examinations/question-paper" },
+    { label: "Marks Entry", href: "/admins/examinations/marks" },
+    { label: "Result", href: "/admins/examinations/results" },
+    { label: "Report Card", href: "/admins/examinations/report-card" },
+    { label: "Online Test", href: "/admins/examinations/online-test" },
+    { label: "Analytics", href: "/admins/examinations/analytics" },
+  ]
+};
+
+// ── Expandable Section Component ─────────────────────────────────────────────
+const ExpandableSection = ({ label, icon, sectionKey, items, isActivePath, collapsedHref, isCollapsed, expandedMenu, setExpandedMenu, showFlyout, scheduleHide, pathname }) => {
+  const isExpanded = expandedMenu === sectionKey;
+
+  if (isCollapsed) {
+    return (
+      <NavItem
+        icon={icon}
+        label={label}
+        collapsed={isCollapsed}
+        active={isActivePath}
+        href={collapsedHref}
+        onMouseEnter={(e) => showFlyout(e, label, items)}
+        onMouseLeave={scheduleHide}
+      />
+    );
+  }
+
+  return (
+    <div className={styles.expandableMenuContainer}>
+      <div
+        onClick={() => setExpandedMenu(isExpanded ? null : sectionKey)}
+        className={`${styles.expandableMenu} ${isExpanded ? styles.expanded : styles.collapsed} ${isActivePath ? styles.navItemActive : ''}`}
+      >
+        <div className={styles.expandableMenuContent}>
+          <div className={`${styles.expandableMenuIcon} ${isExpanded ? styles.expanded : styles.collapsed}`}>
+             {icon}
+          </div>
+          <span style={{ fontWeight: isActivePath ? 900 : 'inherit' }}>{label}</span>
+        </div>
+        <ChevronDown
+          size={14}
+          className={`${styles.expandableChevron} ${isExpanded ? styles.rotated : ''}`}
+        />
+      </div>
+      <div className={`${styles.subItemsContainer} ${isExpanded ? styles.expanded : styles.collapsed}`}>
+        {items.map((sub, idx) => (
+          <SubNavItem key={idx} label={sub.label} active={pathname === sub.href} href={sub.href} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const NavItem = ({ icon, label, collapsed = false, active = false, onClick, href, onMouseEnter, onMouseLeave }) => {
   const content = (
     <>
-      {/* Top Concave Cutout */}
-      {!collapsed && active && (
-        <div className={styles.cutoutTop}>
-          <div className={styles.cutoutTopInner}></div>
-        </div>
-      )}
-      
-      {/* Bottom Concave Cutout */}
-      {!collapsed && active && (
-        <div className={styles.cutoutBottom}>
-          <div className={styles.cutoutBottomInner}></div>
-        </div>
-      )}
-      
+      {!collapsed && active && <div className={styles.cutoutTop}><div className={styles.cutoutTopInner} /></div>}
+      {!collapsed && active && <div className={styles.cutoutBottom}><div className={styles.cutoutBottomInner} /></div>}
       <div style={{ opacity: active ? 1 : 0.8 }}>{icon}</div>
       {!collapsed && <span>{label}</span>}
     </>
   );
 
-  const className = active 
+  const className = active
     ? `${styles.navItemActive} ${collapsed ? styles.navItemActiveCollapsed : ''}`
     : `${styles.navItem} ${collapsed ? styles.navItemCollapsed : ''}`;
 
   if (href) {
     return (
-      <Link href={href} className={className} onClick={onClick} title={collapsed ? label : undefined}>
+      <Link href={href} className={className} onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} title={collapsed ? label : undefined}>
         {content}
       </Link>
     );
   }
-
   return (
-    <div onClick={onClick} className={className} title={collapsed ? label : undefined}>
+    <div onClick={onClick} className={className} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} title={collapsed ? label : undefined}>
       {content}
     </div>
   );
 };
 
-// Sub-component specifically for Nested Sidebar Links
 const SubNavItem = ({ label, active = false, onClick, href }) => {
   const content = (
     <>
-      {active && (
-        <>
-          <div className={styles.cutoutTop}>
-            <div className={styles.cutoutTopInner}></div>
-          </div>
-          <div className={styles.cutoutBottom}>
-            <div className={styles.cutoutBottomInner}></div>
-          </div>
-        </>
-      )}
-      
-      <div className={active ? styles.bulletActive : styles.bulletInactive}></div>
+      {active && (<><div className={styles.cutoutTop}><div className={styles.cutoutTopInner} /></div><div className={styles.cutoutBottom}><div className={styles.cutoutBottomInner} /></div></>)}
+      <div className={active ? styles.bulletActive : styles.bulletInactive} />
       <span>{label}</span>
     </>
   );
 
   const className = active ? styles.subNavItemActive : styles.subNavItem;
-
-  if (href) {
-    return (
-      <Link href={href} className={className} onClick={onClick}>
-        {content}
-      </Link>
-    );
-  }
-
-  return (
-    <div onClick={onClick} className={className}>
-      {content}
-    </div>
-  );
+  if (href) return <Link href={href} className={className} onClick={onClick}>{content}</Link>;
+  return <div onClick={onClick} className={className}>{content}</div>;
 };
 
 export default AdminSidebar;

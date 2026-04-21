@@ -1,6 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   SIDEBAR v3 — Refined Midnight Console
-   Elegant dark glass with warm accent system
+   SIDEBAR v4 — Refined Midnight Console
    ═══════════════════════════════════════════════════════════ */
 
 .sidebar {
@@ -13,8 +12,9 @@
   position: fixed;
   left: 0;
   top: 0;
-  z-index: var(--z-sticky);
+  z-index: var(--z-sticky, 40);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* overflow must be visible so toggleBtn (-13px right) isn't clipped */
   overflow: visible;
 }
 
@@ -27,10 +27,11 @@
   bottom: 0;
   width: 1px;
   background: linear-gradient(180deg, transparent 0%, rgba(56, 189, 248, 0.15) 50%, transparent 100%);
+  pointer-events: none;
 }
 
 .collapsed {
-  width: var(--sidebar-collapsed-width);
+  width: var(--sidebar-collapsed-width, 64px);
 }
 
 /* ─── BRAND ─── */
@@ -40,6 +41,7 @@
   gap: 14px;
   padding: 24px 20px 20px;
   min-height: 76px;
+  flex-shrink: 0;
 }
 
 .brandLogo {
@@ -59,6 +61,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
 }
 
 .brandName {
@@ -92,7 +95,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 10;
+  z-index: 50;
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
 }
@@ -108,8 +111,11 @@
   padding: 4px 10px;
   display: flex;
   flex-direction: column;
+  /* overflow-x MUST be clip (not visible) because this is a scroll container.
+     Using clip instead of hidden means position:fixed children (flyout portal)
+     are unaffected — they escape via the body portal anyway. */
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: clip;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -137,6 +143,10 @@
   gap: 1px;
 }
 
+.menuItemContainer {
+  position: relative;
+}
+
 /* ─── MENU ITEM ─── */
 .menuItem {
   display: flex;
@@ -154,6 +164,7 @@
   border: none;
   width: 100%;
   font-family: inherit;
+  box-sizing: border-box;
 }
 
 .menuItem:hover {
@@ -166,6 +177,7 @@
   align-items: center;
   gap: 12px;
   position: relative;
+  min-width: 0;
 }
 
 .menuIcon {
@@ -188,6 +200,8 @@
   font-weight: 500;
   white-space: nowrap;
   letter-spacing: 0.1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ─── ACTIVE STATE ─── */
@@ -221,6 +235,7 @@
 .expandIcon {
   color: #334155;
   transition: transform 0.25s ease;
+  flex-shrink: 0;
 }
 
 .expandOpen {
@@ -228,7 +243,7 @@
   color: #38bdf8;
 }
 
-/* ─── SUB MENU ─── */
+/* ─── INLINE SUB MENU (expanded state) ─── */
 .subMenu {
   display: flex;
   flex-direction: column;
@@ -274,9 +289,96 @@
   box-shadow: 0 0 6px rgba(14, 165, 233, 0.4);
 }
 
+/* ─── FLYOUT PORTAL (collapsed state) ─── */
+/* Rendered into document.body — completely outside sidebar DOM */
+
+.flyoutPortal {
+  position: fixed;
+  z-index: 9999;
+  width: 216px;
+  background: #0d1525;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.4),
+    0 20px 40px -4px rgba(0, 0, 0, 0.5);
+  animation: flyoutIn 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: left center;
+}
+
+@keyframes flyoutIn {
+  from {
+    opacity: 0;
+    transform: scaleX(0.92) translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1) translateX(0);
+  }
+}
+
+.flyoutHeader {
+  font-size: 10px;
+  font-weight: 700;
+  color: #38bdf8;
+  padding: 7px 12px 7px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin-bottom: 4px;
+}
+
+.flyoutItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  text-decoration: none;
+  border-radius: 8px;
+  transition: all 0.12s ease;
+}
+
+.flyoutItem:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.flyoutItemActive {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.flyoutItemActive .flyoutDot {
+  background: #0ea5e9;
+  box-shadow: 0 0 6px rgba(14, 165, 233, 0.5);
+}
+
+.flyoutDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #1e293b;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+
+/* Full-page invisible layer — catches mouse moving away from both sidebar + flyout */
+.flyoutBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: all;
+  background: transparent;
+}
+
 /* ─── FOOTER ─── */
 .footer {
   padding: 4px 10px 14px;
+  flex-shrink: 0;
 }
 
 .footerDivider {
@@ -292,7 +394,6 @@
 
 /* ─── COLLAPSED STATE ─── */
 .collapsed .brandText,
-.collapsed .brandRole,
 .collapsed .menuLabel,
 .collapsed .sectionLabel,
 .collapsed .expandIcon {
@@ -308,10 +409,12 @@
   justify-content: center;
   padding: 0;
   height: 40px;
+  width: 100%;
 }
 
 .collapsed .menuLeft {
   justify-content: center;
+  gap: 0;
 }
 
 .collapsed .nav {
@@ -324,8 +427,4 @@
 
 .collapsed .activeBar {
   left: -6px;
-}
-
-.collapsed .sidebar::after {
-  display: none;
 }

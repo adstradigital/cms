@@ -11,11 +11,13 @@ import {
   Minus, TextQuote,
   Award, BarChart3, Droplets, Columns, Image as ImageIcon,
   RotateCcw, RotateCw, Loader2, CheckSquare,
-  List, Move
+  List, Move, ChevronDown, X, Bold, Italic, Underline, Download
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { API_CONFIG } from '@/api/config';
 import styles from './ReportCardCreate.module.css';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const CLASSES = ['Class 10-A', 'Class 10-B', 'Class 9-A', 'Class 9-B', 'Class 8-A'];
 
@@ -94,8 +96,8 @@ const DEFAULT_VISIBLE_COLS = ['theory', 'internal', 'total', 'grade', 'grade_poi
 const FONT_OPTIONS = ['Arial', 'Georgia', 'Times New Roman', 'Courier New'];
 const LOCAL_TEMPLATE_KEY = 'report_card_templates_v1';
 
-const getGrade = (pct, system) => {
-  const s = GRADE_SYSTEMS[system] || GRADE_SYSTEMS['CGPA (10-point)'];
+const getGrade = (pct, system, allSystems) => {
+  const s = (allSystems || {})[system] || (allSystems || {})['CGPA (10-point)'] || GRADE_SYSTEMS['CGPA (10-point)'];
   return s.find((g) => pct >= g.min) || s[s.length - 1];
 };
 
@@ -201,7 +203,14 @@ const initialState = {
   selClass: 'Class 10-A',
   selStudent: STUDENTS['Class 10-A'][0] || null,
   marks: buildInitialMarks('Kerala State Board'),
-  design: { layout: 'classic', accent: ACCENT_PRESETS[0], paperSize: 'A4', showGrid: true, gridSize: 2 },
+  design: { 
+    layout: 'classic', 
+    accent: ACCENT_PRESETS[0], 
+    paperSize: 'A4', 
+    showGrid: true, 
+    gridSize: 2,
+    gradeSystems: deepClone(GRADE_SYSTEMS)
+  },
   history: { past: [], future: [] }
 };
 
@@ -293,10 +302,60 @@ const reducer = (state, action) => {
   }
 };
 
+const Accordion = ({ id, title, icon, children, isOpen, onToggle }) => {
+  return (
+    <div className={`${styles.accordion} ${isOpen ? styles.accordionOpen : ''}`}>
+      <button className={styles.accordionHead} onClick={() => onToggle(id)}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{icon} {title}</span>
+        <ChevronDown size={14} className={styles.accordionChevron} />
+      </button>
+      {isOpen && <div className={styles.accordionBody}>{children}</div>}
+    </div>
+  );
+};
+
 const ReportCardCreate = ({ onBack }) => {
   const { user } = useAuth();
   const fileInputRef = useRef(new Map());
   const canvasPageRef = useRef(null);
+  
+  const exportSinglePDF = async () => {
+    if (!canvasPageRef.current) return;
+    try {
+      setToastMsg('Preparing PDF...');
+      const wasPreview = isPrintPreview;
+      if (!wasPreview) setIsPrintPreview(true);
+      
+      // Give React a moment to re-render without inputs/grid
+      setTimeout(async () => {
+        try {
+          const canvas = await html2canvas(canvasPageRef.current, { 
+            scale: 2, 
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff'
+          });
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', design.paperSize === 'A5' ? 'a5' : 'a4');
+          const imgProps = pdf.getImageProperties(imgData);
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+          pdf.save(`ReportCard_${selStudent?.name || 'Design'}_${new Date().getTime()}.pdf`);
+          setToastMsg('PDF Exported!');
+        } catch (err) {
+          console.error(err);
+          setToastMsg('PDF capture failed');
+        } finally {
+          if (!wasPreview) setIsPrintPreview(false);
+        }
+      }, 300);
+    } catch (e) {
+      console.error(e);
+      setToastMsg('PDF Export failed');
+    }
+  };
+
   const [state, dispatch] = useReducer(reducer, initialState);
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [hoveredBlockId, setHoveredBlockId] = useState(null);
@@ -310,6 +369,11 @@ const ReportCardCreate = ({ onBack }) => {
   const [bulkProgress, setBulkProgress] = useState({ running: false, current: 0, total: 0 });
   const [mouseDownData, setMouseDownData] = useState(null);
   const [floatDrag, setFloatDrag] = useState({ id: null, sx: 0, sy: 0, bx: 0, by: 0, cx: 0, cy: 0 });
+  const [leftTab, setLeftTab] = useState('blocks'); // blocks | explorer
+  const [openAccordions, setOpenAccordions] = useState({});
+  const [editingGradeSys, setEditingGradeSys] = useState('CGPA (10-point)');
+  const [promptModal, setPromptModal] = useState({ open: false, title: '', placeholder: '', initialValue: '', onConfirm: () => {} });
+  const toggleAccordion = (key) => setOpenAccordions(prev => ({ ...prev, [key]: !prev[key] }));
   const { activeBlocks, selBlockId, selClass, selStudent, marks, design, history } = state;
 
   useEffect(() => {
@@ -516,9 +580,14 @@ const ReportCardCreate = ({ onBack }) => {
   };
 
   const saveTemplate = async () => {
-    const name = window.prompt('Template name?', `Report Template ${new Date().toLocaleDateString()}`);
-    if (!name) return;
-    const payload = { name, activeBlocks, design };
+    setPromptModal({
+      open: true,
+      title: 'Save Template',
+      placeholder: 'Template name...',
+      initialValue: `Report Template ${new Date().toLocaleDateString()}`,
+      onConfirm: async (name) => {
+        if (!name) return;
+        const payload = { name, activeBlocks, design };
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     const headers = {
       'Content-Type': 'application/json',
@@ -556,6 +625,8 @@ const ReportCardCreate = ({ onBack }) => {
     } catch (e) {
       setToastMsg('Template save failed');
     }
+      }
+    });
   };
 
   const loadTemplates = async () => {
@@ -646,14 +717,14 @@ const ReportCardCreate = ({ onBack }) => {
       const tMax = Number(m.tMax || 80);
       const iMax = Number(m.iMax || 20);
       const pct = getPct(theory, internal, tMax, iMax);
-      const g = getGrade(pct, gradeSys);
+      const g = getGrade(pct, gradeSys, design.gradeSystems);
       total += theory + internal;
       maxTotal += tMax + iMax;
       gpSum += Number(g.gp || 0);
       counted += 1;
     });
     const overallPct = maxTotal ? Math.round((total / maxTotal) * 100) : 0;
-    const overallGrade = getGrade(overallPct, gradeSys);
+    const overallGrade = getGrade(overallPct, gradeSys, design.gradeSystems);
     const gpa = counted ? gpSum / counted : 0;
     const status = overallPct >= 75 ? 'Distinction' : (overallPct >= 33 ? 'Pass' : 'Fail');
     return { overallGrade, gpa, status };
@@ -704,7 +775,13 @@ const ReportCardCreate = ({ onBack }) => {
       case 'header':
         return (
           <div className={styles.pHeader}>
-            <div className={styles.pLogo} style={{ background: design.accent.primary, overflow: 'hidden' }}>{block.config.logo ? <img src={block.config.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : 'Logo'}</div>
+            <div className={styles.pLogo} style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {block.config.logo ? (
+                <img src={block.config.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              ) : (
+                <div style={{ background: design.accent.primary, color: '#fff', padding: '10px 20px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 800 }}>LOGO</div>
+              )}
+            </div>
             <div className={styles.pHeaderContent}>
               <h2 className={styles.pSchoolName} style={{ fontSize: block.config.titleSize, fontWeight: block.config.titleWeight, color: block.config.titleColor, fontFamily: block.config.fontFamily }}>{block.config.schoolName || 'School Name'}</h2>
               <p className={styles.pTagline} style={{ color: block.config.contentColor }}>{block.config.tagline || 'Tagline'}</p>
@@ -755,12 +832,39 @@ const ReportCardCreate = ({ onBack }) => {
           <table className={styles.pTable}>
             <thead><tr><th>Subject</th>{visibleCols.includes('theory') && <th>Theory</th>}{visibleCols.includes('internal') && <th>Internal</th>}{visibleCols.includes('total') && <th className={styles.bold}>Total</th>}{visibleCols.includes('grade') && <th>Grade</th>}{visibleCols.includes('grade_point') && <th>Grade Point</th>}{visibleCols.includes('remarks') && <th>Remarks</th>}{customCols.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
             <tbody>
-              {(SUBJECT_SETS[block.config.board] || []).map((s, idx) => {
+              {(block.config.subjects || SUBJECT_SETS[block.config.board] || []).map((s, idx) => {
                 const m = marks[s] || { theory: 0, internal: 0, tMax: 80, iMax: 20, custom: {} };
                 const total = Number(m.theory || 0) + Number(m.internal || 0);
                 const p = getPct(Number(m.theory || 0), Number(m.internal || 0), Number(m.tMax || 80), Number(m.iMax || 20));
-                const g = getGrade(p, block.config.gradeSys);
-                return <tr key={s} style={block.config.alternateRows && idx % 2 === 1 ? { background: '#f8fafc' } : undefined}><td className={styles.bold}>{s}</td>{visibleCols.includes('theory') && <td>{m.theory}</td>}{visibleCols.includes('internal') && <td>{m.internal}</td>}{visibleCols.includes('total') && <td className={styles.bold}>{total}</td>}{visibleCols.includes('grade') && <td style={{ color: g.hex, fontWeight: 800 }}>{g.g}</td>}{visibleCols.includes('grade_point') && <td className={styles.bold}>{g.gp}</td>}{visibleCols.includes('remarks') && <td>{m.remarks || '-'}</td>}{customCols.map((c) => <td key={`${s}-${c.key}`}>{m.custom?.[c.key] ?? ''}</td>)}</tr>;
+                const g = getGrade(p, block.config.gradeSys, design.gradeSystems);
+                return (
+                  <tr key={`${s}-${idx}`} style={block.config.alternateRows && idx % 2 === 1 ? { background: '#f8fafc' } : undefined}>
+                    <td className={styles.bold}>
+                      {!isPrintPreview ? (
+                        <input className={styles.inlineInput} style={{ fontWeight: 900 }} value={s} onChange={(e) => {
+                          const n = [...(block.config.subjects || SUBJECT_SETS[block.config.board] || [])];
+                          const old = n[idx];
+                          n[idx] = e.target.value;
+                          dispatch({ type: 'UPDATE_BLOCK', payload: { id: block.id, key: 'subjects', value: n } });
+                          if (marks[old]) { dispatch({ type: 'SET_MARKS', payload: { ...marks, [e.target.value]: marks[old] } }); }
+                        }} />
+                      ) : s}
+                    </td>
+                    {visibleCols.includes('theory') && <td>
+                      {!isPrintPreview ? <input type="number" className={styles.inlineInput} value={m.theory} onChange={(e) => updateMarks(s, 'theory', e.target.value)} /> : m.theory}
+                    </td>}
+                    {visibleCols.includes('internal') && <td>
+                      {!isPrintPreview ? <input type="number" className={styles.inlineInput} value={m.internal} onChange={(e) => updateMarks(s, 'internal', e.target.value)} /> : m.internal}
+                    </td>}
+                    {visibleCols.includes('total') && <td className={styles.bold}>{total}</td>}
+                    {visibleCols.includes('grade') && <td style={{ color: g.hex, fontWeight: 800 }}>{g.g}</td>}
+                    {visibleCols.includes('grade_point') && <td className={styles.bold}>{g.gp}</td>}
+                    {visibleCols.includes('remarks') && <td>
+                      {!isPrintPreview ? <input className={styles.inlineInput} value={m.remarks || ''} onChange={(e) => updateMarks(s, 'remarks', e.target.value)} placeholder="-" /> : (m.remarks || '-')}
+                    </td>}
+                    {customCols.map((c) => <td key={`${s}-${c.key}`}>{m.custom?.[c.key] ?? ''}</td>)}
+                  </tr>
+                );
               })}
             </tbody>
           </table>
@@ -787,11 +891,11 @@ const ReportCardCreate = ({ onBack }) => {
                 </tr>
               </thead>
               <tbody>
-                {(config.items || []).map((it, i) => (
+                {(design.gradeSystems[block.config.gradeSys || 'CGPA (10-point)'] || []).map((it, i) => (
                   <tr key={i}>
-                    <td>{it.min} - {it.max}</td>
-                    <td className={styles.bold}>{it.grade}</td>
-                    <td>{it.label}</td>
+                    <td>? {it.min}%</td>
+                    <td className={styles.bold}>{it.g}</td>
+                    <td style={{ color: it.hex, fontWeight: 800 }}>{it.g} Point: {it.gp}</td>
                   </tr>
                 ))}
               </tbody>
@@ -905,241 +1009,273 @@ const ReportCardCreate = ({ onBack }) => {
 
   const renderSelectedSettings = () => {
     const selBlock = activeBlocks.find((b) => b.id === selBlockId);
-    
-    if (!selBlock) {
-      return (
-        <div className={styles.fullEditor}>
-          <div className={styles.globalHeader}>
-            <h3>Global Designer</h3>
-            <span className={styles.sub}>Document & Alignment Controls</span>
-          </div>
-          <div className={styles.editorBody}>
-            <div className={styles.propGroup}>
-              <label className={styles.sLabel}>Preview Student</label>
-              <div className={styles.studentSwitcher}>
-                <select
-                  className={styles.sSelect}
-                  value={selClass}
-                  onChange={(e) => dispatch({ type: 'SET_CLASS', payload: e.target.value })}
-                >
-                  {CLASSES.map((c) => <option key={c}>{c}</option>)}
-                </select>
-                <select
-                  className={styles.sSelect}
-                  value={selStudent?.id || ''}
-                  onChange={(e) =>
-                    dispatch({
-                      type: 'SET_STUDENT',
-                      payload: (STUDENTS[selClass] || []).find((s) => s.id === parseInt(e.target.value, 10)) || null
-                    })
-                  }
-                >
-                  {(STUDENTS[selClass] || []).length === 0 && <option value="">No students</option>}
-                  {(STUDENTS[selClass] || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className={styles.propGroup}>
-              <label className={styles.sLabel} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                Show Small Grid System 
-                <input type="checkbox" checked={design.showGrid} onChange={(e) => dispatch({ type: 'SET_DESIGN', payload: { showGrid: e.target.checked } })} />
-              </label>
-            </div>
-            {design.showGrid && (
-              <div className={styles.propGroup}>
-                <label className={styles.sLabel}>Grid Density (Snap Size)</label>
-                <div className={styles.layoutToggleRow}>
-                  {[1, 2, 4, 5].map(s => (
-                    <button key={s} className={`${styles.layoutBtn} ${design.gridSize === s ? styles.lbActive : ''}`} onClick={() => dispatch({ type: 'SET_DESIGN', payload: { gridSize: s } })}>{s}%</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className={styles.propDivider}>Report Layout</div>
-            <div className={styles.propGroup}>
-              <label className={styles.sLabel}>Theme Accent</label>
-              <div className={styles.accentRow}>
-                {ACCENT_PRESETS.map(a => (
-                  <button key={a.name} style={{ background: a.primary }} className={`${styles.accentCell} ${design.accent.primary === a.primary ? styles.aActive : ''}`} onClick={() => dispatch({ type: 'SET_DESIGN', payload: { accent: a } })} />
-                ))}
-              </div>
-            </div>
-            <div className={styles.propGroup}>
-              <label className={styles.sLabel}>Page Size</label>
-              <select className={styles.sSelect} value={design.paperSize} onChange={(e) => dispatch({ type: 'SET_DESIGN', payload: { paperSize: e.target.value } })}>
-                <option value="A4">A4 (Standard)</option>
-                <option value="A5">A5 (Half-Page)</option>
-                <option value="Letter">US Letter</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      );
-    }
+    if (!selBlock) return null;
     const visibleCols = selBlock.config.visibleCols || DEFAULT_VISIBLE_COLS;
-
     return (
-      <div className={styles.fullEditor}>
-        <div className={styles.editorHead}><button className={styles.backBtn} onClick={() => dispatch({ type: 'SET_SELECTED_BLOCK', payload: null })}><ChevronLeft size={18} /> Back</button><h3>Edit {selBlock.type.replace('_', ' ')}</h3></div>
-        <div className={styles.editorBody}>
-          <div className={styles.collapsibleArea}><div className={styles.cHead}><Palette size={14} /> Layout & Aesthetics</div><div className={styles.cBody}>
-            
-            <div className={styles.propGroup}><label>Width & Alignment</label><div className={styles.layoutToggleRow}><button className={`${styles.layoutBtn} ${selBlock.config.width === 'full' ? styles.lbActive : ''}`} onClick={() => updateBlockConfig(selBlockId, 'width', 'full')}>Full</button><button className={`${styles.layoutBtn} ${selBlock.config.width === 'half' ? styles.lbActive : ''}`} onClick={() => updateBlockConfig(selBlockId, 'width', 'half')}>1/2</button><button className={`${styles.layoutBtn} ${selBlock.config.width === 'third' ? styles.lbActive : ''}`} onClick={() => updateBlockConfig(selBlockId, 'width', 'third')}>1/3</button><button className={`${styles.layoutBtn} ${selBlock.config.width === 'fourth' ? styles.lbActive : ''}`} onClick={() => updateBlockConfig(selBlockId, 'width', 'fourth')}>1/4</button></div><div className={styles.layoutToggleRow}><button className={`${styles.layoutBtn} ${selBlock.config.align === 'left' ? styles.lbActive : ''}`} onClick={() => updateBlockConfig(selBlockId, 'align', 'left')}><AlignLeft size={14} /></button><button className={`${styles.layoutBtn} ${selBlock.config.align === 'center' ? styles.lbActive : ''}`} onClick={() => updateBlockConfig(selBlockId, 'align', 'center')}><AlignCenter size={14} /></button><button className={`${styles.layoutBtn} ${selBlock.config.align === 'right' ? styles.lbActive : ''}`} onClick={() => updateBlockConfig(selBlockId, 'align', 'right')}><AlignRight size={14} /></button></div></div>
-            <div className={styles.propGroup}>
-              <label className={styles.sLabel}>Layout Integration</label>
-              <div className={styles.layoutToggleRow}>
-                <button 
-                  className={`${styles.layoutBtn} ${!selBlock.config.freeMove ? styles.lbActive : ''}`}
-                  onClick={() => updateConfig(selBlock.id, { freeMove: false })}
-                >
-                  <List size={14} /> Normal Stack
-                </button>
-                <button 
-                  className={`${styles.layoutBtn} ${selBlock.config.freeMove ? styles.lbActive : ''}`}
-                  onClick={() => updateConfig(selBlock.id, { freeMove: true, floatWidth: Number(selBlock.config.floatWidth || defaultFloatWidth(selBlock.config.width)) })}
-                >
-                  <Move size={14} /> Free Move
-                </button>
-              </div>
-              {selBlock.config.freeMove && (
-                <div className={styles.paddingInputs} style={{ marginTop: 8 }}>
-                  <div className={styles.inputGroup}><label>X %</label><input type="number" min="0" max="100" value={Math.round(selBlock.config.posX || 0)} onChange={(e) => updateBlockConfig(selBlock.id, 'posX', Number(e.target.value || 0))} /></div>
-                  <div className={styles.inputGroup}><label>Y %</label><input type="number" min="0" max="100" value={Math.round(selBlock.config.posY || 0)} onChange={(e) => updateBlockConfig(selBlock.id, 'posY', Number(e.target.value || 0))} /></div>
-                  <div className={styles.inputGroup}><label>Width %</label><input type="number" min="10" max="95" value={Math.round(selBlock.config.floatWidth || defaultFloatWidth(selBlock.config.width))} onChange={(e) => updateBlockConfig(selBlock.id, 'floatWidth', Number(e.target.value || 20))} /></div>
-                </div>
-              )}
-            </div>
-            <div className={styles.propGroup}><label>Section Background</label><div className={styles.accentRow}>{BG_PRESETS.map((bg) => <button key={bg.name} style={{ background: bg.hex === 'transparent' ? '#fff' : bg.hex, border: bg.hex === 'transparent' ? '1px dashed #cbd5e1' : 'none' }} className={`${styles.accentCell} ${selBlock.config.bg === bg.hex ? styles.aActive : ''}`} onClick={() => updateBlockConfig(selBlockId, 'bg', bg.hex)} title={bg.name} />)}</div></div>
-            <div className={styles.inputRow}><div className={styles.inputGroup}><label>Rounding</label><input type="range" min="0" max="30" value={selBlock.config.radius || 0} onChange={(e) => updateBlockConfig(selBlockId, 'radius', Number(e.target.value))} /></div><div className={styles.inputGroup}><label>Border Style</label><select className={styles.sSelect} value={selBlock.config.borderStyle || 'solid'} onChange={(e) => updateBlockConfig(selBlockId, 'borderStyle', e.target.value)}><option value="solid">solid</option><option value="dashed">dashed</option><option value="dotted">dotted</option></select></div></div>
-            <div className={styles.propGroup}><label>Border Color</label><input className={styles.sInput} type="color" value={selBlock.config.borderColor || '#e2e8f0'} onChange={(e) => updateBlockConfig(selBlockId, 'borderColor', e.target.value)} /></div>
-            <div className={styles.propGroup}><label>Border Sides</label><div className={styles.borderSideToggles}><button className={`${styles.layoutBtn} ${selBlock.config.borderSides?.top ? styles.lbActive : ''}`} onClick={() => handleToggleBorderSide(selBlockId, 'top')}>Top</button><button className={`${styles.layoutBtn} ${selBlock.config.borderSides?.right ? styles.lbActive : ''}`} onClick={() => handleToggleBorderSide(selBlockId, 'right')}>Right</button><button className={`${styles.layoutBtn} ${selBlock.config.borderSides?.bottom ? styles.lbActive : ''}`} onClick={() => handleToggleBorderSide(selBlockId, 'bottom')}>Bottom</button><button className={`${styles.layoutBtn} ${selBlock.config.borderSides?.left ? styles.lbActive : ''}`} onClick={() => handleToggleBorderSide(selBlockId, 'left')}>Left</button></div></div>
-            <div className={styles.propGroup}><label>Padding (px)</label><div className={styles.paddingInputs}><input type="number" min="0" max="60" value={selBlock.config.padding?.top ?? 6} onChange={(e) => handlePaddingChange(selBlockId, 'top', e.target.value)} placeholder="Top" /><input type="number" min="0" max="60" value={selBlock.config.padding?.right ?? 6} onChange={(e) => handlePaddingChange(selBlockId, 'right', e.target.value)} placeholder="Right" /><input type="number" min="0" max="60" value={selBlock.config.padding?.bottom ?? 6} onChange={(e) => handlePaddingChange(selBlockId, 'bottom', e.target.value)} placeholder="Bottom" /><input type="number" min="0" max="60" value={selBlock.config.padding?.left ?? 6} onChange={(e) => handlePaddingChange(selBlockId, 'left', e.target.value)} placeholder="Left" /></div></div>
-          </div></div>
-
-          <div className={styles.collapsibleArea}><div className={styles.cHead}><TextQuote size={14} /> Typography</div><div className={styles.cBody}><div className={styles.inputRow}><div className={styles.inputGroup}><label>Title Size</label><select className={styles.sSelect} value={selBlock.config.titleSize} onChange={(e) => updateBlockConfig(selBlockId, 'titleSize', e.target.value)}><option value="0.7rem">Small</option><option value="0.75rem">Normal</option><option value="1rem">Heading 3</option><option value="1.3rem">Heading 1</option></select></div><div className={styles.inputGroup}><label>Title Weight</label><select className={styles.sSelect} value={selBlock.config.titleWeight} onChange={(e) => updateBlockConfig(selBlockId, 'titleWeight', e.target.value)}><option value="400">Regular</option><option value="700">Bold</option><option value="900">Black</option></select></div></div><div className={styles.inputRow}><div className={styles.inputGroup}><label>Title Color</label><input className={styles.sInput} type="color" value={selBlock.config.titleColor || '#1e293b'} onChange={(e) => updateBlockConfig(selBlockId, 'titleColor', e.target.value)} /></div><div className={styles.inputGroup}><label>Content Color</label><input className={styles.sInput} type="color" value={selBlock.config.contentColor || '#475569'} onChange={(e) => updateBlockConfig(selBlockId, 'contentColor', e.target.value)} /></div></div><div className={styles.propGroup}><label>Font Family</label><select className={styles.sSelect} value={selBlock.config.fontFamily || 'Arial'} onChange={(e) => updateBlockConfig(selBlockId, 'fontFamily', e.target.value)}>{FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}</select></div></div></div>
-
-          <div className={styles.propDivider}>Section Content</div>
-          {selBlock.type === 'spacer' && <div className={styles.propGroup}><label>Vertical Gap (mm)</label><input type="range" min="5" max="100" value={selBlock.config.gap} onChange={(e) => updateBlockConfig(selBlockId, 'gap', parseInt(e.target.value, 10))} /></div>}
-          {selBlock.type === 'header' && <><div className={styles.propGroup}><label>School Logo</label><div className={styles.uploadBox} onClick={() => triggerFileInput(selBlock.id)}>{selBlock.config.logo ? <img src={selBlock.config.logo} alt="Logo" /> : <div className={styles.uploadLabel}><Upload size={20} /> <span>Click to Upload</span></div>}<input type="file" ref={(node) => setFileRef(selBlock.id, node)} hidden onChange={(e) => handleGenericUpload(e, selBlockId, 'logo')} accept="image/*" /></div></div><div className={styles.propGroup}><label>School Name</label><input className={styles.sInput} value={selBlock.config.schoolName || ''} onChange={(e) => updateBlockConfig(selBlockId, 'schoolName', e.target.value)} /></div><div className={styles.propGroup}><label>Tagline</label><input className={styles.sInput} value={selBlock.config.tagline || ''} onChange={(e) => updateBlockConfig(selBlockId, 'tagline', e.target.value)} /></div><div className={styles.propGroup}><label>Session</label><input className={styles.sInput} value={selBlock.config.session || ''} onChange={(e) => updateBlockConfig(selBlockId, 'session', e.target.value)} /></div></>}
-          {selBlock.type === 'marks_table' && <><div className={styles.propGroup}><label>Board</label><select className={styles.sSelect} value={selBlock.config.board} onChange={(e) => { updateBlockConfig(selBlockId, 'board', e.target.value); setSelectedBoard(e.target.value); }}>{Object.keys(SUBJECT_SETS).map((b) => <option key={b}>{b}</option>)}</select></div><div className={styles.propGroup}><label>Grade System</label><select className={styles.sSelect} value={selBlock.config.gradeSys} onChange={(e) => updateBlockConfig(selBlockId, 'gradeSys', e.target.value)}>{Object.keys(GRADE_SYSTEMS).map((g) => <option key={g}>{g}</option>)}</select></div><div className={styles.propGroup}><label>Column Visibility</label><div className={styles.paddingInputs}>{[{ key: 'theory', label: 'Theory' }, { key: 'internal', label: 'Internal' }, { key: 'total', label: 'Total' }, { key: 'grade', label: 'Grade' }, { key: 'grade_point', label: 'Grade Point' }, { key: 'remarks', label: 'Remarks' }].map((c) => <label key={c.key} style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: '0.66rem' }}><input type="checkbox" checked={visibleCols.includes(c.key)} onChange={(e) => { const set = new Set(visibleCols); if (e.target.checked) set.add(c.key); else set.delete(c.key); updateBlockConfig(selBlockId, 'visibleCols', [...set]); }} />{c.label}</label>)}</div></div><div className={styles.propGroup}><label>Custom Columns</label>{(selBlock.config.customCols || []).map((c) => <div key={c.key} className={styles.inputRow}><input className={styles.sInput} value={c.label} onChange={(e) => updateBlockConfig(selBlockId, 'customCols', (selBlock.config.customCols || []).map((x) => (x.key === c.key ? { ...x, label: e.target.value } : x)))} /><select className={styles.sSelect} value={c.type} onChange={(e) => updateBlockConfig(selBlockId, 'customCols', (selBlock.config.customCols || []).map((x) => (x.key === c.key ? { ...x, type: e.target.value } : x)))}><option value="text">text</option><option value="number">number</option></select></div>)}<button className={styles.layoutBtn} onClick={() => updateBlockConfig(selBlockId, 'customCols', [...(selBlock.config.customCols || []), { key: `c_${Date.now()}`, label: 'New Column', type: 'text' }])}>Add Column</button></div><div className={styles.propGroup}><label><input type="checkbox" checked={!!selBlock.config.alternateRows} onChange={(e) => updateBlockConfig(selBlockId, 'alternateRows', e.target.checked)} /> Alternate Row Shading</label></div><label className={styles.sLabel} style={{ marginTop: 10 }}>Bulk Marks Entry</label><div className={styles.marksGridMini}>{(SUBJECT_SETS[selBlock.config.board] || []).map((s) => <div key={s} className={styles.miniMark}><span>{s}</span><div className={styles.inputRow}><input type="number" value={marks[s]?.theory ?? 0} onChange={(e) => updateMarks(s, 'theory', e.target.value)} placeholder="Theory" /><input type="number" value={marks[s]?.tMax ?? 80} onChange={(e) => updateMarks(s, 'tMax', e.target.value)} placeholder="(max)" /></div><div className={styles.inputRow}><input type="number" value={marks[s]?.internal ?? 0} onChange={(e) => updateMarks(s, 'internal', e.target.value)} placeholder="Internal" /><input type="number" value={marks[s]?.iMax ?? 20} onChange={(e) => updateMarks(s, 'iMax', e.target.value)} placeholder="(max)" /></div>{visibleCols.includes('remarks') && <input type="text" value={marks[s]?.remarks || ''} onChange={(e) => updateMarks(s, 'remarks', e.target.value)} placeholder="Remarks" />}{(selBlock.config.customCols || []).map((c) => <input key={`${s}-${c.key}`} type={c.type === 'number' ? 'number' : 'text'} value={marks[s]?.custom?.[c.key] ?? ''} onChange={(e) => updateMarks(s, `custom.${c.key}`, c.type === 'number' ? (parseFloat(e.target.value) || 0) : e.target.value)} placeholder={c.label} />)}</div>)}</div></>}
-          {selBlock.type === 'remarks' && <div className={styles.propGroup}><label>Feedback Content</label>{renderRichToolbar(selBlock)}<div id={`rich-editor-${selBlock.id}`} className={styles.sTextarea} contentEditable suppressContentEditableWarning onInput={(e) => updateBlockConfig(selBlockId, 'content', e.currentTarget.innerHTML)} onBlur={(e) => updateBlockConfig(selBlockId, 'content', e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: selBlock.config.content || '' }} /></div>}
-          {selBlock.type === 'custom_field' && <><div className={styles.propGroup}><label>Field Variant</label><select className={styles.sSelect} value={selBlock.config.fieldType} onChange={(e) => updateBlockConfig(selBlockId, 'fieldType', e.target.value)}><option value="text">Single Line Text</option><option value="textarea">Rich Text Area</option><option value="image">Image Upload</option></select></div><div className={styles.propGroup}><label>Content</label>{selBlock.config.fieldType === 'image' ? <div className={styles.uploadBox} onClick={() => triggerFileInput(selBlock.id)}>{selBlock.config.content ? <img src={selBlock.config.content} alt="Asset" /> : <div className={styles.uploadLabel}><Upload size={20} /> <span>Click to Upload</span></div>}<input type="file" ref={(node) => setFileRef(selBlock.id, node)} hidden onChange={(e) => handleGenericUpload(e, selBlockId)} accept="image/*" /></div> : <>{renderRichToolbar(selBlock)}<div id={`rich-editor-${selBlock.id}`} className={styles.sTextarea} contentEditable suppressContentEditableWarning onInput={(e) => updateBlockConfig(selBlockId, 'content', e.currentTarget.innerHTML)} onBlur={(e) => updateBlockConfig(selBlockId, 'content', e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: selBlock.config.content || '' }} /></>}</div></>}
-          {selBlock.type === 'grade_summary' && (
-            <div className={styles.propGroup}>
-              <label className={styles.sLabel}>Accent Color</label>
-              <div className={styles.accentRow}>
-                {['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ea580c'].map(c => (
-                  <div key={c} onClick={() => updateConfig(selBlock.id, { accentColor: c })} className={`${styles.accentCell} ${selBlock.config.accentColor === c ? styles.aActive : ''}`} style={{ background: c }} />
-                ))}
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Grade Text</label>
-                <input className={styles.sInput} value={selBlock.config.grade || ''} onChange={(e) => updateConfig(selBlock.id, { grade: e.target.value })} />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Performance Label</label>
-                <input className={styles.sInput} value={selBlock.config.label || ''} onChange={(e) => updateConfig(selBlock.id, { label: e.target.value })} />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Description</label>
-                <input className={styles.sInput} value={selBlock.config.desc || ''} onChange={(e) => updateConfig(selBlock.id, { desc: e.target.value })} placeholder="Calculation logic info..." />
-              </div>
-            </div>
-          )}
-          {selBlock.type === 'grading_legend' && (
-            <div className={styles.propGroup}>
-              <label className={styles.sLabel}>Legend Scale</label>
-              <div className={styles.legendEditorList}>
-                {(selBlock.config.items || []).map((it, idx) => (
-                  <div key={idx} className={styles.legendEditorRow}>
-                    <input placeholder="Min" type="number" value={it.min} onChange={(e) => {
-                      const newItems = [...selBlock.config.items];
-                      newItems[idx].min = e.target.value;
-                      updateConfig(selBlock.id, { items: newItems });
-                    }} />
-                    <input placeholder="Max" type="number" value={it.max} onChange={(e) => {
-                      const newItems = [...selBlock.config.items];
-                      newItems[idx].max = e.target.value;
-                      updateConfig(selBlock.id, { items: newItems });
-                    }} />
-                    <input placeholder="Grade" value={it.grade} onChange={(e) => {
-                      const newItems = [...selBlock.config.items];
-                      newItems[idx].grade = e.target.value;
-                      updateConfig(selBlock.id, { items: newItems });
-                    }} />
-                    <button className={styles.pDelete} onClick={() => {
-                      const newItems = selBlock.config.items.filter((_, i) => i !== idx);
-                      updateConfig(selBlock.id, { items: newItems });
-                    }}><Trash2 size={12} /></button>
-                  </div>
-                ))}
-                <button className={styles.compactBtn} style={{ width: '100%', marginTop: '8px' }} onClick={() => {
-                  const newItems = [...(selBlock.config.items || []), { min: 0, max: 0, grade: 'C', label: 'Average' }];
-                  updateConfig(selBlock.id, { items: newItems });
-                }}><Plus size={14} /> Add Scale Row</button>
-              </div>
-            </div>
-          )}
-          {selBlock.type === 'attendance' && <><div className={styles.propGroup}><label>Working Days</label><input className={styles.sInput} type="number" value={selBlock.config.workingDays || 0} onChange={(e) => updateBlockConfig(selBlockId, 'workingDays', parseInt(e.target.value || 0, 10))} /></div><div className={styles.propGroup}><label>Present Days</label><input className={styles.sInput} type="number" value={selBlock.config.presentDays || 0} onChange={(e) => updateBlockConfig(selBlockId, 'presentDays', parseInt(e.target.value || 0, 10))} /></div></>}
-          {selBlock.type === 'cocurricular' && <><div className={styles.propGroup}><label>Title</label><input className={styles.sInput} value={selBlock.config.title || ''} onChange={(e) => updateBlockConfig(selBlockId, 'title', e.target.value)} /></div>{(selBlock.config.items || []).map((item, idx) => <div key={`${item.activity}-${idx}`} className={styles.inputRow}><input className={styles.sInput} value={item.activity} onChange={(e) => { const items = deepClone(selBlock.config.items || []); items[idx].activity = e.target.value; updateBlockConfig(selBlockId, 'items', items); }} placeholder="Activity" /><input className={styles.sInput} value={item.grade} onChange={(e) => { const items = deepClone(selBlock.config.items || []); items[idx].grade = e.target.value; updateBlockConfig(selBlockId, 'items', items); }} placeholder="Grade/1-5" /><button className={styles.pDelete} onClick={() => { const items = deepClone(selBlock.config.items || []); items.splice(idx, 1); updateBlockConfig(selBlockId, 'items', items); }}><Trash2 size={12} /></button></div>)}<button className={styles.layoutBtn} onClick={() => updateBlockConfig(selBlockId, 'items', [...(selBlock.config.items || []), { activity: 'New Activity', grade: 'A' }])}>Add Activity</button></>}
-          {selBlock.type === 'chart' && <div className={styles.propGroup}><label>Board</label><select className={styles.sSelect} value={selBlock.config.board} onChange={(e) => updateBlockConfig(selBlockId, 'board', e.target.value)}>{Object.keys(SUBJECT_SETS).map((b) => <option key={b}>{b}</option>)}</select></div>}
-          {selBlock.type === 'watermark' && <><div className={styles.propGroup}><label>Watermark Image</label><div className={styles.uploadBox} onClick={() => triggerFileInput(selBlock.id)}>{selBlock.config.src ? <img src={selBlock.config.src} alt="Watermark" /> : <div className={styles.uploadLabel}><Upload size={20} /> <span>Click to Upload</span></div>}<input type="file" ref={(node) => setFileRef(selBlock.id, node)} hidden onChange={(e) => handleGenericUpload(e, selBlock.id, 'src')} accept="image/*" /></div></div><div className={styles.propGroup}><label>Opacity (5-30%)</label><input type="range" min="5" max="30" value={selBlock.config.opacity || 10} onChange={(e) => updateBlockConfig(selBlock.id, 'opacity', parseInt(e.target.value, 10))} /></div></>}
-          {selBlock.type === 'col_group' && <><div className={styles.propGroup}><label>Ratio</label><select className={styles.sSelect} value={selBlock.config.ratio || '50/50'} onChange={(e) => updateBlockConfig(selBlock.id, 'ratio', e.target.value)}><option value="50/50">50/50</option><option value="60/40">60/40</option><option value="70/30">70/30</option></select></div><div className={styles.propGroup}><label>Left Block</label><select className={styles.sSelect} value={selBlock.config.leftId || ''} onChange={(e) => updateBlockConfig(selBlock.id, 'leftId', e.target.value)}><option value="">Select</option>{activeBlocks.filter((b) => b.id !== selBlock.id && b.type !== 'watermark').map((b) => <option key={b.id} value={b.id}>{BLOCK_TYPES.find((t) => t.type === b.type)?.label} ({b.id})</option>)}</select></div><div className={styles.propGroup}><label>Right Block</label><select className={styles.sSelect} value={selBlock.config.rightId || ''} onChange={(e) => updateBlockConfig(selBlock.id, 'rightId', e.target.value)}><option value="">Select</option>{activeBlocks.filter((b) => b.id !== selBlock.id && b.type !== 'watermark').map((b) => <option key={b.id} value={b.id}>{BLOCK_TYPES.find((t) => t.type === b.type)?.label} ({b.id})</option>)}</select></div></>}
-          <button className={styles.deleteMain} onClick={() => removeBlock(selBlockId)}><Trash2 size={16} /> Delete Section</button>
-        </div>
-      </div>
+      <>
+        {selBlock.type === 'spacer' && <div className={styles.propGroup}><label>Vertical Gap (mm)</label><input type="range" min="5" max="100" value={selBlock.config.gap} onChange={(e) => updateBlockConfig(selBlockId, 'gap', parseInt(e.target.value, 10))} /></div>}
+        {selBlock.type === 'header' && <><div className={styles.propGroup}><label>School Logo</label><div className={styles.uploadBox} onClick={() => triggerFileInput(selBlock.id)}>{selBlock.config.logo ? <img src={selBlock.config.logo} alt="Logo" /> : <div className={styles.uploadLabel}><Upload size={20} /> <span>Click to Upload</span></div>}<input type="file" ref={(node) => setFileRef(selBlock.id, node)} hidden onChange={(e) => handleGenericUpload(e, selBlockId, 'logo')} accept="image/*" /></div></div><div className={styles.propGroup}><label>School Name</label><input className={styles.sInput} value={selBlock.config.schoolName || ''} onChange={(e) => updateBlockConfig(selBlockId, 'schoolName', e.target.value)} /></div><div className={styles.propGroup}><label>Tagline</label><input className={styles.sInput} value={selBlock.config.tagline || ''} onChange={(e) => updateBlockConfig(selBlockId, 'tagline', e.target.value)} /></div><div className={styles.propGroup}><label>Session</label><input className={styles.sInput} value={selBlock.config.session || ''} onChange={(e) => updateBlockConfig(selBlockId, 'session', e.target.value)} /></div></>}
+        {selBlock.type === 'marks_table' && <><div className={styles.propGroup}><label>Board</label><select className={styles.sSelect} value={selBlock.config.board} onChange={(e) => { updateConfig(selBlockId, { board: e.target.value, subjects: [...(SUBJECT_SETS[e.target.value] || [])] }); setSelectedBoard(e.target.value); }}>{Object.keys(SUBJECT_SETS).map((b) => <option key={b}>{b}</option>)}</select></div><div className={styles.propGroup}><label>Grade System</label><select className={styles.sSelect} value={selBlock.config.gradeSys} onChange={(e) => updateBlockConfig(selBlockId, 'gradeSys', e.target.value)}>{Object.keys(design.gradeSystems).map((g) => <option key={g}>{g}</option>)}</select></div><div className={styles.propGroup}><label>Columns</label><div className={styles.paddingInputs}>{[{ key: 'theory', label: 'Theory' }, { key: 'internal', label: 'Internal' }, { key: 'total', label: 'Total' }, { key: 'grade', label: 'Grade' }, { key: 'grade_point', label: 'GP' }, { key: 'remarks', label: 'Remarks' }].map((c) => <label key={c.key} style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: '0.66rem' }}><input type="checkbox" checked={visibleCols.includes(c.key)} onChange={(e) => { const set = new Set(visibleCols); if (e.target.checked) set.add(c.key); else set.delete(c.key); updateBlockConfig(selBlockId, 'visibleCols', [...set]); }} />{c.label}</label>)}</div></div><div className={styles.propGroup}><label><input type="checkbox" checked={!!selBlock.config.alternateRows} onChange={(e) => updateBlockConfig(selBlockId, 'alternateRows', e.target.checked)} /> Alternate Rows</label></div><label className={styles.sLabel} style={{ marginTop: 10 }}>Marks Entry (Customizable)</label><div className={styles.marksGridMini}>{(selBlock.config.subjects || SUBJECT_SETS[selBlock.config.board] || []).map((s, idx) => <div key={idx} className={styles.miniMark}><div style={{display:'flex',gap:4,alignItems:'center'}}><input className={styles.sInput} style={{fontWeight:800,flex:1,padding:'4px 8px'}} value={s} onChange={(e)=>{const n=[...(selBlock.config.subjects||SUBJECT_SETS[selBlock.config.board]||[])];const old=n[idx];n[idx]=e.target.value;updateConfig(selBlockId,{subjects:n});if(marks[old]){dispatch({type:'SET_MARKS',payload:{...marks,[e.target.value]:marks[old]}})} }} /><button className={styles.pDelete} onClick={()=>{const n=[...(selBlock.config.subjects||SUBJECT_SETS[selBlock.config.board]||[])];n.splice(idx,1);updateConfig(selBlockId,{subjects:n})}}><Trash2 size={12}/></button></div><div className={styles.inputRow}><input type="number" value={marks[s]?.theory ?? 0} onChange={(e) => updateMarks(s, 'theory', e.target.value)} placeholder="Theory" /><input type="number" value={marks[s]?.tMax ?? 80} onChange={(e) => updateMarks(s, 'tMax', e.target.value)} placeholder="(max)" /></div><div className={styles.inputRow}><input type="number" value={marks[s]?.internal ?? 0} onChange={(e) => updateMarks(s, 'internal', e.target.value)} placeholder="Internal" /><input type="number" value={marks[s]?.iMax ?? 20} onChange={(e) => updateMarks(s, 'iMax', e.target.value)} placeholder="(max)" /></div></div>)}<button className={styles.compactBtn} style={{width:'100%',marginTop:8}} onClick={()=>{const n=[...(selBlock.config.subjects||SUBJECT_SETS[selBlock.config.board]||[])];n.push('New Subject');updateConfig(selBlockId,{subjects:n})}}><Plus size={14}/> Add Subject</button></div></>}
+        {selBlock.type === 'remarks' && <div className={styles.propGroup}><label>Feedback Content</label>{renderRichToolbar(selBlock)}<div id={`rich-editor-${selBlock.id}`} className={styles.sTextarea} contentEditable suppressContentEditableWarning onInput={(e) => updateBlockConfig(selBlockId, 'content', e.currentTarget.innerHTML)} onBlur={(e) => updateBlockConfig(selBlockId, 'content', e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: selBlock.config.content || '' }} /></div>}
+        {selBlock.type === 'custom_field' && <><div className={styles.propGroup}><label>Variant</label><select className={styles.sSelect} value={selBlock.config.fieldType} onChange={(e) => updateBlockConfig(selBlockId, 'fieldType', e.target.value)}><option value="text">Text</option><option value="textarea">Rich Text</option><option value="image">Image</option></select></div><div className={styles.propGroup}><label>Content</label>{selBlock.config.fieldType === 'image' ? <div className={styles.uploadBox} onClick={() => triggerFileInput(selBlock.id)}>{selBlock.config.content ? <img src={selBlock.config.content} alt="Asset" /> : <div className={styles.uploadLabel}><Upload size={20} /> <span>Upload</span></div>}<input type="file" ref={(node) => setFileRef(selBlock.id, node)} hidden onChange={(e) => handleGenericUpload(e, selBlockId)} accept="image/*" /></div> : <>{renderRichToolbar(selBlock)}<div id={`rich-editor-${selBlock.id}`} className={styles.sTextarea} contentEditable suppressContentEditableWarning onInput={(e) => updateBlockConfig(selBlockId, 'content', e.currentTarget.innerHTML)} onBlur={(e) => updateBlockConfig(selBlockId, 'content', e.currentTarget.innerHTML)} dangerouslySetInnerHTML={{ __html: selBlock.config.content || '' }} /></>}</div></>}
+        {selBlock.type === 'grade_summary' && <div className={styles.propGroup}><label className={styles.sLabel}>Accent</label><div className={styles.accentRow}>{['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c'].map(c=>(<div key={c} onClick={()=>updateConfig(selBlock.id,{accentColor:c})} className={`${styles.accentCell} ${selBlock.config.accentColor===c?styles.aActive:''}`} style={{background:c}}/>))}</div><div className={styles.inputGroup}><label>Grade</label><input className={styles.sInput} value={selBlock.config.grade||''} onChange={(e)=>updateConfig(selBlock.id,{grade:e.target.value})}/></div><div className={styles.inputGroup}><label>Label</label><input className={styles.sInput} value={selBlock.config.label||''} onChange={(e)=>updateConfig(selBlock.id,{label:e.target.value})}/></div></div>}
+        {selBlock.type === 'grading_legend' && <div className={styles.propGroup}><label className={styles.sLabel}>System</label><select className={styles.sSelect} value={selBlock.config.gradeSys} onChange={(e) => updateBlockConfig(selBlockId, 'gradeSys', e.target.value)}>{Object.keys(design.gradeSystems).map((g) => <option key={g}>{g}</option>)}</select></div>}
+        {selBlock.type === 'attendance' && <><div className={styles.propGroup}><label>Working Days</label><input className={styles.sInput} type="number" value={selBlock.config.workingDays||0} onChange={(e)=>updateBlockConfig(selBlockId,'workingDays',parseInt(e.target.value||0,10))}/></div><div className={styles.propGroup}><label>Present Days</label><input className={styles.sInput} type="number" value={selBlock.config.presentDays||0} onChange={(e)=>updateBlockConfig(selBlockId,'presentDays',parseInt(e.target.value||0,10))}/></div></>}
+        {selBlock.type === 'cocurricular' && <><div className={styles.propGroup}><label>Title</label><input className={styles.sInput} value={selBlock.config.title||''} onChange={(e)=>updateBlockConfig(selBlockId,'title',e.target.value)}/></div>{(selBlock.config.items||[]).map((item,idx)=><div key={`${item.activity}-${idx}`} className={styles.inputRow}><input className={styles.sInput} value={item.activity} onChange={(e)=>{const items=deepClone(selBlock.config.items||[]);items[idx].activity=e.target.value;updateBlockConfig(selBlockId,'items',items)}} placeholder="Activity"/><input className={styles.sInput} value={item.grade} onChange={(e)=>{const items=deepClone(selBlock.config.items||[]);items[idx].grade=e.target.value;updateBlockConfig(selBlockId,'items',items)}} placeholder="Grade"/><button className={styles.pDelete} onClick={()=>{const items=deepClone(selBlock.config.items||[]);items.splice(idx,1);updateBlockConfig(selBlockId,'items',items)}}><Trash2 size={12}/></button></div>)}<button className={styles.layoutBtn} onClick={()=>updateBlockConfig(selBlockId,'items',[...(selBlock.config.items||[]),{activity:'New',grade:'A'}])}>Add Activity</button></>}
+        {selBlock.type === 'chart' && <div className={styles.propGroup}><label>Board</label><select className={styles.sSelect} value={selBlock.config.board} onChange={(e)=>updateBlockConfig(selBlockId,'board',e.target.value)}>{Object.keys(SUBJECT_SETS).map(b=><option key={b}>{b}</option>)}</select></div>}
+        {selBlock.type === 'watermark' && <><div className={styles.propGroup}><label>Image</label><div className={styles.uploadBox} onClick={()=>triggerFileInput(selBlock.id)}>{selBlock.config.src?<img src={selBlock.config.src} alt="WM"/>:<div className={styles.uploadLabel}><Upload size={20}/> <span>Upload</span></div>}<input type="file" ref={(node)=>setFileRef(selBlock.id,node)} hidden onChange={(e)=>handleGenericUpload(e,selBlock.id,'src')} accept="image/*"/></div></div><div className={styles.propGroup}><label>Opacity</label><input type="range" min="5" max="30" value={selBlock.config.opacity||10} onChange={(e)=>updateBlockConfig(selBlock.id,'opacity',parseInt(e.target.value,10))}/></div></>}
+        {selBlock.type === 'col_group' && <><div className={styles.propGroup}><label>Ratio</label><select className={styles.sSelect} value={selBlock.config.ratio||'50/50'} onChange={(e)=>updateBlockConfig(selBlock.id,'ratio',e.target.value)}><option value="50/50">50/50</option><option value="60/40">60/40</option><option value="70/30">70/30</option></select></div><div className={styles.propGroup}><label>Left</label><select className={styles.sSelect} value={selBlock.config.leftId||''} onChange={(e)=>updateBlockConfig(selBlock.id,'leftId',e.target.value)}><option value="">Select</option>{activeBlocks.filter(b=>b.id!==selBlock.id&&b.type!=='watermark').map(b=><option key={b.id} value={b.id}>{BLOCK_TYPES.find(t=>t.type===b.type)?.label}</option>)}</select></div><div className={styles.propGroup}><label>Right</label><select className={styles.sSelect} value={selBlock.config.rightId||''} onChange={(e)=>updateBlockConfig(selBlock.id,'rightId',e.target.value)}><option value="">Select</option>{activeBlocks.filter(b=>b.id!==selBlock.id&&b.type!=='watermark').map(b=><option key={b.id} value={b.id}>{BLOCK_TYPES.find(t=>t.type===b.type)?.label}</option>)}</select></div></>}
+      </>
     );
   };
 
-  const renderGlobalDesigner = () => (
-    <>
-      {renderSelectedSettings()}
-      <div className={styles.propDivider}>Templates</div>
-      <div className={styles.templateGrid}>
-        {TEMPLATES.map((t) => (
-          <div key={t.id} className={`${styles.templateCard} ${design.layout === t.id ? styles.tActive : ''}`} onClick={() => dispatch({ type: 'SET_DESIGN', payload: { layout: t.id } })}>
-            <div className={styles.tThumbnail} data-id={t.id} />
-            <span>{t.name}</span>
-          </div>
-        ))}
-      </div>
-      <div className={styles.propDivider}>Section Explorer</div>
-      <div className={styles.blockExplorer}>
-        {activeBlocks.map((b, i) => (
-          <div key={b.id} draggable onDragStart={() => onDragStart(i, b)} onDragOver={onDragOver} onDrop={() => onDrop(i)} className={`${styles.explorerItem} ${selBlockId === b.id ? styles.eActive : ''}`} onClick={() => dispatch({ type: 'SET_SELECTED_BLOCK', payload: b.id })}>
-            <GripVertical size={14} className={styles.eGrip} />
-            <span>{BLOCK_TYPES.find((t) => t.type === b.type)?.label || b.type}</span>
-          </div>
-        ))}
-      </div>
-      <div className={styles.propDivider}>Insert Section</div>
-      <div className={styles.blockPalette}>
-        {BLOCK_TYPES.map((t) => (
-          <button key={t.type} className={styles.pBlockBtn} onClick={() => addBlock(t.type)}>
-            {t.icon}
-            <span>{t.label.split(' ')[0]}</span>
-          </button>
-        ))}
-      </div>
-    </>
-  );
 
+  const selBlock = activeBlocks.find((b) => b.id === selBlockId);
   const pageSizeClass = design.paperSize === 'A5' ? styles.paperA5 : (design.paperSize === 'Letter' ? styles.paperLetter : styles.paperA4);
 
   return (
-    <div className={`${styles.builderContainer} ${isPrintPreview ? styles.printPreviewMode : ''}`} onClick={() => dispatch({ type: 'SET_SELECTED_BLOCK', payload: null })}>
-      {!isPrintPreview && <div className={styles.newSidebar} onClick={(e) => e.stopPropagation()}>{renderGlobalDesigner()}</div>}
+    <div className={`${styles.builderContainer} ${selBlockId && !isPrintPreview ? styles.hasRightPanel : ''} ${isPrintPreview ? styles.printPreviewMode : ''}`} onClick={() => dispatch({ type: 'SET_SELECTED_BLOCK', payload: null })}>
+      {/* ─── MS Word Top Toolbar ─── */}
+      {!isPrintPreview && (
+        <div className={styles.wordToolbar} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.tbGroup}>
+            <button className={styles.backBtn} onClick={onBack}><ChevronLeft size={16}/> Back</button>
+          </div>
+          <div className={styles.tbGroup}>
+            <button className={styles.tbBtn} onClick={() => dispatch({ type: 'UNDO' })} disabled={!canUndo}><RotateCcw size={14}/></button>
+            <button className={styles.tbBtn} onClick={() => dispatch({ type: 'REDO' })} disabled={!canRedo}><RotateCw size={14}/></button>
+          </div>
+          {selBlock && ['remarks','custom_field'].includes(selBlock.type) && (
+            <div className={styles.tbGroup}>
+              <button className={styles.tbBtn} onClick={() => applyRichCommand(selBlock.id, 'bold')}><Bold size={14}/></button>
+              <button className={styles.tbBtn} onClick={() => applyRichCommand(selBlock.id, 'italic')}><Italic size={14}/></button>
+              <button className={styles.tbBtn} onClick={() => applyRichCommand(selBlock.id, 'underline')}><Underline size={14}/></button>
+              <input type="color" className={styles.tbSelect} style={{width:28,padding:2,height:28}} onChange={(e) => applyRichCommand(selBlock.id, 'foreColor', e.target.value)} title="Text Color"/>
+              <select className={styles.tbSelect} onChange={(e) => applyRichCommand(selBlock.id, 'fontName', e.target.value)} defaultValue={selBlock.config.fontFamily||'Arial'}>{FONT_OPTIONS.map(f=><option key={f} value={f}>{f}</option>)}</select>
+            </div>
+          )}
+          {selBlock && (
+            <div className={styles.tbGroup}>
+              <button className={`${styles.tbBtn} ${selBlock.config.align==='left'?styles.tbBtnActive:''}`} onClick={()=>updateBlockConfig(selBlockId,'align','left')}><AlignLeft size={14}/></button>
+              <button className={`${styles.tbBtn} ${selBlock.config.align==='center'?styles.tbBtnActive:''}`} onClick={()=>updateBlockConfig(selBlockId,'align','center')}><AlignCenter size={14}/></button>
+              <button className={`${styles.tbBtn} ${selBlock.config.align==='right'?styles.tbBtnActive:''}`} onClick={()=>updateBlockConfig(selBlockId,'align','right')}><AlignRight size={14}/></button>
+            </div>
+          )}
+          <div className={styles.tbGroup} style={{marginLeft:'auto', borderRight:'none'}}>
+            <button className={styles.tbBtn} onClick={loadTemplates}><Upload size={14}/> Templates</button>
+            <button className={styles.tbBtn} onClick={saveTemplate}><Save size={14}/> Save</button>
+            <button className={styles.tbBtn} onClick={() => setIsPrintPreview(true)}><Printer size={14}/> Preview</button>
+            <button className={styles.tbBtn} onClick={exportSinglePDF}><Download size={14}/> Export PDF</button>
+            <button className={styles.tbBtn} onClick={generateAll} disabled={bulkProgress.running}><Printer size={14}/> Generate</button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Left Panel (Tabbed) ─── */}
+      {!isPrintPreview && (
+        <div className={styles.newSidebar} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.panelTabs}>
+            <button className={`${styles.panelTab} ${leftTab==='blocks'?styles.panelTabActive:''}`} onClick={()=>setLeftTab('blocks')}>Blocks</button>
+            <button className={`${styles.panelTab} ${leftTab==='explorer'?styles.panelTabActive:''}`} onClick={()=>setLeftTab('explorer')}>Explorer</button>
+          </div>
+          <div className={styles.panelBody}>
+            {leftTab === 'blocks' && (
+              <>
+                <div className={styles.blockPalette}>
+                  {BLOCK_TYPES.map((t) => (
+                    <button key={t.type} className={styles.pBlockBtn} onClick={() => addBlock(t.type)}>
+                      {t.icon}
+                      <span>{t.label.split(' ')[0]}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className={styles.propDivider}>Templates</div>
+                <div className={styles.templateGrid}>
+                  {TEMPLATES.map((t) => (
+                    <div key={t.id} className={`${styles.templateCard} ${design.layout === t.id ? styles.tActive : ''}`} onClick={() => dispatch({ type: 'SET_DESIGN', payload: { layout: t.id } })}>
+                      <div className={styles.tThumbnail} data-id={t.id} />
+                      <span>{t.name}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className={styles.propDivider}>Settings</div>
+                <Accordion id="global" title="Page & Theme" icon={<Palette size={14}/>} isOpen={openAccordions['global']} onToggle={toggleAccordion}>
+                  <div className={styles.propGroup}><label className={styles.sLabel}>Theme Accent</label><div className={styles.accentRow}>{ACCENT_PRESETS.map(a=>(<button key={a.name} style={{background:a.primary}} className={`${styles.accentCell} ${design.accent.primary===a.primary?styles.aActive:''}`} onClick={()=>dispatch({type:'SET_DESIGN',payload:{accent:a}})}/>))}</div></div>
+                  <div className={styles.propGroup}><label className={styles.sLabel}>Page Size</label><select className={styles.sSelect} value={design.paperSize} onChange={(e)=>dispatch({type:'SET_DESIGN',payload:{paperSize:e.target.value}})}><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select></div>
+                  <div className={styles.propGroup}><label className={styles.sLabel} style={{display:'flex',justifyContent:'space-between'}}>Grid <input type="checkbox" checked={design.showGrid} onChange={(e)=>dispatch({type:'SET_DESIGN',payload:{showGrid:e.target.checked}})}/></label></div>
+                </Accordion>
+
+                <Accordion id="grading" title="Grading Systems" icon={<Award size={14}/>} isOpen={openAccordions['grading']} onToggle={toggleAccordion}>
+                  <div className={styles.propGroup}>
+                    <label className={styles.sLabel}>Select System</label>
+                    <div style={{display:'flex', gap:4}}>
+                      <select className={styles.sSelect} style={{flex:1}} value={editingGradeSys} onChange={(e)=>setEditingGradeSys(e.target.value)}>
+                        {Object.keys(design.gradeSystems).map(k=><option key={k} value={k}>{k}</option>)}
+                      </select>
+                      <button className={styles.compactBtn} onClick={()=>{
+                        setPromptModal({
+                          open: true,
+                          title: 'New Grading System',
+                          placeholder: 'System name (e.g. CBSE 2024)',
+                          initialValue: '',
+                          onConfirm: (name) => {
+                            if(name) {
+                              dispatch({type:'SET_DESIGN', payload:{ gradeSystems: {...design.gradeSystems, [name]: [{min:0, g:'F', gp:0, hex:'#dc2626'}]} }});
+                              setEditingGradeSys(name);
+                            }
+                          }
+                        });
+                      }}><Plus size={14}/></button>
+                    </div>
+                  </div>
+                  <div className={styles.legendEditorList}>
+                    {(design.gradeSystems[editingGradeSys] || []).map((row, idx) => (
+                      <div key={idx} className={styles.legendEditorRow}>
+                        <input type="number" className={styles.sInput} style={{width:45}} value={row.min} onChange={(e)=>{
+                          const next = [...design.gradeSystems[editingGradeSys]];
+                          next[idx] = {...next[idx], min: parseInt(e.target.value,10)||0};
+                          dispatch({type:'SET_DESIGN', payload:{ gradeSystems: {...design.gradeSystems, [editingGradeSys]: next.sort((a,b)=>b.min - a.min)} }});
+                        }} placeholder="Min%"/>
+                        <input className={styles.sInput} style={{flex:1}} value={row.g} onChange={(e)=>{
+                          const next = [...design.gradeSystems[editingGradeSys]];
+                          next[idx] = {...next[idx], g: e.target.value};
+                          dispatch({type:'SET_DESIGN', payload:{ gradeSystems: {...design.gradeSystems, [editingGradeSys]: next} }});
+                        }} placeholder="Grade"/>
+                        <input type="number" step="0.1" className={styles.sInput} style={{width:40}} value={row.gp} onChange={(e)=>{
+                          const next = [...design.gradeSystems[editingGradeSys]];
+                          next[idx] = {...next[idx], gp: parseFloat(e.target.value)||0};
+                          dispatch({type:'SET_DESIGN', payload:{ gradeSystems: {...design.gradeSystems, [editingGradeSys]: next} }});
+                        }} placeholder="GP"/>
+                        <input type="color" className={styles.sInput} style={{width:30, padding:2}} value={row.hex} onChange={(e)=>{
+                          const next = [...design.gradeSystems[editingGradeSys]];
+                          next[idx] = {...next[idx], hex: e.target.value};
+                          dispatch({type:'SET_DESIGN', payload:{ gradeSystems: {...design.gradeSystems, [editingGradeSys]: next} }});
+                        }} />
+                        <button className={styles.compactBtn} onClick={()=>{
+                           const next = design.gradeSystems[editingGradeSys].filter((_, i)=>i!==idx);
+                           dispatch({type:'SET_DESIGN', payload:{ gradeSystems: {...design.gradeSystems, [editingGradeSys]: next} }});
+                        }}><Trash2 size={12}/></button>
+                      </div>
+                    ))}
+                    <button className={styles.compactBtn} style={{width:'100%', marginTop:4}} onClick={()=>{
+                      const next = [...(design.gradeSystems[editingGradeSys]||[]), {min:0, g:'New', gp:0, hex:'#000000'}];
+                      dispatch({type:'SET_DESIGN', payload:{ gradeSystems: {...design.gradeSystems, [editingGradeSys]: next.sort((a,b)=>b.min - a.min)} }});
+                    }}>+ Add Range</button>
+                  </div>
+                </Accordion>
+                <Accordion id="preview" title="Preview Student" icon={<UserSquare size={14}/>} isOpen={openAccordions['preview']} onToggle={toggleAccordion}>
+                  <select className={styles.sSelect} value={selClass} onChange={(e)=>dispatch({type:'SET_CLASS',payload:e.target.value})}>{CLASSES.map(c=><option key={c}>{c}</option>)}</select>
+                  <select className={styles.sSelect} value={selStudent?.id||''} onChange={(e)=>dispatch({type:'SET_STUDENT',payload:(STUDENTS[selClass]||[]).find(s=>s.id===parseInt(e.target.value,10))||null})}>{(STUDENTS[selClass]||[]).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
+                </Accordion>
+              </>
+            )}
+            {leftTab === 'explorer' && (
+              <div className={styles.blockExplorer}>
+                {activeBlocks.map((b, i) => (
+                  <div key={b.id} draggable onDragStart={() => onDragStart(i, b)} onDragOver={onDragOver} onDrop={() => onDrop(i)} className={`${styles.explorerItem} ${selBlockId === b.id ? styles.eActive : ''}`} onClick={() => dispatch({ type: 'SET_SELECTED_BLOCK', payload: b.id })}>
+                    <GripVertical size={14} className={styles.eGrip} />
+                    <span>{BLOCK_TYPES.find((t) => t.type === b.type)?.label || b.type}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Canvas ─── */}
       <div className={styles.canvasArea}>
-        {!isPrintPreview && <div className={styles.canvasTopBar}><div className={styles.bread}>{activeBlocks.find((b) => b.type === 'header')?.config.schoolName || 'New Template'}</div><div className={styles.topActions}><button className={styles.compactBtn} onClick={() => dispatch({ type: 'UNDO' })} disabled={!canUndo}><RotateCcw size={14} /> Undo</button><button className={styles.compactBtn} onClick={() => dispatch({ type: 'REDO' })} disabled={!canRedo}><RotateCw size={14} /> Redo</button><button className={styles.compactBtn} onClick={generateAll} disabled={bulkProgress.running}><Printer size={14} /> Generate All</button><button className={styles.compactBtn} onClick={() => setIsPrintPreview(true)}><Printer size={14} /> Print Draft</button><button className={styles.compactBtn} onClick={saveTemplate}><Save size={14} /> Save Progress</button></div></div>}
         {isPrintPreview && <button className={styles.compactBtn} style={{ position: 'absolute', top: 12, right: 12, zIndex: 30 }} onClick={() => setIsPrintPreview(false)}>Exit Preview</button>}
         <div className={styles.canvasScroll}><div 
           ref={canvasPageRef} 
-          className={`${styles.canvasPage} ${styles[design.layout]} ${pageSizeClass} ${design.showGrid ? styles.showGrid : ''}`}
+          className={`${styles.canvasPage} ${styles[design.layout]} ${pageSizeClass} ${design.showGrid && !isPrintPreview ? styles.showGrid : ''} ${isPrintPreview ? styles.printPreviewMode : ''}`}
           style={{ '--grid-size': `${design.gridSize || 2}%` }}
         >{watermarkBlocks.map((b, i) => renderBlock(b, i))}{topLevelBlocks.map((b, i) => renderBlock(b, i))}</div></div>
         {bulkProgress.running && <div style={{ padding: '8px 16px', background: '#fff', borderTop: '1px solid #e2e8f0' }}><div style={{ fontSize: '0.72rem', fontWeight: 800 }}>Generating {bulkProgress.current} of {bulkProgress.total}...</div><div style={{ width: '100%', height: 6, borderRadius: 99, background: '#e2e8f0', marginTop: 4 }}><div style={{ width: `${(bulkProgress.current / Math.max(1, bulkProgress.total)) * 100}%`, height: '100%', borderRadius: 99, background: design.accent.primary }} /></div></div>}
       </div>
+
+      {/* ─── Right Context Panel ─── */}
+      {selBlockId && !isPrintPreview && selBlock && (
+        <div className={styles.contextPanel} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.contextHeader}>
+            <h3>Edit {BLOCK_TYPES.find(t=>t.type===selBlock.type)?.label || selBlock.type}</h3>
+            <button className={styles.contextClose} onClick={() => dispatch({ type: 'SET_SELECTED_BLOCK', payload: null })}><X size={16}/></button>
+          </div>
+          <div className={styles.contextBody}>
+            {/* Content-specific settings (always open) */}
+            {renderSelectedSettings()}
+
+            {/* Layout accordion (collapsed by default) */}
+            <Accordion id="layout" title="Advanced Styling" icon={<Palette size={14}/>} isOpen={openAccordions['layout']} onToggle={toggleAccordion}>
+              <div className={styles.propGroup}><label>Width</label><div className={styles.layoutToggleRow}><button className={`${styles.layoutBtn} ${selBlock.config.width==='full'?styles.lbActive:''}`} onClick={()=>updateBlockConfig(selBlockId,'width','full')}>Full</button><button className={`${styles.layoutBtn} ${selBlock.config.width==='half'?styles.lbActive:''}`} onClick={()=>updateBlockConfig(selBlockId,'width','half')}>1/2</button><button className={`${styles.layoutBtn} ${selBlock.config.width==='third'?styles.lbActive:''}`} onClick={()=>updateBlockConfig(selBlockId,'width','third')}>1/3</button><button className={`${styles.layoutBtn} ${selBlock.config.width==='fourth'?styles.lbActive:''}`} onClick={()=>updateBlockConfig(selBlockId,'width','fourth')}>1/4</button></div></div>
+              <div className={styles.propGroup}><label>Background</label><div className={styles.accentRow}>{BG_PRESETS.map(bg=><button key={bg.name} style={{background:bg.hex==='transparent'?'#fff':bg.hex,border:bg.hex==='transparent'?'1px dashed #cbd5e1':'none'}} className={`${styles.accentCell} ${selBlock.config.bg===bg.hex?styles.aActive:''}`} onClick={()=>updateBlockConfig(selBlockId,'bg',bg.hex)} title={bg.name}/>)}</div></div>
+              <div className={styles.inputRow}><div className={styles.inputGroup}><label>Rounding</label><input type="range" min="0" max="30" value={selBlock.config.radius||0} onChange={(e)=>updateBlockConfig(selBlockId,'radius',Number(e.target.value))}/></div><div className={styles.inputGroup}><label>Border Style</label><select className={styles.sSelect} value={selBlock.config.borderStyle||'solid'} onChange={(e)=>updateBlockConfig(selBlockId,'borderStyle',e.target.value)}><option value="solid">solid</option><option value="dashed">dashed</option><option value="dotted">dotted</option></select></div></div>
+              <div className={styles.propGroup}><label>Border Color</label><input className={styles.sInput} type="color" value={selBlock.config.borderColor||'#e2e8f0'} onChange={(e)=>updateBlockConfig(selBlockId,'borderColor',e.target.value)}/></div>
+              <div className={styles.propGroup}><label>Border Sides</label><div className={styles.borderSideToggles}><button className={`${styles.layoutBtn} ${selBlock.config.borderSides?.top?styles.lbActive:''}`} onClick={()=>handleToggleBorderSide(selBlockId,'top')}>Top</button><button className={`${styles.layoutBtn} ${selBlock.config.borderSides?.right?styles.lbActive:''}`} onClick={()=>handleToggleBorderSide(selBlockId,'right')}>Right</button><button className={`${styles.layoutBtn} ${selBlock.config.borderSides?.bottom?styles.lbActive:''}`} onClick={()=>handleToggleBorderSide(selBlockId,'bottom')}>Bottom</button><button className={`${styles.layoutBtn} ${selBlock.config.borderSides?.left?styles.lbActive:''}`} onClick={()=>handleToggleBorderSide(selBlockId,'left')}>Left</button></div></div>
+              <div className={styles.propGroup}><label>Padding (px)</label><div className={styles.paddingInputs}><input type="number" min="0" max="60" value={selBlock.config.padding?.top??6} onChange={(e)=>handlePaddingChange(selBlockId,'top',e.target.value)} placeholder="Top"/><input type="number" min="0" max="60" value={selBlock.config.padding?.right??6} onChange={(e)=>handlePaddingChange(selBlockId,'right',e.target.value)} placeholder="Right"/><input type="number" min="0" max="60" value={selBlock.config.padding?.bottom??6} onChange={(e)=>handlePaddingChange(selBlockId,'bottom',e.target.value)} placeholder="Bottom"/><input type="number" min="0" max="60" value={selBlock.config.padding?.left??6} onChange={(e)=>handlePaddingChange(selBlockId,'left',e.target.value)} placeholder="Left"/></div></div>
+            </Accordion>
+
+            <Accordion id="typography" title="Typography" icon={<TextQuote size={14}/>} isOpen={openAccordions['typography']} onToggle={toggleAccordion}>
+              <div className={styles.inputRow}><div className={styles.inputGroup}><label>Title Size</label><select className={styles.sSelect} value={selBlock.config.titleSize} onChange={(e)=>updateBlockConfig(selBlockId,'titleSize',e.target.value)}><option value="0.7rem">Small</option><option value="0.75rem">Normal</option><option value="1rem">Heading 3</option><option value="1.3rem">Heading 1</option></select></div><div className={styles.inputGroup}><label>Weight</label><select className={styles.sSelect} value={selBlock.config.titleWeight} onChange={(e)=>updateBlockConfig(selBlockId,'titleWeight',e.target.value)}><option value="400">Regular</option><option value="700">Bold</option><option value="900">Black</option></select></div></div>
+              <div className={styles.inputRow}><div className={styles.inputGroup}><label>Title Color</label><input className={styles.sInput} type="color" value={selBlock.config.titleColor||'#1e293b'} onChange={(e)=>updateBlockConfig(selBlockId,'titleColor',e.target.value)}/></div><div className={styles.inputGroup}><label>Content Color</label><input className={styles.sInput} type="color" value={selBlock.config.contentColor||'#475569'} onChange={(e)=>updateBlockConfig(selBlockId,'contentColor',e.target.value)}/></div></div>
+              <div className={styles.propGroup}><label>Font</label><select className={styles.sSelect} value={selBlock.config.fontFamily||'Arial'} onChange={(e)=>updateBlockConfig(selBlockId,'fontFamily',e.target.value)}>{FONT_OPTIONS.map(f=><option key={f} value={f}>{f}</option>)}</select></div>
+            </Accordion>
+
+            <Accordion id="position" title="Layout Mode" icon={<Move size={14}/>} isOpen={openAccordions['position']} onToggle={toggleAccordion}>
+              <div className={styles.layoutToggleRow}>
+                <button className={`${styles.layoutBtn} ${!selBlock.config.freeMove?styles.lbActive:''}`} onClick={()=>updateConfig(selBlock.id,{freeMove:false})}><List size={14}/> Stack</button>
+                <button className={`${styles.layoutBtn} ${selBlock.config.freeMove?styles.lbActive:''}`} onClick={()=>updateConfig(selBlock.id,{freeMove:true,floatWidth:Number(selBlock.config.floatWidth||defaultFloatWidth(selBlock.config.width))})}><Move size={14}/> Free</button>
+              </div>
+              {selBlock.config.freeMove && (
+                <div className={styles.paddingInputs} style={{marginTop:8}}>
+                  <div className={styles.inputGroup}><label>X %</label><input type="number" min="0" max="100" value={Math.round(selBlock.config.posX||0)} onChange={(e)=>updateBlockConfig(selBlock.id,'posX',Number(e.target.value||0))}/></div>
+                  <div className={styles.inputGroup}><label>Y %</label><input type="number" min="0" max="100" value={Math.round(selBlock.config.posY||0)} onChange={(e)=>updateBlockConfig(selBlock.id,'posY',Number(e.target.value||0))}/></div>
+                  <div className={styles.inputGroup}><label>Width %</label><input type="number" min="10" max="95" value={Math.round(selBlock.config.floatWidth||defaultFloatWidth(selBlock.config.width))} onChange={(e)=>updateBlockConfig(selBlock.id,'floatWidth',Number(e.target.value||20))}/></div>
+                </div>
+              )}
+            </Accordion>
+
+            <button className={styles.deleteMain} onClick={() => removeBlock(selBlockId)}><Trash2 size={16}/> Delete Section</button>
+          </div>
+        </div>
+      )}
+
       {toastMsg && <div className={styles.toastSuccess}>{toastMsg}</div>}
+      
+      {promptModal.open && (
+        <div className={styles.modalBackdrop} onClick={() => setPromptModal({ ...promptModal, open: false })}>
+          <div className={styles.modalContent} style={{ width: 400 }} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>{promptModal.title}</h3>
+              <button className={styles.modalClose} onClick={() => setPromptModal({ ...promptModal, open: false })}><X size={20} /></button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <input 
+                className={styles.sInput} 
+                autoFocus 
+                placeholder={promptModal.placeholder}
+                defaultValue={promptModal.initialValue}
+                id="prompt-input"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    promptModal.onConfirm(e.target.value);
+                    setPromptModal({ ...promptModal, open: false });
+                  }
+                }}
+              />
+              <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+                <button className={styles.ghostBtn} onClick={() => setPromptModal({ ...promptModal, open: false })}>Cancel</button>
+                <button className={styles.actionBtn} onClick={() => {
+                  const val = document.getElementById('prompt-input').value;
+                  promptModal.onConfirm(val);
+                  setPromptModal({ ...promptModal, open: false });
+                }}>OK</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {templateModalOpen && <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.35)', display: 'grid', placeItems: 'center', zIndex: 1000 }}><div style={{ width: 'min(520px, 95vw)', maxHeight: '80vh', overflow: 'auto', background: '#fff', borderRadius: 10, padding: 14, border: '1px solid #e2e8f0' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><h3 style={{ margin: 0, fontSize: '1rem' }}>Load Template</h3><button className={styles.compactBtn} onClick={() => setTemplateModalOpen(false)}>Close</button></div>{isLoadingTemplates ? <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Loader2 size={16} className={styles.spin} /> Loading...</div> : <div style={{ display: 'grid', gap: 8 }}>{templatesList.length === 0 && <div className={styles.pSub}>No templates found</div>}{templatesList.map((tpl) => <button key={tpl.id || tpl.name} className={styles.templateCard} style={{ width: '100%', alignItems: 'flex-start' }} onClick={() => applyTemplate(tpl)}><span>{tpl.name || `Template ${tpl.id}`}</span><small style={{ color: '#64748b' }}>{tpl.description || 'Click to apply this template'}</small></button>)}</div>}</div></div>}
     </div>
   );

@@ -23,7 +23,7 @@ class StaffSerializer(serializers.ModelSerializer):
     class Meta:
         model = Staff
         fields = [
-            'id', 'user', 'full_name', 'email', 'phone', 'employee_id',
+            'id', 'user', 'full_name', 'email', 'phone', 'employee_id', 'designation',
             'joining_date', 'status', 'is_teaching_staff', 'role_name',
             'user_role_id', 'is_active', 'experience_years', 'qualification',
             'first_name', 'last_name', 'teaching_subject_ids', 'teaching_subject_names',

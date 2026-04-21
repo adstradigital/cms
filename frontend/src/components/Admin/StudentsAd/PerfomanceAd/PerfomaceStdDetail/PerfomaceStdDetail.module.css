@@ -73,11 +73,13 @@
   padding: 10px 18px;
   background-color: var(--theme-bg);
   border: 1px solid var(--theme-border);
-  color: var(--theme-text-secondary);
+  color: var(--theme-text);
   border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
+  transition: all 0.2s;
 }
+.secondaryBtn:hover { background-color: var(--color-surface-hover); }
 
 /* Layout Grid */
 .grid {

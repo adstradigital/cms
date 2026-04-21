@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, parent_views
 
 urlpatterns = [
     # Auth
@@ -34,4 +34,12 @@ urlpatterns = [
     
     # Public Config
     path("school-config/", views.public_school_config_view, name="school_config"),
+
+    # Parent Portal Specific
+    path("parent/stats/", parent_views.parent_stats_view, name="parent_stats"),
+    path("parent/children/", parent_views.parent_children_view, name="parent_children"),
+    path("parent/child/<int:child_id>/progress/", parent_views.child_progress_view, name="child_progress"),
+    path("parent/child/<int:child_id>/attendance/", parent_views.child_attendance_view, name="child_attendance"),
+    path("parent/child/<int:child_id>/fees/", parent_views.child_fees_view, name="child_fees"),
+    path("parent/child/<int:child_id>/homework/", parent_views.child_homework_view, name="child_homework"),
 ]

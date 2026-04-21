@@ -706,7 +706,17 @@ def test_start_attempt_view(request, test_pk):
     if not student:
         return Response({"error": "Student profile not found."}, status=status.HTTP_403_FORBIDDEN)
 
-    # Check attempt limit
+    # Check for an existing in-progress attempt to resume
+    in_progress_attempt = TestAttempt.objects.filter(
+        test=test, 
+        student=student, 
+        status="in_progress"
+    ).first()
+    
+    if in_progress_attempt:
+        return Response(TestAttemptSerializer(in_progress_attempt).data, status=status.HTTP_200_OK)
+
+    # Check attempt limit for NEW attempts
     existing_attempts = TestAttempt.objects.filter(test=test, student=student).count()
     if existing_attempts >= test.max_attempts:
         return Response({"error": f"Maximum attempts ({test.max_attempts}) reached."}, status=status.HTTP_400_BAD_REQUEST)
@@ -803,6 +813,13 @@ def test_attempt_detail_view(request, attempt_pk):
     except TestAttempt.DoesNotExist:
         return Response({"error": "Attempt not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    # Security: Only allow student to see their own attempt, or staff to see all
+    if not request.user.is_staff:
+        # Check if student exists and belongs to this user
+        student = Student.objects.filter(user=request.user).first()
+        if not student or attempt.student != student:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
     return Response(TestAttemptSerializer(attempt).data)
 
 
@@ -842,4 +859,19 @@ def test_publish_result_view(request, attempt_pk):
     attempt.status = "published"
     attempt.save(update_fields=["status"])
     return Response({"message": "Result published.", "status": "published"})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_test_attempts_view(request):
+    """Students list their own test attempts."""
+    try:
+        student = Student.objects.filter(user=request.user).first()
+        if not student:
+            return Response({"error": "Student profile not found."}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = TestAttempt.objects.filter(student=student).select_related("test", "test__subject")
+        return Response(TestAttemptListSerializer(qs, many=True).data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, Trash2, GripVertical, CheckCircle, List, Type, Image, FileText, X } from 'lucide-react';
+import { Plus, Save, Trash2, GripVertical, CheckCircle, List, Type, Image, FileText, X, Edit3 } from 'lucide-react';
 import styles from './OnlineTest.module.css';
 import adminApi from '@/api/adminApi';
 
@@ -119,7 +119,12 @@ export default function TestBuilder({ testId, onBack }) {
                   <strong>Q{idx + 1}.</strong> {q.question_type !== 'divider' && `(${q.marks} marks)`}
                 </div>
                 <div style={{display: 'flex', gap: 8}}>
-                   <button className={styles.actionBtn} onClick={() => setEditingQ(q)}><Edit3 size={14}/></button>
+                   <button className={styles.actionBtn} onClick={() => {
+                     setEditingQ({
+                       ...q,
+                       choices_data: q.choices?.map(c => ({ text: c.text, is_correct: c.is_correct })) || []
+                     });
+                   }}><Edit3 size={14}/></button>
                    <button className={styles.actionBtn} style={{color: '#EF4444'}} onClick={() => handleDelete(q.id)}><Trash2 size={14}/></button>
                 </div>
               </div>
@@ -187,7 +192,7 @@ export default function TestBuilder({ testId, onBack }) {
                         type={editingQ.question_type === 'mcq_single' ? 'radio' : 'checkbox'} 
                         checked={choice.is_correct}
                         onChange={(e) => {
-                           const newChoices = [...editingQ.choices_data];
+                           const newChoices = [...(editingQ.choices_data || [])];
                            if(editingQ.question_type === 'mcq_single'){
                               newChoices.forEach(c => c.is_correct = false);
                            }
@@ -201,17 +206,17 @@ export default function TestBuilder({ testId, onBack }) {
                         className={styles.formInput} 
                         value={choice.text}
                         onChange={e => {
-                          const newChoices = [...editingQ.choices_data];
+                          const newChoices = [...(editingQ.choices_data || [])];
                           newChoices[i].text = e.target.value;
                           setEditingQ({...editingQ, choices_data: newChoices});
                         }}
                       />
                       <button type="button" className={styles.actionBtn} onClick={() => {
-                        const newC = [...editingQ.choices_data]; newC.splice(i, 1); setEditingQ({...editingQ, choices_data: newC});
+                        const newC = [...(editingQ.choices_data || [])]; newC.splice(i, 1); setEditingQ({...editingQ, choices_data: newC});
                       }}><Trash2 size={16}/></button>
                     </div>
                   ))}
-                  <button type="button" className={styles.actionBtn} onClick={() => setEditingQ({...editingQ, choices_data: [...editingQ.choices_data, {text:'', is_correct:false}]})}>
+                  <button type="button" className={styles.actionBtn} onClick={() => setEditingQ({...editingQ, choices_data: [...(editingQ.choices_data || []), {text:'', is_correct:false}]})}>
                     + Add Option
                   </button>
                 </div>

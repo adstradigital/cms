@@ -1,0 +1,415 @@
+/* ─── Global Finance Token Overrides for unified clean UI ─── */
+.financeModule {
+  --finance-bg: #f0f4f9;
+  --finance-card: #ffffff;
+  --finance-text: #171c20;
+  --finance-text-muted: #45474c;
+  --finance-text-light: #8590a6;
+  
+  --finance-primary: #091426;
+  --finance-primary-hover: #1e293b;
+  
+  --finance-border: #dfe3e8;
+  --finance-border-input: #c5c6cd;
+  
+  --finance-success-bg: #d1fae5;
+  --finance-success-text: #065f46;
+  
+  --finance-warning-bg: #fef3c7;
+  --finance-warning-text: #92400e;
+  
+  --finance-danger-bg: #fee2e2;
+  --finance-danger-text: #dc2626;
+
+  /* Typography */
+  --font-base: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Manrope', 'Inter', system-ui, sans-serif;
+
+  background-color: var(--finance-bg);
+  min-height: calc(100vh - 60px);
+  padding: 32px;
+  font-family: var(--font-base);
+  color: var(--finance-text);
+}
+
+/* ─── Page Header ─── */
+.pageHeader {
+  margin-bottom: 24px;
+}
+.pageTitle {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--finance-text);
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+.pageSubtitle {
+  font-size: 14px;
+  color: var(--finance-text-muted);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* ─── Tabs Navigation ─── */
+.tabsContainer {
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--finance-border);
+}
+.tabsList {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+}
+.tabBtn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--finance-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.tabBtn:hover {
+  color: var(--finance-primary);
+  background-color: rgba(9, 20, 38, 0.03);
+}
+.activeTab {
+  color: var(--finance-primary);
+  border-bottom-color: var(--finance-primary);
+}
+.tabIcon {
+  display: flex;
+  align-items: center;
+  color: inherit;
+}
+
+/* ─── Split Layout ─── */
+.splitLayout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+.leftColumn {
+  width: 400px;
+  flex-shrink: 0;
+}
+.rightColumn {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .splitLayout { flex-direction: column; }
+  .leftColumn { width: 100%; }
+}
+
+/* ─── Cards ─── */
+.card {
+  background-color: var(--finance-card);
+  border: 1px solid var(--finance-border);
+  border-radius: 8px;
+  padding: 24px;
+  height: 100%;
+}
+.cardHeader {
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--finance-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.cardTitle {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--finance-text);
+  margin: 0;
+}
+.cardSubtitle {
+  font-size: 13px;
+  color: var(--finance-text-muted);
+  margin-top: 4px;
+}
+
+/* ─── Forms ─── */
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.formRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.formRow .formGroup {
+  flex: 1;
+  margin-bottom: 0;
+}
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--finance-text-muted);
+}
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  background-color: #f6faff;
+  border: 1px solid var(--finance-border-input);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--finance-text);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.input:focus {
+  border-color: var(--finance-primary);
+  background-color: #fff;
+}
+.inputWithIcon { padding-left: 36px; }
+.inputIcon {
+  position: absolute;
+  left: 10px;
+  color: #75777d;
+}
+.inputPrefix {
+  position: absolute;
+  left: 12px;
+  color: #75777d;
+  font-size: 14px;
+  font-family: monospace;
+}
+.numberInput {
+  font-family: monospace;
+  text-align: right;
+}
+.select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 32px;
+}
+.selectArrow {
+  position: absolute;
+  right: 12px;
+  color: #75777d;
+  pointer-events: none;
+}
+.textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ─── Radio / Toggle Grid ─── */
+.radioGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+.methodBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--finance-border-input);
+  border-radius: 6px;
+  padding: 10px;
+  cursor: pointer;
+  background-color: transparent;
+  color: var(--finance-text);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.methodBtn:hover {
+  background-color: var(--finance-bg);
+}
+.methodSelected {
+  border: 2px solid var(--finance-primary);
+  background-color: rgba(9, 20, 38, 0.04);
+}
+.srOnly {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
+}
+
+/* ─── Buttons ─── */
+.submitBtn {
+  width: 100%;
+  background-color: var(--finance-primary);
+  color: var(--finance-card);
+  border: none;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+  transition: background-color 0.2s;
+}
+.submitBtn:hover {
+  background-color: var(--finance-primary-hover);
+}
+.submitBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnPrimary {
+  background-color: var(--finance-primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btnPrimary:hover { background-color: var(--finance-primary-hover); }
+.btnSecondary {
+  background-color: transparent;
+  color: var(--finance-text);
+  border: 1px solid var(--finance-border-input);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btnSecondary:hover { background-color: var(--finance-bg); }
+
+/* ─── Tables ─── */
+.tableResponsive {
+  overflow-x: auto;
+  margin: 0 -24px -24px -24px; /* Extends to edge of card */
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 750px;
+  text-align: left;
+}
+.table th {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--finance-text-muted);
+  padding: 14px 24px;
+  background-color: #f6faff;
+  border-bottom: 2px solid var(--finance-border);
+  border-top: 1px solid var(--finance-border);
+  white-space: nowrap;
+}
+.table td {
+  padding: 14px 24px;
+  font-size: 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--finance-text);
+}
+.table tr:last-child td {
+  border-bottom: none;
+}
+.table tr:hover td {
+  background-color: #fafbfc;
+}
+
+.fontMono { font-family: monospace; }
+.textRight { text-align: right; }
+.textCenter { text-align: center; }
+.textBold { font-weight: 600; }
+.textSub { color: var(--finance-text-muted); font-size: 13px; display: block; margin-top: 2px; }
+
+/* ─── Badges ─── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: #f1f5f9;
+  color: #475569;
+}
+.badgePaid { background-color: var(--finance-success-bg); color: var(--finance-success-text); }
+.badgePending { background-color: var(--finance-warning-bg); color: var(--finance-warning-text); }
+.badgeDanger { background-color: var(--finance-danger-bg); color: var(--finance-danger-text); }
+
+/* ─── Shared Utilities ─── */
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.iconBtn {
+  background: none;
+  border: 1px solid var(--finance-border);
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--finance-text-muted);
+  display: inline-flex;
+  transition: all 0.2s;
+}
+.iconBtn:hover { background-color: var(--finance-bg); color: var(--finance-text); }
+.iconBtnDanger:hover { background-color: var(--finance-danger-bg); color: var(--finance-danger-text); border-color: transparent; }
+
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--finance-text-muted);
+  font-size: 14px;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px;
+  color: var(--finance-text-muted);
+  font-weight: 600;
+  font-size: 14px;
+}
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Modals ─── */
+.overlay { position: fixed; inset: 0; background: rgba(9, 20, 38, 0.4); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
+.modal { background: var(--finance-card); border-radius: 8px; width: 100%; max-width: 520px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); animation: pop 0.22s ease; overflow: hidden; }
+@keyframes pop { from { opacity:0; transform:scale(0.96) translateY(10px); } to { opacity:1; transform:none; } }
+.modalHeader { padding: 20px 24px; border-bottom: 1px solid var(--finance-border); display: flex; align-items: center; justify-content: space-between; background: #fafbfc; }
+.modalTitle { font-size: 16px; font-weight: 700; color: var(--finance-text); font-family: var(--font-heading); margin: 0; }
+.modalClose { background: none; border: none; color: var(--finance-text-muted); cursor: pointer; padding: 4px; border-radius: 4px; display: flex; }
+.modalClose:hover { background: var(--finance-border); }
+.modalBody { padding: 24px; max-height: 70vh; overflow-y: auto; }
+.modalFooter { padding: 16px 24px; border-top: 1px solid var(--finance-border); display: flex; justify-content: flex-end; gap: 12px; background: #fafbfc; }

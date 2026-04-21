@@ -100,8 +100,16 @@ const menuSections = {
             { label: 'Learning Materials', href: '/student/assignments?view=materials' }
           ]
         },
-        { label: 'Results', href: '/student/results', icon: BarChart3 },
-        { label: 'Quiz Center', href: '/student/quizzes', icon: BrainCircuit },
+        { 
+          label: 'Results', 
+          href: '/student/results', 
+          icon: BarChart3,
+          subItems: [
+            { label: 'Academic Performance', href: '/student/results?view=academic' },
+            { label: 'Online Quiz History', href: '/student/results?view=online' }
+          ]
+        },
+        { label: 'Online Test', href: '/student/tests', icon: BrainCircuit },
         { label: 'Brain Games', href: '/student/brain-games', icon: Gamepad2 },
         { label: 'Fees', href: '/student/fees', icon: CreditCard },
       ]
@@ -112,8 +120,12 @@ const menuSections = {
       title: 'MAIN',
       items: [
         { label: 'Dashboard', href: '/parent', icon: LayoutDashboard },
-        { label: 'Child Progress', href: '/parent/child-progress', icon: BarChart3 },
-        { label: 'Payments', href: '/parent/payments', icon: CreditCard },
+        { label: 'Child Progress', href: '/parent?tab=academics', icon: BarChart3 },
+        { label: 'Attendance', href: '/parent?tab=attendance', icon: ClipboardCheck },
+        { label: 'Homework', href: '/parent?tab=homework', icon: Edit3 },
+        { label: 'Payments', href: '/parent?tab=fees', icon: CreditCard },
+        { label: 'PTM Scheduler', href: '/parent?tab=ptm', icon: CalendarDays },
+        { label: 'Transport', href: '/parent?tab=transport', icon: School },
       ]
     }
   ],

@@ -1,0 +1,250 @@
+.reviewWrapper {
+  min-height: 100vh;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+
+.reviewHeader {
+  background: #1e293b;
+  color: white;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.exitBtn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exitBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.testTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.summaryBar {
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 20px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scoreGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.finalScore {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #4f46e5;
+}
+
+.scoreLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.reviewBody {
+  display: flex;
+  flex: 1;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 32px;
+  gap: 32px;
+}
+
+.sideNav {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+.navHeader {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+
+.questionGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+.navBtn {
+  height: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.navActive {
+  border: 2px solid #4f46e5;
+  color: #4f46e5;
+}
+
+.navCorrect {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #059669;
+}
+
+.navIncorrect {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #dc2626;
+}
+
+.mainArea {
+  flex: 1;
+}
+
+.questionCard {
+  background: white;
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
+}
+
+.questionHead {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.qNum { font-weight: 700; color: #64748b; }
+.qStatus { font-weight: 700; }
+
+.qText {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 32px;
+}
+
+.optionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.optionItem {
+  padding: 16px 20px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-weight: 500;
+}
+
+.optionChar {
+  width: 28px;
+  height: 28px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.userSelected {
+  border-color: #4f46e5;
+  background: #4f46e505;
+}
+
+.correctChoice {
+  border-color: #10b981 !important;
+  background: #ecfdf5 !important;
+}
+
+.incorrectChoice {
+  border-color: #ef4444 !important;
+  background: #fef2f2 !important;
+}
+
+.feedbackBox {
+  margin-top: 32px;
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 20px;
+  border-left: 4px solid #4f46e5;
+}
+
+.feedbackTitle {
+  font-weight: 700;
+  color: #475569;
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.remarkText {
+  color: #1e293b;
+  line-height: 1.6;
+}
+
+.actionRow {
+  display: flex;
+  justify-content: space-between;
+}
+
+.pBtn, .nBtn {
+  background: white;
+  border: 1px solid #e2e8f0;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 16px;
+  color: #64748b;
+}
+
+.answerText {
+  padding: 16px;
+  background: #f8fafc;
+  border-left: 4px solid #64748b;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 20px;
+}

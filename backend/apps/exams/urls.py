@@ -29,6 +29,7 @@ urlpatterns = [
     path("schedules/<int:pk>/", views.exam_schedule_detail_view, name="exam_schedule_detail"),
 
 
+
     # ─── Online Test v2 ───────────────────────────────────────────────
     path("online-tests/", views.online_test_list_view, name="online_test_list"),
     path("online-tests/<int:pk>/", views.online_test_detail_view, name="online_test_detail"),
@@ -39,6 +40,7 @@ urlpatterns = [
     path("online-tests/attempts/<int:attempt_pk>/submit/", views.test_submit_attempt_view, name="test_submit_attempt"),
     path("online-tests/attempts/<int:attempt_pk>/", views.test_attempt_detail_view, name="test_attempt_detail"),
     path("online-tests/<int:test_pk>/submissions/", views.test_submissions_view, name="test_submissions"),
+    path("online-tests/my-attempts/", views.my_test_attempts_view, name="my_test_attempts"),
     path("online-tests/answers/<int:answer_pk>/grade/", views.test_grade_answer_view, name="test_grade_answer"),
     path("online-tests/attempts/<int:attempt_pk>/publish/", views.test_publish_result_view, name="test_publish_result"),
 ]

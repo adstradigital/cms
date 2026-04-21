@@ -1,0 +1,72 @@
+.page { padding: 24px; max-width: 1280px; }
+.header { margin-bottom: 20px; }
+.title { font-size: 22px; font-weight: 950; color: var(--theme-text); margin: 0; }
+.subtitle { font-size: 13px; color: var(--theme-text-secondary); font-weight: 700; margin: 4px 0 0; }
+
+/* ─── Tabs ─── */
+.tabs { display: flex; gap: 4px; background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: 14px; padding: 6px; width: fit-content; margin-bottom: 20px; }
+.tab { background: transparent; border: none; border-radius: 10px; padding: 9px 18px; font-size: 13px; font-weight: 800; color: var(--theme-text-secondary); cursor: pointer; transition: background 0.15s, color 0.15s; }
+.tabActive { background: var(--color-primary); color: #fff; }
+.tabContent { }
+
+/* ─── Tab Header ─── */
+.tabHeader { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.tabTitle { font-size: 16px; font-weight: 900; color: var(--theme-text); margin: 0; }
+
+/* ─── Buttons ─── */
+.btnPrimary { background: var(--color-primary); border: none; color: #fff; border-radius: 12px; padding: 10px 16px; font-weight: 900; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.btnSec { background: var(--theme-surface); border: 1.5px solid var(--theme-border); color: var(--theme-text); border-radius: 12px; padding: 10px 16px; font-weight: 900; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.btnSm { display: inline-flex; align-items: center; gap: 5px; border: none; border-radius: 10px; padding: 7px 12px; font-size: 12px; font-weight: 900; cursor: pointer; }
+.btnApprove { background: #ecfdf5; color: #065f46; }
+.btnApprove:hover { background: #d1fae5; }
+.btnReject { background: #fee2e2; color: #dc2626; }
+.btnReject:hover { background: #fecaca; }
+.btnApprove:disabled, .btnReject:disabled { opacity: 0.5; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ─── Icons ─── */
+.ib { border: 1px solid var(--theme-border); background: var(--theme-surface); border-radius: 10px; padding: 7px 9px; cursor: pointer; color: var(--theme-text-secondary); display: inline-flex; }
+.ibDanger:hover { background: #fee2e2; color: #dc2626; }
+
+/* ─── Card Grid (categories) ─── */
+.cardGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.card { background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-2xl); padding: 16px; }
+.cardName { font-size: 14px; font-weight: 900; color: var(--theme-text); }
+.cardDesc { font-size: 12px; color: var(--theme-text-secondary); font-weight: 700; margin: 6px 0 8px; }
+.cardBottom { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.chipOk { background: #ecfdf5; color: #065f46; border-radius: 999px; padding: 3px 9px; font-size: 11px; font-weight: 900; display: inline-flex; }
+.chipMuted { background: var(--theme-bg); color: var(--theme-text-secondary); border: 1px solid var(--theme-border); border-radius: 999px; padding: 3px 9px; font-size: 11px; font-weight: 900; display: inline-flex; }
+
+/* ─── Table ─── */
+.tableWrap { background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-2xl); overflow: auto; max-height: 60vh; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid var(--theme-border); text-align: left; color: var(--theme-text); white-space: nowrap; }
+.table th { position: sticky; top: 0; z-index: 5; background: var(--theme-surface); color: var(--theme-text-secondary); font-weight: 900; font-size: 12px; box-shadow: inset 0 -1px 0 var(--theme-border); }
+.table tr:last-child td { border-bottom: none; }
+.bold { font-weight: 900; }
+.muted { color: var(--theme-text-secondary); font-weight: 700; }
+.empty { text-align: center; padding: 30px; color: var(--theme-text-secondary); font-weight: 800; }
+.badge { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.badge_ok { background: #ecfdf5; color: #065f46; }
+.badge_warn { background: #fef3c7; color: #92400e; }
+.badge_danger { background: #fee2e2; color: #dc2626; }
+
+/* ─── Modal ─── */
+.overlay { position: fixed; inset: 0; background: rgba(2,6,23,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
+.modal { background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: var(--radius-2xl); width: 100%; max-width: 520px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.3); animation: pop 0.22s ease; }
+@keyframes pop { from { opacity:0; transform:scale(0.96) translateY(14px); } to { opacity:1; transform:none; } }
+.mh { padding: 16px; border-bottom: 1px solid var(--theme-border); display: flex; align-items: center; justify-content: space-between; }
+.mt { font-size: 16px; font-weight: 900; color: var(--theme-text); }
+.closeBtn { border: 1px solid var(--theme-border); background: transparent; color: var(--theme-text); border-radius: 10px; padding: 6px 10px; cursor: pointer; }
+.form { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.formGrid { padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.frow { display: flex; flex-direction: column; gap: 5px; }
+.frow label { font-size: 13px; font-weight: 800; color: var(--theme-text); }
+.frow input, .frow select, .frow textarea { border: 1.5px solid var(--theme-border); border-radius: 12px; padding: 10px 12px; background: var(--theme-bg); color: var(--theme-text); font-size: 13px; outline: none; }
+.frow input:focus, .frow select:focus, .frow textarea:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+.full { grid-column: 1/-1; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: var(--theme-text); cursor: pointer; }
+.formActions { display: flex; justify-content: flex-end; gap: 10px; }
+.loading { display: flex; align-items: center; gap: 10px; padding: 40px; color: var(--theme-text-secondary); font-weight: 800; }
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

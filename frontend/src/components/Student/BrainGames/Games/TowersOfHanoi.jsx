@@ -100,24 +100,28 @@ export default function TowersOfHanoi({ onWin }) {
     const diskCount = STAGES.find(s => s.id === currentStage).disks;
     let isGameOver = false;
 
+    // 1. Update Pegs and check for win condition simultaneously
     setPegs(prev => {
       const newPegs = JSON.parse(JSON.stringify(prev));
       const disk = newPegs[from].pop();
       newPegs[to].push(disk);
       
+      // Win condition: All disks moved to peg 1 or 2
       if (to !== 0 && newPegs[to].length === diskCount) {
         isGameOver = true;
       }
       return newPegs;
     });
 
-    setMoves(m => {
-      const newMoves = m + 1;
-      if (isGameOver) {
-        handleWin(newMoves);
-      }
-      return newMoves;
-    });
+    // 2. Update moves
+    setMoves(m => m + 1);
+
+    // 3. Handle win OUTSIDE of state setters to avoid 'bad setState' error
+    if (isGameOver) {
+      setTimeout(() => {
+        handleWin(moves + 1);
+      }, 0);
+    }
 
     setSelectedPeg(null);
     setHint(null);

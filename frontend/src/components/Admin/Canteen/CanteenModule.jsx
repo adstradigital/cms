@@ -262,6 +262,9 @@ const CanteenModule = ({ activeSegment }) => {
   const [opFoodCat, setOpFoodCat] = useState('all');
   const [stuList, setStuList] = useState([]);
   const [staList, setStaList] = useState([]);
+  const [opShowDrop, setOpShowDrop] = useState(false);
+  const [opClassFilter, setOpClassFilter] = useState('');
+
 
   const loadOrders = useCallback(async () => {
     try { const r = await canteenApi.getOrders({ status: orderStatus }); setOrders(r.data?.results || r.data || []); }
@@ -1097,11 +1100,12 @@ const CanteenModule = ({ activeSegment }) => {
       <Modal open={opModal} onClose={() => setOpModal(false)} title="Create New Order" Icon={Plus} width="700px">
          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 32 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* 1. Customer Type Toggle */}
                 <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
                    {['student', 'staff'].map(type => (
                       <button 
                         key={type} 
-                        onClick={() => { setOpCustomerType(type); setOpSearch(''); setOpStudents([]); setOpSelected(null); }}
+                        onClick={() => { setOpCustomerType(type); setOpSearch(''); setOpSelected(null); setOpShowDrop(false); }}
                         style={{
                            flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${opCustomerType === type ? C.primary : C.border}`,
                            background: opCustomerType === type ? C.primary : '#fff', color: opCustomerType === type ? '#fff' : C.text,
@@ -1112,160 +1116,126 @@ const CanteenModule = ({ activeSegment }) => {
                       </button>
                    ))}
                 </div>
-                <div style={{ position: 'relative' }}>
-                   <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>
-                      Select {opCustomerType === 'student' ? 'Student' : 'Staff'}
-                   </label>
-                   <div 
-                     onClick={async () => {
-                        if (opCustomerType === 'student' && stuList.length === 0) {
-                           const r = await canteenApi.searchStudents('', { ignore_rls: true, paginate: 'false' });
-                           setStuList(r.data?.results || r.data || []);
-                        } else if (opCustomerType === 'staff' && staList.length === 0) {
-                           const r = await canteenApi.searchStaff('');
-                           setStaList(r.data || []);
-                        }
-                        setOpSearch('');
-                     }}
-                     style={{ position: 'relative' }}
-                   >
-                      <FInput 
-                        placeholder={`Search ${opCustomerType === 'student' ? 'Students' : 'Staff'}...`} 
-                        value={opSearch} 
-                        onChange={e => setOpSearch(e.target.value)}
-                        onBlur={() => setTimeout(() => setOpSearch(''), 200)}
-                      />
-                      
-                      {/* Dropdown List */}
-                      <div style={{ 
-                        position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', 
-                        borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
-                        zIndex: 10, padding: 8, maxHeight: 250, overflowY: 'auto' 
-                      }}>
-                         {(opCustomerType === 'student' ? stuList : staList)
-                           .filter(s => {
-                              const name = opCustomerType === 'student' ? (s.full_name || `${s.user?.first_name} ${s.user?.last_name || ''}`.trim()) : s.full_name;
-                              return !opSearch || name.toLowerCase().includes(opSearch.toLowerCase());
-                           })
-                           .map(s => {
-                              const name = opCustomerType === 'student' ? (s.full_name || `${s.user?.first_name} ${s.user?.last_name || ''}`.trim()) : s.full_name;
-                              const secondary = opCustomerType === 'student' 
-                                ? `${s.class_name || 'N/A'} | ${s.admission_number || 'N/A'}` 
-                                : `${s.designation || 'Staff'} | ${s.employee_id || 'N/A'}`;
-                              
-                              return (
-                                 <div 
-                                   key={`${opCustomerType}-${s.id}`} 
-                                   onClick={() => { setOpSelected({ ...s, full_name: name, type: opCustomerType }); setOpSearch(''); }} 
-                                   style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', borderBottom: `1px solid ${C.border}33`, display: 'flex', justifyContent: 'space-between' }}
-                                   onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                 >
-                                    <div>
-                                       <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{name}</p>
-                                       <p style={{ margin: 0, fontSize: 11, color: C.muted }}>{secondary}</p>
-                                    </div>
-                                    {opSelected?.id === s.id && opSelected?.type === opCustomerType && <CheckCircle2 size={16} color={C.accent} />}
-                                 </div>
-                              );
-                           })
-                         }
+
+                {/* 2. Customer Selection Dropdown */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+                   <div style={{ position: 'relative' }}>
+
+                      <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>
+                         Select {opCustomerType === 'student' ? 'Student' : 'Staff'}
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                         <FInput 
+                            placeholder={`Search ${opCustomerType === 'student' ? 'Students' : 'Staff'}...`} 
+                            value={opSearch} 
+                            onChange={e => { setOpSearch(e.target.value); setOpShowDrop(true); }}
+                            onFocus={async () => {
+                               setOpShowDrop(true);
+                               if (opCustomerType === 'student' && stuList.length === 0) {
+                                  const r = await canteenApi.searchStudents('', { ignore_rls: true, paginate: 'false' });
+                                  setStuList(r.data?.results || r.data || []);
+                               } else if (opCustomerType === 'staff' && staList.length === 0) {
+                                  const r = await canteenApi.searchStaff('');
+                                  setStaList(r.data || []);
+                               }
+                            }}
+                            onBlur={() => setTimeout(() => setOpShowDrop(false), 200)}
+                         />
+                         
+                         {opShowDrop && (
+                            <div style={{ 
+                               position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', 
+                               borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
+                               zIndex: 100, padding: 8, maxHeight: 250, overflowY: 'auto', marginTop: 4
+                            }}>
+                               {(opCustomerType === 'student' ? stuList : staList)
+                                 .filter(s => {
+                                    const name = (s.full_name || `${s.user?.first_name || ''} ${s.user?.last_name || ''}`.trim());
+                                    return !opSearch || name.toLowerCase().includes(opSearch.toLowerCase());
+                                 })
+                                 .map(s => {
+                                    const name = (s.full_name || `${s.user?.first_name || ''} ${s.user?.last_name || ''}`.trim());
+                                    const secondary = opCustomerType === 'student' 
+                                      ? `${s.class_name || 'N/A'} | ${s.admission_number || 'N/A'}` 
+                                      : `${s.designation || 'Staff'} | ${s.employee_id || 'N/A'}`;
+                                    
+                                    return (
+                                       <div 
+                                         key={s.id} 
+                                         onMouseDown={() => { setOpSelected({ ...s, full_name: name, type: opCustomerType }); setOpSearch(''); setOpShowDrop(false); }} 
+                                         style={{ padding: '8px 12px', borderRadius: 8, cursor: 'pointer', borderBottom: `1px solid ${C.border}33`, display: 'flex', justifyContent: 'space-between' }}
+                                         onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                       >
+                                          <div>
+                                             <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{name}</p>
+                                             <p style={{ margin: 0, fontSize: 11, color: C.muted }}>{secondary}</p>
+                                          </div>
+                                          {opSelected?.id === s.id && opSelected?.type === opCustomerType && <CheckCircle2 size={16} color={C.accent} />}
+                                       </div>
+                                    );
+                                 })
+                               }
+                            </div>
+                         )}
                       </div>
                    </div>
                 </div>
 
-               {opSelected && (
-                  <div style={{ padding: '12px 16px', background: '#F0FDF4', borderRadius: 12, border: '1px solid #BBF7D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                     <div>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#166534' }}>Currently Selecting for:</p>
-                        <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: '#14532D' }}>{opSelected.full_name}</p>
-                     </div>
-                     <button onClick={() => setOpSelected(null)} style={{ background: '#DCFCE7', border: 'none', borderRadius: 8, color: '#166534', cursor: 'pointer', padding: 4, display: 'flex' }}><X size={16} /></button>
-                  </div>
-               )}
+                {/* 3. Selected Banner */}
+                {opSelected && (
+                   <div style={{ padding: '12px 16px', background: '#F0FDF4', borderRadius: 12, border: '1px solid #BBF7D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                         <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#166534' }}>Currently Selecting for:</p>
+                         <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: '#14532D' }}>{opSelected.full_name}</p>
+                      </div>
+                      <button onClick={() => setOpSelected(null)} style={{ background: '#DCFCE7', border: 'none', borderRadius: 8, color: '#166534', cursor: 'pointer', padding: 4, display: 'flex' }}><X size={16} /></button>
+                   </div>
+                )}
 
-               <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
-                     <h6 style={{ margin: 0, fontWeight: 800 }}>Select Food Items</h6>
-                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-                        {['all', 'Breakfast', 'Lunch', 'Snacks', 'Juices'].map(cat => (
-                           <button 
-                             key={cat} 
-                             onClick={() => setOpFoodCat(cat)}
-                             style={{
-                                padding: '6px 14px', borderRadius: 8, border: `1px solid ${opFoodCat === cat ? C.primary : C.border}`,
-                                background: opFoodCat === cat ? C.primary : '#fff', color: opFoodCat === cat ? '#fff' : C.muted,
-                                fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s'
-                             }}
-                           >
-                              {cat}
-                           </button>
-                        ))}
-                     </div>
-                  </div>
+                {/* 4. Food Selection */}
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                      <h6 style={{ margin: 0, fontWeight: 800 }}>Select Food Items</h6>
+                      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                         {['all', 'Breakfast', 'Lunch', 'Snacks', 'Juices'].map(cat => (
+                            <button 
+                              key={cat} 
+                              onClick={() => setOpFoodCat(cat)}
+                              style={{
+                                 padding: '6px 14px', borderRadius: 8, border: `1px solid ${opFoodCat === cat ? C.primary : C.border}`,
+                                 background: opFoodCat === cat ? C.primary : '#fff', color: opFoodCat === cat ? '#fff' : C.muted,
+                                 fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s'
+                              }}
+                            >
+                               {cat}
+                            </button>
+                         ))}
+                      </div>
+                   </div>
 
-                  {/* Food Item Dropdown */}
-                  <div style={{ position: 'relative', marginBottom: 12 }}>
-                     <FInput 
-                        placeholder="Select food item..." 
-                        onChange={e => {
-                           const q = e.target.value.toLowerCase();
-                           setOpSearch(q); // Reuse opSearch for food filtering
-                        }}
-                     />
-                     <div style={{ 
-                        position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', 
-                        borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
-                        zIndex: 10, padding: 8, maxHeight: 200, overflowY: 'auto' 
-                     }}>
-                        {foodItems.filter(f => {
-                           const active = f.status === 'active';
-                           const catMatch = opFoodCat === 'all' || (f.category_name || f.category) === opFoodCat;
-                           const searchMatch = !opSearch || f.name.toLowerCase().includes(opSearch.toLowerCase());
-                           return active && catMatch && searchMatch;
-                        }).map(f => (
-                           <div 
-                             key={f.id} 
-                             onClick={() => {
-                                setOpItems(prev => {
-                                   const exists = prev.find(i => i.id === f.id);
-                                   if (exists) return prev.map(i => i.id === f.id ? { ...i, qty: i.qty + 1 } : i);
-                                   return [...prev, { id: f.id, name: f.name, price: Number(f.price), qty: 1 }];
-                                });
-                             }}
-                             style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', borderBottom: `1px solid ${C.border}33`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                             onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                           >
-                              <div>
-                                 <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{f.name}</p>
-                                 <p style={{ margin: 0, fontSize: 11, color: C.accent, fontWeight: 800 }}>₹{Number(f.price).toFixed(2)}</p>
-                              </div>
-                              <Plus size={16} color={C.primary} />
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, maxHeight: 150, overflowY: 'auto', paddingRight: 4 }}>
-                     {foodItems.filter(f => {
-                        const active = f.status === 'active';
-                        const catMatch = opFoodCat === 'all' || (f.category_name || f.category) === opFoodCat;
-                        return active && catMatch;
-                     }).map(f => (
-                        <div key={f.id} className="food-box" onClick={() => {
-                           setOpItems(prev => {
-                              const exists = prev.find(i => i.id === f.id);
-                              if (exists) return prev.map(i => i.id === f.id ? { ...i, qty: i.qty + 1 } : i);
-                              return [...prev, { id: f.id, name: f.name, price: Number(f.price), qty: 1 }];
-                           });
-                        }} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', background: '#fff', textAlign: 'center', transition: 'border-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.borderColor = C.primary} onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
-                           <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</p>
-                           <p style={{ margin: 0, fontSize: 13, fontWeight: 900, color: C.accent }}>₹{Number(f.price).toFixed(0)}</p>
-                        </div>
-                     ))}
-                  </div>
-               </div>
+                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, maxHeight: 200, overflowY: 'auto', paddingRight: 4 }}>
+                      {foodItems.filter(f => {
+                         const active = f.status === 'active';
+                         const catStr = String(f.category_name || f.category || '').toLowerCase();
+                         const catMatch = opFoodCat === 'all' || catStr === opFoodCat.toLowerCase();
+                         return active && catMatch;
+                      }).map(f => (
+                         <div key={f.id} onClick={() => {
+                            setOpItems(prev => {
+                               const exists = prev.find(i => i.id === f.id);
+                               if (exists) return prev.map(i => i.id === f.id ? { ...i, qty: i.qty + 1 } : i);
+                               return [...prev, { id: f.id, name: f.name, price: Number(f.price), qty: 1 }];
+                            });
+                         }} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', background: '#fff', textAlign: 'center', transition: 'border-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.borderColor = C.primary} onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+                            <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</p>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 900, color: C.accent }}>₹{Number(f.price).toFixed(0)}</p>
+                         </div>
+                      ))}
+                   </div>
+                </div>
             </div>
 
+            {/* Cart Side */}
             <div style={{ background: '#F8FAFC', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                <h6 style={{ margin: 0, fontWeight: 800, textTransform: 'uppercase', fontSize: 11, color: C.muted }}>Cart Details</h6>
                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', maxHeight: 300 }}>
@@ -1312,6 +1282,7 @@ const CanteenModule = ({ activeSegment }) => {
             </div>
          </div>
       </Modal>
+
 
       {/* Weekly Menu Modal */}
       <Modal open={wmModal} onClose={() => setWmModal(false)} title={`Edit Menu: ${wmForm.day}`} Icon={Calendar} width="600px">

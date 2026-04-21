@@ -27,7 +27,8 @@ import {
   ChevronDown,
   Zap,
   BrainCircuit,
-  Gamepad2
+  Gamepad2,
+  Navigation
 } from 'lucide-react';
 import styles from './Sidebar.module.css';
 import useAuth from '@/hooks/useAuth';
@@ -57,6 +58,7 @@ const menuSections = {
         { label: 'Attendance', href: '/staff/attendance', icon: ClipboardCheck },
         { label: 'Exams', href: '/staff/exams', icon: FileText },
         { label: 'Assignments', href: '/staff/assignments', icon: Edit3 },
+        { label: 'Bus Tracking', href: '/staff/transport-tracking', icon: Navigation },
       ]
     }
   ],

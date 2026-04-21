@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Count, Sum, Q, F
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -15,6 +16,7 @@ from .models import (
     StudentTransport,
     TransportComplaint,
     TransportFee,
+    TransportFeePayment,
     TransportRoute,
 )
 from .serializers import (
@@ -52,8 +54,11 @@ def school_bus_list_view(request):
         if request.method == "GET":
             bus_status = request.query_params.get("status")
             is_active = request.query_params.get("is_active")
+            mine = request.query_params.get("mine")
 
             qs = SchoolBus.objects.select_related("driver").all()
+            if mine and mine.lower() == "true":
+                qs = qs.filter(driver=request.user)
             if bus_status:
                 qs = qs.filter(status=bus_status)
             if is_active is not None:
@@ -116,6 +121,42 @@ def school_bus_live_location_view(request, bus_pk):
             },
             status=status.HTTP_200_OK,
         )
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def bus_ping_view(request):
+    """
+    Endpoint for driver phone to automatically send location.
+    Finds the bus assigned to the authenticated user (driver).
+    """
+    try:
+        # Find bus assigned to this user
+        bus = SchoolBus.objects.filter(driver=request.user).first()
+        if not bus:
+            return Response({"error": "No bus assigned to your account."}, status=status.HTTP_404_NOT_FOUND)
+
+        latitude = request.data.get("latitude")
+        longitude = request.data.get("longitude")
+        speed = request.data.get("speed_kmph", 0)
+
+        if latitude is None or longitude is None:
+            return Response({"error": "Latitude and longitude are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Log location
+        log = BusLocationLog.objects.create(
+            bus=bus,
+            latitude=latitude,
+            longitude=longitude,
+            speed_kmph=speed,
+            source="mobile",
+            recorded_by=request.user
+        )
+
+        return Response(BusLocationLogSerializer(log).data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -219,6 +260,29 @@ def route_stop_create_view(request, route_pk):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def route_stop_detail_view(request, pk):
+    try:
+        try:
+            stop = RouteStop.objects.get(pk=pk)
+        except RouteStop.DoesNotExist:
+            return Response({"error": "Stop not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "DELETE":
+            stop.delete()
+            return Response({"message": "Stop deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+        serializer = RouteStopSerializer(stop, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(RouteStopSerializer(stop).data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def student_transport_list_view(request):
@@ -226,6 +290,7 @@ def student_transport_list_view(request):
         if request.method == "GET":
             route_id = request.query_params.get("route")
             student_id = request.query_params.get("student")
+            search = request.query_params.get("search")
 
             qs = StudentTransport.objects.select_related(
                 "student",
@@ -239,13 +304,68 @@ def student_transport_list_view(request):
                 qs = qs.filter(stop__route_id=route_id)
             if student_id:
                 qs = qs.filter(student_id=student_id)
+            if search:
+                qs = qs.filter(
+                    Q(student__user__first_name__icontains=search)
+                    | Q(student__user__last_name__icontains=search)
+                    | Q(student__admission_number__icontains=search)
+                )
             return Response(StudentTransportSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
-        serializer = StudentTransportSerializer(data=request.data)
+        # Capacity validation before assignment
+        data = request.data
+        stop_id = data.get("stop")
+        if stop_id:
+            try:
+                stop = RouteStop.objects.select_related("route", "route__bus").get(pk=stop_id)
+                route = stop.route
+                bus = route.bus
+                if bus:
+                    current_count = StudentTransport.objects.filter(
+                        stop__route=route, is_active=True
+                    ).count()
+                    if current_count >= bus.capacity:
+                        return Response(
+                            {"error": f"Bus capacity ({bus.capacity}) reached for route '{route.name}'."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+            except RouteStop.DoesNotExist:
+                return Response({"error": "Stop not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = StudentTransportSerializer(data=data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def student_transport_detail_view(request, pk):
+    try:
+        try:
+            allocation = StudentTransport.objects.select_related(
+                "student", "student__user", "stop", "stop__route", "stop__route__bus"
+            ).get(pk=pk)
+        except StudentTransport.DoesNotExist:
+            return Response({"error": "Allocation not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "GET":
+            return Response(StudentTransportSerializer(allocation).data, status=status.HTTP_200_OK)
+
+        if request.method == "DELETE":
+            allocation.is_active = False
+            allocation.save(update_fields=["is_active"])
+            return Response({"message": "Allocation deactivated."}, status=status.HTTP_200_OK)
+
+        serializer = StudentTransportSerializer(allocation, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(StudentTransportSerializer(allocation).data, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -357,15 +477,31 @@ def transport_fee_pay_view(request, pk):
             return Response({"error": "amount must be greater than 0."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
+            # Create installment record
+            TransportFeePayment.objects.create(
+                fee=fee,
+                amount=amount,
+                payment_date=serializer.validated_data.get("payment_date", timezone.localdate()),
+                payment_method=serializer.validated_data["payment_method"],
+                transaction_id=serializer.validated_data.get("transaction_id", ""),
+                remarks=serializer.validated_data.get("remarks", ""),
+                collected_by=request.user
+            )
+
+            # Update master record
             fee.amount_paid = (fee.amount_paid or Decimal("0")) + amount
             if fee.amount_paid > fee.amount_due:
-                fee.amount_paid = fee.amount_due
+                # Optional: Allow overpayment or cap it
+                pass
+            
             fee.payment_method = serializer.validated_data["payment_method"]
             fee.payment_date = serializer.validated_data.get("payment_date", timezone.localdate())
             fee.transaction_id = serializer.validated_data.get("transaction_id", fee.transaction_id)
+            
             remarks = serializer.validated_data.get("remarks")
             if remarks:
                 fee.remarks = remarks
+                
             fee.status = _derive_fee_status(
                 fee.amount_due,
                 fee.amount_paid,
@@ -468,6 +604,80 @@ def transport_complaint_detail_view(request, pk):
             complaint.save(update_fields=["resolved_by", "updated_at"])
 
         return Response(TransportComplaintSerializer(complaint).data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def transport_analytics_view(request):
+    """Aggregate analytics for the transport dashboard."""
+    try:
+        today = timezone.localdate()
+
+        # Fleet stats
+        total_buses = SchoolBus.objects.count()
+        active_buses = SchoolBus.objects.filter(is_active=True, status="active").count()
+        maintenance_buses = SchoolBus.objects.filter(status="maintenance").count()
+
+        # Route stats
+        total_routes = TransportRoute.objects.filter(is_active=True).count()
+
+        # Student stats
+        total_students = StudentTransport.objects.filter(is_active=True).count()
+
+        # Occupancy per route
+        route_occupancy = []
+        for route in TransportRoute.objects.filter(is_active=True).select_related("bus"):
+            enrolled = StudentTransport.objects.filter(stop__route=route, is_active=True).count()
+            capacity = route.bus.capacity if route.bus else route.vehicle_capacity or 40
+            route_occupancy.append({
+                "route": route.name,
+                "enrolled": enrolled,
+                "capacity": capacity,
+                "occupancy_pct": round((enrolled / capacity) * 100, 1) if capacity else 0,
+            })
+
+        # Fee stats
+        fee_qs = TransportFee.objects.all()
+        total_due = fee_qs.aggregate(total=Sum("amount_due"))["total"] or Decimal("0")
+        total_collected = fee_qs.aggregate(total=Sum("amount_paid"))["total"] or Decimal("0")
+        fee_by_status = dict(fee_qs.values_list("status").annotate(cnt=Count("id")).values_list("status", "cnt"))
+        collection_rate = round((total_collected / total_due) * 100, 1) if total_due else 0
+
+        # Complaint stats
+        complaint_qs = TransportComplaint.objects.all()
+        complaint_by_status = dict(
+            complaint_qs.values_list("status").annotate(cnt=Count("id")).values_list("status", "cnt")
+        )
+        complaint_by_priority = dict(
+            complaint_qs.values_list("priority").annotate(cnt=Count("id")).values_list("priority", "cnt")
+        )
+
+        return Response({
+            "fleet": {
+                "total": total_buses,
+                "active": active_buses,
+                "maintenance": maintenance_buses,
+                "inactive": total_buses - active_buses - maintenance_buses,
+            },
+            "routes": {"total": total_routes},
+            "students": {"total": total_students},
+            "occupancy": route_occupancy,
+            "fees": {
+                "total_due": float(total_due),
+                "total_collected": float(total_collected),
+                "outstanding": float(total_due - total_collected),
+                "collection_rate": collection_rate,
+                "by_status": fee_by_status,
+            },
+            "complaints": {
+                "total": complaint_qs.count(),
+                "by_status": complaint_by_status,
+                "by_priority": complaint_by_priority,
+            },
+        }, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

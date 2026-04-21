@@ -9,6 +9,7 @@ const studentApi = {
   getTimetable: () => instance.get('/student/timetable/'),
   getResults: () => instance.get('/student/results/'),
   getFees: () => instance.get('/student/fees/'),
+  getMyTestAttempts: () => instance.get('/exams/online-tests/my-attempts/'),
 };
 
 export default studentApi;

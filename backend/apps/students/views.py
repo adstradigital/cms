@@ -75,7 +75,8 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
         section_id = self.request.query_params.get("section")
         class_id   = self.request.query_params.get("class")
         ay_ref     = self.request.query_params.get("academic_year")
-        is_active  = self.request.query_params.get("is_active")
+        is_active      = self.request.query_params.get("is_active")
+        transport_user = self.request.query_params.get("transport_user")
 
         if section_id:
             qs = qs.filter(section_id=section_id)
@@ -83,6 +84,10 @@ class StudentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
         if class_id:
             qs = qs.filter(section__school_class_id=class_id)
             debug_info.append(f"Filtered by class: {class_id}")
+        
+        if transport_user:
+            qs = qs.filter(transport_user=transport_user.lower() == "true")
+            debug_info.append(f"Filtered by transport_user: {transport_user}")
         
         if ay_ref:
             if ay_ref.isdigit():

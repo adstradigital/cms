@@ -14,9 +14,9 @@ import {
 import styles from '../BrainGames.module.css';
 
 const DICTIONARY = {
-  Science: ['photosynthesis', 'mitochondria', 'gravitation', 'evaporation', 'molecule', 'atmosphere', 'ecosystem', 'heredity', 'organism', 'nebula'],
-  Math: ['geometry', 'calculus', 'equations', 'fraction', 'percentage', 'triangle', 'algorithm', 'symmetry', 'variable', 'matrix'],
-  General: ['innovation', 'knowledge', 'strategic', 'intelligence', 'perspective', 'education', 'language', 'curiosity', 'discovery', 'challenge']
+  Science: ['photosynthesis', 'mitochondria', 'gravitation', 'evaporation', 'molecule', 'atmosphere', 'ecosystem', 'heredity', 'organism', 'nebula', 'chromosome', 'velocity', 'equilibrium', 'catalyst'],
+  Math: ['geometry', 'calculus', 'equations', 'fraction', 'percentage', 'triangle', 'algorithm', 'symmetry', 'variable', 'matrix', 'probability', 'derivative', 'integration', 'polynomial'],
+  General: ['innovation', 'knowledge', 'strategic', 'intelligence', 'perspective', 'education', 'language', 'curiosity', 'discovery', 'challenge', 'achievement', 'philosophy', 'adventure', 'resilience']
 };
 
 export default function WordScramble({ onWin }) {
@@ -31,7 +31,18 @@ export default function WordScramble({ onWin }) {
   const [isGameOver, setIsGameOver] = useState(false);
 
   const scramble = (str) => {
-    return str.split('').sort(() => Math.random() - 0.5).join('');
+    const arr = str.split('');
+    let scrambledStr = str;
+    
+    // Keep shuffling until the word is actually scrambled (not equal to original)
+    while (scrambledStr === str && str.length > 1) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      scrambledStr = arr.join('');
+    }
+    return scrambledStr;
   };
 
   const nextWord = useCallback((cat = category) => {

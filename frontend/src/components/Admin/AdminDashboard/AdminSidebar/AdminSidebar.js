@@ -22,7 +22,8 @@ import {
   Bus,
   Bed,
   Utensils,
-  Library
+  Library,
+  DollarSign
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import styles from './AdminSidebar.module.css';
@@ -94,6 +95,7 @@ const AdminSidebar = () => {
     else if (pathname?.startsWith('/admins/library')) setExpandedMenu('Library');
     else if (pathname?.startsWith('/admins/canteen')) setExpandedMenu('Canteen');
     else if (pathname?.startsWith('/admins/transport')) setExpandedMenu('Transport');
+    else if (pathname?.startsWith('/admins/finance')) setExpandedMenu('Finance');
   }, [pathname]);
   
   const isStudentsPath = pathname?.startsWith('/admins/students');
@@ -104,6 +106,7 @@ const AdminSidebar = () => {
   const isLibraryPath = pathname?.startsWith('/admins/library');
   const isCanteenPath = pathname?.startsWith('/admins/canteen');
   const isTransportPath = pathname?.startsWith('/admins/transport');
+  const isFinancePath = pathname?.startsWith('/admins/finance');
   
   // ── Flyout hover logic ──────────────────────────────────────────────────────
   const cancelHide = useCallback(() => {
@@ -301,6 +304,21 @@ const AdminSidebar = () => {
           scheduleHide={scheduleHide}
           pathname={pathname}
         />
+
+        <ExpandableSection
+          label="Finance"
+          icon={<DollarSign size={18} />}
+          sectionKey="Finance"
+          items={SECTIONS.finance}
+          isActivePath={isFinancePath}
+          collapsedHref="/admins/finance"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
       </nav>
 
       {/* Flyout Portal — rendered into body, outside sidebar overflow */}
@@ -396,6 +414,15 @@ const SECTIONS = {
     { label: "Report Card", href: "/admins/examinations/report-card" },
     { label: "Online Test", href: "/admins/examinations/online-test" },
     { label: "Analytics", href: "/admins/examinations/analytics" },
+  ],
+  finance: [
+    { label: "Overview", href: "/admins/finance" },
+    { label: "Fees", href: "/admins/finance/fees" },
+    { label: "Expenses", href: "/admins/finance/expenses" },
+    { label: "Payroll", href: "/admins/finance/payroll" },
+    { label: "Budget", href: "/admins/finance/budget" },
+    { label: "Reports", href: "/admins/finance/reports" },
+    { label: "Donations", href: "/admins/finance/donations" },
   ]
 };
 
@@ -421,10 +448,10 @@ const ExpandableSection = ({ label, icon, sectionKey, items, isActivePath, colla
     <div className={styles.expandableMenuContainer}>
       <div
         onClick={() => setExpandedMenu(isExpanded ? null : sectionKey)}
-        className={`${styles.expandableMenu} ${isExpanded ? styles.expanded : styles.collapsed} ${isActivePath ? styles.navItemActive : ''}`}
+        className={`${styles.expandableMenu} ${isExpanded ? styles.expanded : styles.collapsed} ${isActivePath ? styles.parentActive : ''}`}
       >
         <div className={styles.expandableMenuContent}>
-          <div className={`${styles.expandableMenuIcon} ${isExpanded ? styles.expanded : styles.collapsed}`}>
+          <div className={`${styles.expandableMenuIcon} ${isExpanded ? styles.expanded : styles.collapsed} ${isActivePath ? styles.parentActiveIcon : ''}`}>
              {icon}
           </div>
           <span style={{ fontWeight: isActivePath ? 900 : 'inherit' }}>{label}</span>

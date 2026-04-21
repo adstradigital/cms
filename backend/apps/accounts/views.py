@@ -33,20 +33,31 @@ def login_view(request):
 
         identifier = str(identifier).strip()
 
+        print(f"DEBUG LOGIN: identifier='{identifier}', password='{password}'")
         # 1) Standard Django authentication by username
         user = authenticate(request, username=identifier, password=password)
+        print(f"DEBUG LOGIN: authenticate(request) result: {user}")
 
         # 2) Fallback: allow login by email / phone / case-insensitive username
         if not user:
+            print(f"DEBUG LOGIN: Attempting fallback for '{identifier}'...")
             candidate = User.objects.filter(
                 Q(username__iexact=identifier) |
                 Q(email__iexact=identifier) |
                 Q(phone__iexact=identifier)
             ).first()
-            if candidate and candidate.check_password(password):
-                user = candidate
+            if candidate:
+                print(f"DEBUG LOGIN: Found candidate '{candidate.username}', checking password...")
+                if candidate.check_password(password):
+                    user = candidate
+                    print(f"DEBUG LOGIN: Fallback SUCCESS")
+                else:
+                    print(f"DEBUG LOGIN: Fallback PASSWORD FAIL")
+            else:
+                print(f"DEBUG LOGIN: Candidate NOT FOUND")
 
         if not user:
+            print(f"DEBUG LOGIN: Authentication FAILED for '{identifier}'")
             return Response(
                 {"error": "Invalid credentials."},
                 status=status.HTTP_401_UNAUTHORIZED,

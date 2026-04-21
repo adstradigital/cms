@@ -27,7 +27,8 @@ import {
   ChevronDown,
   Zap,
   BrainCircuit,
-  Gamepad2
+  Gamepad2,
+  Navigation
 } from 'lucide-react';
 import styles from './Sidebar.module.css';
 import useAuth from '@/hooks/useAuth';
@@ -57,6 +58,7 @@ const menuSections = {
         { label: 'Attendance', href: '/staff/attendance', icon: ClipboardCheck },
         { label: 'Exams', href: '/staff/exams', icon: FileText },
         { label: 'Assignments', href: '/staff/assignments', icon: Edit3 },
+        { label: 'Bus Tracking', href: '/staff/transport-tracking', icon: Navigation },
       ]
     }
   ],
@@ -98,8 +100,16 @@ const menuSections = {
             { label: 'Learning Materials', href: '/student/assignments?view=materials' }
           ]
         },
-        { label: 'Results', href: '/student/results', icon: BarChart3 },
-        { label: 'Quiz Center', href: '/student/quizzes', icon: BrainCircuit },
+        { 
+          label: 'Results', 
+          href: '/student/results', 
+          icon: BarChart3,
+          subItems: [
+            { label: 'Academic Performance', href: '/student/results?view=academic' },
+            { label: 'Online Quiz History', href: '/student/results?view=online' }
+          ]
+        },
+        { label: 'Online Test', href: '/student/tests', icon: BrainCircuit },
         { label: 'Brain Games', href: '/student/brain-games', icon: Gamepad2 },
         { label: 'Fees', href: '/student/fees', icon: CreditCard },
       ]

@@ -8,6 +8,7 @@ const transportApi = {
   updateBus: (id, data) => instance.patch(`/transport/buses/${id}/`, data),
   deleteBus: (id) => instance.delete(`/transport/buses/${id}/`),
   getLiveLocation: (id) => instance.get(`/transport/buses/${id}/live-location/`),
+  pingBus: (data) => instance.post('/transport/buses/ping/', data),
 
   // Routes and stops
   getRoutes: (params) => instance.get('/transport/routes/', { params }),
@@ -17,10 +18,14 @@ const transportApi = {
   deleteRoute: (id) => instance.delete(`/transport/routes/${id}/`),
   getRouteStops: (routeId) => instance.get(`/transport/routes/${routeId}/stops/`),
   createRouteStop: (routeId, data) => instance.post(`/transport/routes/${routeId}/stops/`, data),
+  updateStop: (id, data) => instance.patch(`/transport/stops/${id}/`, data),
+  deleteStop: (id) => instance.delete(`/transport/stops/${id}/`),
 
   // Student transport allocations
   getStudentTransports: (params) => instance.get('/transport/students/', { params }),
   assignStudentTransport: (data) => instance.post('/transport/students/', data),
+  updateStudentTransport: (id, data) => instance.patch(`/transport/students/${id}/`, data),
+  removeStudentTransport: (id) => instance.delete(`/transport/students/${id}/`),
 
   // Live location logs
   getLocationLogs: (params) => instance.get('/transport/locations/', { params }),
@@ -39,6 +44,9 @@ const transportApi = {
   createComplaint: (data) => instance.post('/transport/complaints/', data),
   updateComplaint: (id, data) => instance.patch(`/transport/complaints/${id}/`, data),
   deleteComplaint: (id) => instance.delete(`/transport/complaints/${id}/`),
+
+  // Analytics
+  getAnalytics: () => instance.get('/transport/analytics/'),
 };
 
 export default transportApi;

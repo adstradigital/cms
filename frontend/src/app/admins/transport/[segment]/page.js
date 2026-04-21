@@ -5,8 +5,10 @@ const VALID_SEGMENTS = new Set([
   'buses',
   'routes',
   'tracking',
+  'students',
   'fees',
   'complaints',
+  'analytics',
 ]);
 
 export default async function TransportPage({ params }) {

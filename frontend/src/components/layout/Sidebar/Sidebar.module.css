@@ -14,20 +14,8 @@
   top: 0;
   z-index: var(--z-sticky, 40);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  /* overflow must be visible so toggleBtn (-13px right) isn't clipped */
   overflow: visible;
-}
-
-/* Subtle right-edge glow */
-.sidebar::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: linear-gradient(180deg, transparent 0%, rgba(56, 189, 248, 0.15) 50%, transparent 100%);
-  pointer-events: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .collapsed {
@@ -54,7 +42,7 @@
   justify-content: center;
   color: white;
   flex-shrink: 0;
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .brandText {
@@ -83,21 +71,20 @@
 /* ─── TOGGLE ─── */
 .toggleBtn {
   position: absolute;
-  right: -13px;
-  top: 38px;
-  width: 26px;
-  height: 26px;
+  right: -12px;
+  top: 84px; /* Moved below navbar */
+  width: 24px;
+  height: 24px;
   background: #0ea5e9;
-  border: 3px solid var(--color-bg, #f1f5f9);
+  border: 1px solid #0ea5e9;
   color: #fff;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 50;
+  z-index: 100;
   transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
 }
 
 .toggleBtn:hover {

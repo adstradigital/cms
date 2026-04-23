@@ -117,15 +117,17 @@ const menuSections = {
   ],
   parent: [
     {
-      title: 'MAIN',
+      title: 'PARENT PORTAL',
       items: [
         { label: 'Dashboard', href: '/parent', icon: LayoutDashboard },
-        { label: 'Child Progress', href: '/parent?tab=academics', icon: BarChart3 },
-        { label: 'Attendance', href: '/parent?tab=attendance', icon: ClipboardCheck },
-        { label: 'Homework', href: '/parent?tab=homework', icon: Edit3 },
-        { label: 'Payments', href: '/parent?tab=fees', icon: CreditCard },
-        { label: 'PTM Scheduler', href: '/parent?tab=ptm', icon: CalendarDays },
-        { label: 'Transport', href: '/parent?tab=transport', icon: School },
+        { label: 'Child Progress View', href: '/parent?tab=academics', icon: BarChart3 },
+        { label: 'Attendance Alerts', href: '/parent?tab=attendance', icon: ClipboardCheck },
+        { label: 'Timetable & Holidays', href: '/parent?tab=timetable', icon: CalendarDays },
+        { label: 'Homework View', href: '/parent?tab=homework', icon: Edit3 },
+        { label: 'Fee Payments', href: '/parent?tab=fees', icon: CreditCard },
+        { label: 'Teacher Communication', href: '/parent?tab=communication', icon: Users },
+        { label: 'Transport Tracking', href: '/parent?tab=transport', icon: School },
+        { label: 'Behavior & Conduct', href: '/parent?tab=conduct', icon: FileText },
       ]
     }
   ],
@@ -247,13 +249,26 @@ export default function Sidebar({ role = 'admin', collapsed, onToggle }) {
   const isPathActive = (href) => {
     if (!href) return false;
     const [base, query] = href.split('?');
-    if (!query) return pathname === base;
-    const view = new URLSearchParams(query).get('view');
-    return pathname === base && searchParams.get('view') === view;
+    if (pathname !== base) return false;
+    
+    const currentQuery = searchParams.toString();
+    
+    // Case 1: Href has no query (e.g. /parent)
+    // It should only be active if the current URL also has no relevant query params
+    if (!query) {
+      return !searchParams.get('tab') && !searchParams.get('view');
+    }
+    
+    // Case 2: Href has query (e.g. /parent?tab=attendance)
+    const hrefParams = new URLSearchParams(query);
+    for (const [key, value] of hrefParams.entries()) {
+      if (searchParams.get(key) !== value) return false;
+    }
+    return true;
   };
 
-  const getSettingsHref = () => role === 'admin' ? '/admins/settings' : `/${role}/settings`;
-  const getSupportHref  = () => role === 'admin' ? '/admins/support'  : `/${role}/support`;
+  const getSettingsHref = () => role === 'parent' ? '/parent?tab=settings' : (role === 'admin' ? '/admins/settings' : `/${role}/settings`);
+  const getSupportHref  = () => role === 'parent' ? '/parent?tab=support'  : (role === 'admin' ? '/admins/support'  : `/${role}/support`);
 
   return (
     <>
@@ -284,7 +299,7 @@ export default function Sidebar({ role = 'admin', collapsed, onToggle }) {
                   const Icon = item.icon;
                   const hasSubItems = item.subItems?.length > 0;
                   const isExpanded = expandedItems[item.label] || pathname.startsWith(item.href);
-                  const isActive = pathname === item.href;
+                  const isActive = isPathActive(item.href);
 
                   return (
                     <div

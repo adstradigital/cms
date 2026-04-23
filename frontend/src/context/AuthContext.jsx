@@ -69,6 +69,10 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    // Determine the relevant login route before destroying the user session
+    const roleName = String(user?.role_name || user?.role || user?.portal || '').toLowerCase();
+    const loginRoute = (roleName === 'parent') ? '/parent/login' : '/login';
+
     try {
       const refresh = localStorage.getItem('refresh_token');
       if (refresh) await authApi.logout({ refresh });
@@ -78,7 +82,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     setUser(null);
-    router.push('/login');
+    router.push(loginRoute);
   };
 
   return (

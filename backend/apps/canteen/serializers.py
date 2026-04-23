@@ -1,11 +1,13 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import (
-    FoodItem, DailyMenu, CanteenComplaint, CanteenSupplier,
+    FoodItem, DailyMenu, CanteenComplaint, CanteenSupplier, CanteenVendor,
     CanteenInventoryItem, CanteenInventoryLog, CanteenWastageLog,
     CanteenConsumptionLog, FoodCategory, CanteenOrder, OrderItem, CanteenPayment,
     CanteenIngredient, CanteenDish, CanteenCombo,
     WeeklyMenu, CanteenNotification,
+    CanteenPurchaseOrder, CanteenPurchaseOrderItem,
+    CanteenStaffProfile, CanteenStaffAttendance, CanteenStaffTask,
 )
 
 
@@ -92,20 +94,91 @@ class CanteenSupplierSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class CanteenPurchaseOrderItemSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source="inventory_item.name", read_only=True)
+    unit = serializers.CharField(source="inventory_item.unit", read_only=True)
+
+    class Meta:
+        model = CanteenPurchaseOrderItem
+        fields = "__all__"
+
+
+class CanteenPurchaseOrderSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    items = CanteenPurchaseOrderItemSerializer(many=True, read_only=True)
+    items_count = serializers.IntegerField(source="items.count", read_only=True)
+
+    class Meta:
+        model = CanteenPurchaseOrder
+        fields = "__all__"
+
+
+class CanteenVendorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CanteenVendor
+        fields = "__all__"
+
+
 class CanteenInventoryItemSerializer(serializers.ModelSerializer):
     is_low_stock = serializers.SerializerMethodField()
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    days_to_expiry = serializers.SerializerMethodField()
 
     def get_is_low_stock(self, obj):
         return float(obj.current_stock) <= float(obj.min_stock_level)
+
+    def get_days_to_expiry(self, obj):
+        if obj.expiry_date:
+            delta = obj.expiry_date - timezone.now().date()
+            return delta.days
+        return None
 
     class Meta:
         model = CanteenInventoryItem
         fields = "__all__"
 
 
+class CanteenStaffProfileSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source="user.get_full_name", read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
+    attendance_stats = serializers.SerializerMethodField()
+
+    def get_attendance_stats(self, obj):
+        total = obj.attendance.count()
+        present = obj.attendance.filter(status="present").count()
+        return {
+            "total_records": total,
+            "present_count": present,
+            "attendance_percentage": (present / total * 100) if total > 0 else 0
+        }
+
+    class Meta:
+        model = CanteenStaffProfile
+        fields = "__all__"
+
+
+class CanteenStaffAttendanceSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source="staff.user.get_full_name", read_only=True)
+    role = serializers.CharField(source="staff.role", read_only=True)
+
+    class Meta:
+        model = CanteenStaffAttendance
+        fields = "__all__"
+
+
+class CanteenStaffTaskSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source="staff.user.get_full_name", read_only=True)
+    assigned_by_name = serializers.CharField(source="assigned_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = CanteenStaffTask
+        fields = "__all__"
+
+
 class CanteenInventoryLogSerializer(serializers.ModelSerializer):
     item_name = serializers.SerializerMethodField()
     supplier_name = serializers.SerializerMethodField()
+    vendor_name = serializers.SerializerMethodField()
     recorded_by_name = serializers.SerializerMethodField()
 
     def get_item_name(self, obj):
@@ -117,6 +190,12 @@ class CanteenInventoryLogSerializer(serializers.ModelSerializer):
     def get_supplier_name(self, obj):
         try:
             return obj.supplier.name if obj.supplier else None
+        except Exception:
+            return None
+
+    def get_vendor_name(self, obj):
+        try:
+            return obj.vendor.name if obj.vendor else None
         except Exception:
             return None
 

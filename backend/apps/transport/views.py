@@ -178,9 +178,13 @@ def bus_location_log_list_view(request):
                 qs = qs.filter(route_id=route_id)
 
             if only_latest and only_latest.lower() == "true":
-                latest = qs.first()
+                # Get the latest log ID for each bus
+                from django.db.models import Max
+                latest_log_ids = BusLocationLog.objects.values('bus').annotate(latest_id=Max('id')).values_list('latest_id', flat=True)
+                qs = BusLocationLog.objects.filter(id__in=latest_log_ids).select_related("bus", "route", "recorded_by")
+                
                 return Response(
-                    BusLocationLogSerializer(latest).data if latest else None,
+                    BusLocationLogSerializer(qs, many=True).data,
                     status=status.HTTP_200_OK,
                 )
 

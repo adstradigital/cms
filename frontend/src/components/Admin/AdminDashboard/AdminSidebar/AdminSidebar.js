@@ -448,20 +448,20 @@ const ExpandableSection = ({ label, icon, sectionKey, items, isActivePath, colla
     <div className={styles.expandableMenuContainer}>
       <div
         onClick={() => setExpandedMenu(isExpanded ? null : sectionKey)}
-        className={`${styles.expandableMenu} ${isExpanded ? styles.expanded : styles.collapsed} ${isActivePath ? styles.parentActive : ''}`}
+        className={`${styles.expandableMenu} ${isExpanded ? styles.expandableMenuExpanded : styles.expandableMenuCollapsed} ${isActivePath ? styles.parentActive : ''}`}
       >
         <div className={styles.expandableMenuContent}>
-          <div className={`${styles.expandableMenuIcon} ${isExpanded ? styles.expanded : styles.collapsed} ${isActivePath ? styles.parentActiveIcon : ''}`}>
+          <div className={`${styles.expandableMenuIcon} ${isExpanded ? styles.expandableMenuIconExpanded : styles.expandableMenuIconCollapsed} ${isActivePath ? styles.parentActiveIcon : ''}`}>
              {icon}
           </div>
           <span style={{ fontWeight: isActivePath ? 900 : 'inherit' }}>{label}</span>
         </div>
         <ChevronDown
           size={14}
-          className={`${styles.expandableChevron} ${isExpanded ? styles.rotated : ''}`}
+          className={`${styles.expandableChevron} ${isExpanded ? styles.expandableChevronRotated : ''}`}
         />
       </div>
-      <div className={`${styles.subItemsContainer} ${isExpanded ? styles.expanded : styles.collapsed}`}>
+      <div className={`${styles.subItemsContainer} ${isExpanded ? styles.subItemsContainerExpanded : styles.subItemsContainerCollapsed}`}>
         {items.map((sub, idx) => (
           <SubNavItem key={idx} label={sub.label} active={pathname === sub.href} href={sub.href} />
         ))}

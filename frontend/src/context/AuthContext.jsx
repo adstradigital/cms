@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
       'super_admin': '/admins',
       'principal': '/admins',
       'staff': '/staff',
+      'driver': '/staff/transport-tracking',
       'student': '/student',
       'parent': '/parent',
     };

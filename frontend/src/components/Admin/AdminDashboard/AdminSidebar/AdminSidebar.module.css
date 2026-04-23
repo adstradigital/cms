@@ -254,19 +254,17 @@
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.3s ease;
+  font-family: "Manrope", "Segoe UI", sans-serif;
 }
-.expandableMenu.expanded {
+.expandableMenuExpanded {
   color: white;
   font-weight: 700;
 }
-.expandableMenu.collapsed {
+.expandableMenuCollapsed {
   color: rgba(255, 255, 255, 0.8);
   font-weight: 500;
 }
-.expandableMenu {
-  font-family: "Manrope", "Segoe UI", sans-serif;
-}
-.expandableMenu.collapsed:hover {
+.expandableMenuCollapsed:hover {
   background-color: rgba(255, 255, 255, 0.1);
   color: white;
 }
@@ -289,17 +287,17 @@
 .expandableMenuIcon {
   transition: opacity 0.3s ease;
 }
-.expandableMenuIcon.expanded {
+.expandableMenuIconExpanded {
   opacity: 1;
 }
-.expandableMenuIcon.collapsed {
+.expandableMenuIconCollapsed {
   opacity: 0.8;
 }
 
 .expandableChevron {
   transition: transform 0.3s ease;
 }
-.expandableChevron.rotated {
+.expandableChevronRotated {
   transform: rotate(180deg);
 }
 
@@ -310,12 +308,12 @@
   overflow: hidden;
   transition: all 0.3s ease;
 }
-.subItemsContainer.expanded {
+.subItemsContainerExpanded {
   max-height: 40rem; /* Increased to fit more items */
   margin-top: 0.25rem; /* mt-1 */
   margin-bottom: 0.5rem; /* mb-2 */
 }
-.subItemsContainer.collapsed {
+.subItemsContainerCollapsed {
   max-height: 0;
 }
 

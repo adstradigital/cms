@@ -54,6 +54,12 @@ const canteenApi = {
   updateSupplier: (id, data) => instance.patch(`/canteen/suppliers/${id}/`, data),
   deleteSupplier: (id) => instance.delete(`/canteen/suppliers/${id}/`),
 
+  // ── Vendors ──────────────────────────────────────────────────────────────────
+  getVendors: (params) => instance.get('/canteen/vendors/', { params }),
+  createVendor: (data) => instance.post('/canteen/vendors/', data),
+  updateVendor: (id, data) => instance.patch(`/canteen/vendors/${id}/`, data),
+  deleteVendor: (id) => instance.delete(`/canteen/vendors/${id}/`),
+
   // ── Inventory ────────────────────────────────────────────────────────────────
   getInventoryItems: (params) => instance.get('/canteen/inventory-items/', { params }),
   createInventoryItem: (data) => instance.post('/canteen/inventory-items/', data),

@@ -18,13 +18,262 @@
   min-height: 100%;
   padding: var(--space-6);
   border-radius: var(--radius-xl);
-  background: 
-    radial-gradient(circle at 0% 0%, rgba(11, 107, 203, 0.04) 0%, transparent 50%),
-    radial-gradient(circle at 100% 100%, rgba(0, 166, 118, 0.04) 0%, transparent 50%),
-    #f8fafc;
-  font-family: var(--font-sans);
+  background: #f8fafc;
+  font-family: 'Inter', var(--font-sans);
   color: var(--t-ink);
 }
+
+.trackingWrapper {
+  display: flex;
+  gap: 24px;
+  height: calc(100vh - 250px);
+  min-height: 700px;
+  animation: fadeUp 0.6s ease-out;
+}
+
+.fleetSidebar {
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: transparent;
+}
+
+.fleetHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px;
+}
+
+.fleetHeader h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  color: #1e293b;
+}
+
+.busList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.busList::-webkit-scrollbar { width: 6px; }
+.busList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+.busCard {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.busCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05);
+  border-color: #94a3b8;
+}
+
+.busCardActive {
+  border: 2px solid #1a73e8;
+  background: #f0f7ff;
+  box-shadow: 0 10px 25px -5px rgba(26, 115, 232, 0.1);
+}
+
+.busCardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.busCardInfo {
+  display: flex;
+  gap: 12px;
+}
+
+.busIconBox {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.busCardActive .busIconBox {
+  background: #1a73e8;
+  color: white;
+}
+
+.busDetails h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.busDetails p {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.statusBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.statusOnline { background: #dcfce7; color: #15803d; }
+.statusDelayed { background: #fef3c7; color: #b45309; }
+.statusOffline { background: #f1f5f9; color: #64748b; }
+
+.busCardMeta {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.metaItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.trackingWrapperFull {
+  display: flex;
+  height: calc(100vh - 250px);
+  min-height: 700px;
+  animation: fadeUp 0.6s ease-out;
+}
+
+.mapContainerFull {
+  flex: 1;
+  background: white;
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05);
+}
+
+.mapContainer {
+  flex: 1;
+  background: white;
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05);
+}
+
+.mapOverlay {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.searchBox {
+  background: white;
+  border-radius: 16px;
+  padding: 10px 16px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 300px;
+  border: 1px solid #e2e8f0;
+}
+
+.searchBox input {
+  border: none;
+  outline: none;
+  width: 100%;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.mapControls {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.controlBtn {
+  width: 40px;
+  height: 40px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #64748b;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
+}
+
+.controlBtn:hover {
+  background: #f8fafc;
+  color: #1a73e8;
+}
+
+.pulseMarker {
+  position: relative;
+}
+
+.pulseMarker::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  background: inherit;
+  border-radius: 50%;
+  opacity: 0.5;
+  animation: markerPulse 2s infinite;
+}
+
+@keyframes markerPulse {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+  100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+}
+
 
 /* —— Header —— */
 .header {

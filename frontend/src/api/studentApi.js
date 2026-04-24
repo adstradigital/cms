@@ -10,6 +10,10 @@ const studentApi = {
   getResults: () => instance.get('/student/results/'),
   getFees: () => instance.get('/student/fees/'),
   getMyTestAttempts: () => instance.get('/exams/online-tests/my-attempts/'),
+  getMaterials: (params) => instance.get(ENDPOINTS.ACADEMICS.MATERIALS, { params }),
+  getMySubmissions: (params) => instance.get('/academics/my-submissions/', { params }),
 };
+
+
 
 export default studentApi;

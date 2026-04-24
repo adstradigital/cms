@@ -148,10 +148,16 @@ class HomeworkSerializer(serializers.ModelSerializer):
 class HomeworkSubmissionSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
     homework_title = serializers.CharField(source="homework.title", read_only=True)
+    subject_name = serializers.CharField(source="homework.subject.name", read_only=True)
+    teacher_name = serializers.CharField(source="homework.assigned_by.get_full_name", read_only=True)
 
     class Meta:
         model = HomeworkSubmission
-        fields = "__all__"
+        fields = [
+            "id", "homework", "homework_title", "student", "student_name", 
+            "subject_name", "teacher_name", "submitted_file", "remarks", 
+            "grade", "status", "submitted_at", "is_late"
+        ]
         read_only_fields = ["submitted_at", "is_late"]
 
 

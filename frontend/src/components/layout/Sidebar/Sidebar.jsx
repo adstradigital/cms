@@ -57,6 +57,7 @@ const menuSections = {
         { label: 'Attendance', href: '/staff/attendance', icon: ClipboardCheck },
         { label: 'Exams', href: '/staff/exams', icon: FileText },
         { label: 'Assignments', href: '/staff/assignments', icon: Edit3 },
+        { label: 'Study Material', href: '/staff/study-material', icon: BookOpen },
       ]
     }
   ],
@@ -103,12 +104,15 @@ const menuSections = {
           href: '/student/results', 
           icon: BarChart3,
           subItems: [
-            { label: 'Academic Performance', href: '/student/results?view=academic' },
-            { label: 'Online Quiz History', href: '/student/results?view=online' }
+            { label: 'Real Exam Results', href: '/student/results?view=academic' },
+            { label: 'Online Quiz History', href: '/student/results?view=online' },
+            { label: 'Assignment evaluations', href: '/student/results?view=assignments' }
           ]
         },
+
         { label: 'Online Test', href: '/student/tests', icon: BrainCircuit },
         { label: 'Brain Games', href: '/student/brain-games', icon: Gamepad2 },
+        { label: 'Study Material', href: '/student/study-material', icon: BookOpen },
         { label: 'Fees', href: '/student/fees', icon: CreditCard },
       ]
     }

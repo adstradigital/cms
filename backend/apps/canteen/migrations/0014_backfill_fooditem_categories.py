@@ -45,7 +45,7 @@ def backfill_fooditem_categories(apps, schema_editor):
         return category.id
 
     with connection.cursor() as cursor:
-        cursor.execute("SELECT id, category_id FROM canteen_food_items")
+        cursor.execute("SELECT id, category_legacy FROM canteen_food_items")
         food_item_rows = cursor.fetchall()
 
     updates = []

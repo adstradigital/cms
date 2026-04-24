@@ -1,22 +1,36 @@
 .layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
   min-height: 100vh;
   position: relative;
-  overflow-x: hidden;
+  width: 100%;
+  transition: grid-template-columns 0.4s ease;
+  background: #f8fafc;
+}
+
+/* Removed mesh/gradients for a cleaner look */
+
+.layout[data-collapsed="true"] {
+  grid-template-columns: var(--sidebar-collapsed-width) 1fr;
+}
+
+.sidebarSpacer {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .main {
-  flex: 1;
-  transition: margin-left var(--transition-base);
   display: flex;
   flex-direction: column;
-  padding: 0 var(--space-4) var(--space-8) 0;
+  min-height: 100vh;
+  min-width: 0;
+  position: relative;
 }
 
 .content {
   flex: 1;
-  padding: var(--space-6);
-  max-width: var(--content-max-width);
+  padding: 24px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -24,6 +38,12 @@
 }
 
 @media (max-width: 768px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .sidebarSpacer {
+    display: none;
+  }
   .main {
     margin-left: 0 !important;
   }

@@ -2,11 +2,13 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     FoodItemViewSet, DailyMenuViewSet, CanteenComplaintViewSet,
-    CanteenSupplierViewSet, CanteenInventoryItemViewSet,
+    CanteenSupplierViewSet, CanteenVendorViewSet, CanteenInventoryItemViewSet,
     CanteenInventoryLogViewSet, CanteenWastageLogViewSet,
     CanteenConsumptionLogViewSet, FoodCategoryViewSet, CanteenOrderViewSet,
     CanteenIngredientViewSet, CanteenDishViewSet, CanteenComboViewSet, WeeklyMenuViewSet,
     OrderItemViewSet, CanteenPaymentViewSet,
+    CanteenPurchaseOrderViewSet, CanteenStaffProfileViewSet,
+    CanteenStaffAttendanceViewSet, CanteenStaffTaskViewSet,
     canteen_dashboard_view, canteen_reports_view,
 )
 
@@ -17,6 +19,7 @@ router.register(r'daily-menu', DailyMenuViewSet)
 router.register(r'weekly-menu', WeeklyMenuViewSet)
 router.register(r'complaints', CanteenComplaintViewSet)
 router.register(r'suppliers', CanteenSupplierViewSet)
+router.register(r'vendors', CanteenVendorViewSet)
 router.register(r'inventory-items', CanteenInventoryItemViewSet)
 router.register(r'inventory-logs', CanteenInventoryLogViewSet)
 router.register(r'wastage-logs', CanteenWastageLogViewSet)
@@ -27,6 +30,10 @@ router.register(r'payments', CanteenPaymentViewSet)
 router.register(r'ingredients', CanteenIngredientViewSet)
 router.register(r'dishes', CanteenDishViewSet)
 router.register(r'combos', CanteenComboViewSet)
+router.register(r'purchase-orders', CanteenPurchaseOrderViewSet)
+router.register(r'staff-profiles', CanteenStaffProfileViewSet)
+router.register(r'staff-attendance', CanteenStaffAttendanceViewSet)
+router.register(r'staff-tasks', CanteenStaffTaskViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

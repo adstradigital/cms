@@ -79,6 +79,8 @@ INSTALLED_APPS = [
     'apps.events',
     'apps.canteen',
     'apps.ai_brain',
+    'apps.expenses',
+    'apps.payroll',
 ]
 
 MIDDLEWARE = [

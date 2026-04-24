@@ -16,6 +16,10 @@ urlpatterns = [
     path("issues/", views.book_issue_list_view, name="book-issue-list"),
     path("issues/<int:pk>/return/", views.book_return_view, name="book-return"),
     path("issues/<int:pk>/pay/", views.mark_fine_paid_view, name="mark-fine-paid"),
+    path("scan/borrower/", views.scan_borrower_view, name="library-scan-borrower"),
+    path("scan/book/", views.scan_book_view, name="library-scan-book"),
+    path("scan/issue/", views.scan_issue_view, name="library-scan-issue"),
+    path("scan/return/", views.scan_return_view, name="library-scan-return"),
     path("reports/", views.library_reports_view, name="library-reports"),
     path("reports/export/", views.library_reports_export_view, name="library-reports-export"),
 ]

@@ -126,7 +126,41 @@ const adminApi = {
   deleteNotification: (id) => instance.delete(`/notifications/${id}/`),
   publishNotification: (id) => instance.post(`/notifications/${id}/publish/`),
 
-  // Fees
+  // ─── Fees ─────────────────────────────────────────────────────────────────
+  // Fee Categories (Fee Heads)
+  getFeeCategories: (params) => instance.get('/fees/categories/', { params }),
+  createFeeCategory: (data) => instance.post('/fees/categories/', data),
+  updateFeeCategory: (id, data) => instance.patch(`/fees/categories/${id}/`, data),
+  deleteFeeCategory: (id) => instance.delete(`/fees/categories/${id}/`),
+
+  // Fee Structures
+  getFeeStructures: (params) => instance.get('/fees/structures/', { params }),
+  createFeeStructure: (data) => instance.post('/fees/structures/', data),
+  updateFeeStructure: (id, data) => instance.patch(`/fees/structures/${id}/`, data),
+  deleteFeeStructure: (id) => instance.delete(`/fees/structures/${id}/`),
+  copyFeeStructure: (data) => instance.post('/fees/structures/copy/', data),
+
+  // Fee Instalments
+  getFeeInstalments: (params) => instance.get('/fees/instalments/', { params }),
+  createFeeInstalment: (data) => instance.post('/fees/instalments/', data),
+  updateFeeInstalment: (id, data) => instance.patch(`/fees/instalments/${id}/`, data),
+  deleteFeeInstalment: (id) => instance.delete(`/fees/instalments/${id}/`),
+
+  // Concessions
+  getConcessions: (params) => instance.get('/fees/concessions/', { params }),
+  createConcession: (data) => instance.post('/fees/concessions/', data),
+  updateConcession: (id, data) => instance.patch(`/fees/concessions/${id}/`, data),
+  deleteConcession: (id) => instance.delete(`/fees/concessions/${id}/`),
+  getStudentConcessions: (params) => instance.get('/fees/student-concessions/', { params }),
+  assignStudentConcession: (data) => instance.post('/fees/student-concessions/', data),
+  revokeStudentConcession: (id) => instance.delete(`/fees/student-concessions/${id}/`),
+
+  // Fee Payments & Receipts
+  getFeePayments: (params) => instance.get('/fees/payments/', { params }),
+  createFeePayment: (data) => instance.post('/fees/payments/', data),
+  updateFeePayment: (id, data) => instance.patch(`/fees/payments/${id}/`, data),
+
+  // Reports & Tracking
   getFeeSectionOverview: (params) => instance.get('/fees/section-overview/', { params }),
   getStudentFeeStatement: (studentId, params) => instance.get(`/fees/students/${studentId}/statement/`, { params }),
   getFeeDefaulters: (params) => instance.get('/fees/defaulters/', { params }),
@@ -190,6 +224,46 @@ const adminApi = {
   // Grading
   gradeTestAnswer: (answerId, data) => instance.patch(`/exams/online-tests/answers/${answerId}/grade/`, data),
   publishTestResult: (attemptId) => instance.post(`/exams/online-tests/attempts/${attemptId}/publish/`),
+
+  // ─── Expenses ─────────────────────────────────────────────────────────────
+  getExpenseCategories: (params) => instance.get('/expenses/categories/', { params }),
+  createExpenseCategory: (data) => instance.post('/expenses/categories/', data),
+  updateExpenseCategory: (id, data) => instance.patch(`/expenses/categories/${id}/`, data),
+  deleteExpenseCategory: (id) => instance.delete(`/expenses/categories/${id}/`),
+  getExpenseEntries: (params) => instance.get('/expenses/entries/', { params }),
+  createExpenseEntry: (data) => instance.post('/expenses/entries/', data),
+  updateExpenseEntry: (id, data) => instance.patch(`/expenses/entries/${id}/`, data),
+  deleteExpenseEntry: (id) => instance.delete(`/expenses/entries/${id}/`),
+  approveExpense: (id, data) => instance.post(`/expenses/entries/${id}/approve/`, data),
+
+  // ─── Payroll ──────────────────────────────────────────────────────────────
+  getSalaryStructures: (params) => instance.get('/payroll/salary-structures/', { params }),
+  createSalaryStructure: (data) => instance.post('/payroll/salary-structures/', data),
+  updateSalaryStructure: (id, data) => instance.patch(`/payroll/salary-structures/${id}/`, data),
+  deleteSalaryStructure: (id) => instance.delete(`/payroll/salary-structures/${id}/`),
+  getDeductionTypes: (params) => instance.get('/payroll/deductions/', { params }),
+  createDeductionType: (data) => instance.post('/payroll/deductions/', data),
+  updateDeductionType: (id, data) => instance.patch(`/payroll/deductions/${id}/`, data),
+  deleteDeductionType: (id) => instance.delete(`/payroll/deductions/${id}/`),
+  getPayrollRuns: (params) => instance.get('/payroll/runs/', { params }),
+  createPayrollRun: (data) => instance.post('/payroll/runs/', data),
+  getPayrollRun: (id) => instance.get(`/payroll/runs/${id}/`),
+  processPayrollRun: (id) => instance.post(`/payroll/runs/${id}/process/`),
+  updatePayrollEntry: (id, data) => instance.patch(`/payroll/entries/${id}/`, data),
+  getPayrollEntry: (id) => instance.get(`/payroll/entries/${id}/`),
+
+  // ─── Budget ───────────────────────────────────────────────────────────────
+  getDonations: (params) => instance.get('/fees/donations/', { params }),
+  createDonation: (data) => instance.post('/fees/donations/', data),
+  updateDonation: (id, data) => instance.patch(`/fees/donations/${id}/`, data),
+  deleteDonation: (id) => instance.delete(`/fees/donations/${id}/`),
+  getAnnualBudgets: (params) => instance.get('/fees/budgets/', { params }),
+  createAnnualBudget: (data) => instance.post('/fees/budgets/', data),
+  updateAnnualBudget: (id, data) => instance.patch(`/fees/budgets/${id}/`, data),
+  getBudgetItems: (budgetId) => instance.get(`/fees/budgets/${budgetId}/items/`),
+  createBudgetItem: (data) => instance.post('/fees/budget-items/', data),
+  updateBudgetItem: (id, data) => instance.patch(`/fees/budget-items/${id}/`, data),
+  deleteBudgetItem: (id) => instance.delete(`/fees/budget-items/${id}/`),
 };
 
 export default adminApi;

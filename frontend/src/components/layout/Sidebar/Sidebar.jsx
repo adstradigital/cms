@@ -4,30 +4,31 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  GraduationCap, 
-  School, 
-  BookOpen, 
-  UserPlus, 
-  FileSpreadsheet, 
-  ClipboardCheck, 
-  FileText, 
-  Edit3, 
-  CalendarDays, 
-  Library, 
-  BarChart3, 
-  CreditCard, 
-  Settings, 
-  HelpCircle, 
+import {
+  LayoutDashboard,
+  Users,
+  GraduationCap,
+  School,
+  BookOpen,
+  UserPlus,
+  FileSpreadsheet,
+  ClipboardCheck,
+  FileText,
+  Edit3,
+  CalendarDays,
+  Library,
+  BarChart3,
+  CreditCard,
+  Settings,
+  HelpCircle,
   LogOut,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   Zap,
   BrainCircuit,
-  Gamepad2
+  Gamepad2,
+  Navigation
 } from 'lucide-react';
 import styles from './Sidebar.module.css';
 import useAuth from '@/hooks/useAuth';
@@ -57,7 +58,7 @@ const menuSections = {
         { label: 'Attendance', href: '/staff/attendance', icon: ClipboardCheck },
         { label: 'Exams', href: '/staff/exams', icon: FileText },
         { label: 'Assignments', href: '/staff/assignments', icon: Edit3 },
-        { label: 'Study Material', href: '/staff/study-material', icon: BookOpen },
+        { label: 'Bus Tracking', href: '/staff/transport-tracking', icon: Navigation },
       ]
     }
   ],
@@ -68,9 +69,9 @@ const menuSections = {
         { label: 'Dashboard', href: '/student', icon: LayoutDashboard },
         { label: 'My Profile', href: '/student/profile', icon: Users },
         { label: 'Timetable', href: '/student/timetable', icon: CalendarDays },
-        { 
-          label: 'Attendance', 
-          href: '/student/attendance', 
+        {
+          label: 'Attendance',
+          href: '/student/attendance',
           icon: ClipboardCheck,
           subItems: [
             { label: 'Attendance Insights', href: '/student/attendance?view=insights' },
@@ -78,9 +79,9 @@ const menuSections = {
             { label: 'Academic Calendar', href: '/student/attendance?view=calendar' }
           ]
         },
-        { 
-          label: 'Library', 
-          href: '/student/library', 
+        {
+          label: 'Library',
+          href: '/student/library',
           icon: Library,
           subItems: [
             { label: 'Resources Catalog', href: '/student/library?view=catalog' },
@@ -88,9 +89,9 @@ const menuSections = {
             { label: 'Reservations & Help', href: '/student/library?view=help' }
           ]
         },
-        { 
-          label: 'Assignments', 
-          href: '/student/assignments', 
+        {
+          label: 'Assignments',
+          href: '/student/assignments',
           icon: Edit3,
           subItems: [
             { label: 'Submission Portal', href: '/student/assignments?view=portal' },
@@ -99,9 +100,9 @@ const menuSections = {
             { label: 'Learning Materials', href: '/student/assignments?view=materials' }
           ]
         },
-        { 
-          label: 'Results', 
-          href: '/student/results', 
+        {
+          label: 'Results',
+          href: '/student/results',
           icon: BarChart3,
           subItems: [
             { label: 'Real Exam Results', href: '/student/results?view=academic' },
@@ -119,15 +120,17 @@ const menuSections = {
   ],
   parent: [
     {
-      title: 'MAIN',
+      title: 'PARENT PORTAL',
       items: [
         { label: 'Dashboard', href: '/parent', icon: LayoutDashboard },
-        { label: 'Child Progress', href: '/parent?tab=academics', icon: BarChart3 },
-        { label: 'Attendance', href: '/parent?tab=attendance', icon: ClipboardCheck },
-        { label: 'Homework', href: '/parent?tab=homework', icon: Edit3 },
-        { label: 'Payments', href: '/parent?tab=fees', icon: CreditCard },
-        { label: 'PTM Scheduler', href: '/parent?tab=ptm', icon: CalendarDays },
-        { label: 'Transport', href: '/parent?tab=transport', icon: School },
+        { label: 'Child Progress View', href: '/parent?tab=academics', icon: BarChart3 },
+        { label: 'Attendance Alerts', href: '/parent?tab=attendance', icon: ClipboardCheck },
+        { label: 'Timetable & Holidays', href: '/parent?tab=timetable', icon: CalendarDays },
+        { label: 'Homework View', href: '/parent?tab=homework', icon: Edit3 },
+        { label: 'Fee Payments', href: '/parent?tab=fees', icon: CreditCard },
+        { label: 'Teacher Communication', href: '/parent?tab=communication', icon: Users },
+        { label: 'Transport Tracking', href: '/parent?tab=transport', icon: School },
+        { label: 'Behavior & Conduct', href: '/parent?tab=conduct', icon: FileText },
       ]
     }
   ],
@@ -198,7 +201,7 @@ export default function Sidebar({ role = 'admin', collapsed, onToggle }) {
     } else {
       setInternalCollapsed(prev => {
         const next = !prev;
-        try { localStorage.setItem(STORAGE_KEY, String(next)); } catch {}
+        try { localStorage.setItem(STORAGE_KEY, String(next)); } catch { }
         return next;
       });
     }
@@ -207,7 +210,7 @@ export default function Sidebar({ role = 'admin', collapsed, onToggle }) {
   // Sync to localStorage whenever parent-controlled collapsed changes
   useEffect(() => {
     if (!isControlled) return;
-    try { localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch {}
+    try { localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch { }
   }, [isControlled, collapsed]);
 
   // ── Expanded sub-menus (expanded state) ─────────────────────────────────────
@@ -249,13 +252,26 @@ export default function Sidebar({ role = 'admin', collapsed, onToggle }) {
   const isPathActive = (href) => {
     if (!href) return false;
     const [base, query] = href.split('?');
-    if (!query) return pathname === base;
-    const view = new URLSearchParams(query).get('view');
-    return pathname === base && searchParams.get('view') === view;
+    if (pathname !== base) return false;
+
+    const currentQuery = searchParams.toString();
+
+    // Case 1: Href has no query (e.g. /parent)
+    // It should only be active if the current URL also has no relevant query params
+    if (!query) {
+      return !searchParams.get('tab') && !searchParams.get('view');
+    }
+
+    // Case 2: Href has query (e.g. /parent?tab=attendance)
+    const hrefParams = new URLSearchParams(query);
+    for (const [key, value] of hrefParams.entries()) {
+      if (searchParams.get(key) !== value) return false;
+    }
+    return true;
   };
 
-  const getSettingsHref = () => role === 'admin' ? '/admins/settings' : `/${role}/settings`;
-  const getSupportHref  = () => role === 'admin' ? '/admins/support'  : `/${role}/support`;
+  const getSettingsHref = () => role === 'parent' ? '/parent?tab=settings' : (role === 'admin' ? '/admins/settings' : `/${role}/settings`);
+  const getSupportHref = () => role === 'parent' ? '/parent?tab=support' : (role === 'admin' ? '/admins/support' : `/${role}/support`);
 
   return (
     <>
@@ -286,7 +302,7 @@ export default function Sidebar({ role = 'admin', collapsed, onToggle }) {
                   const Icon = item.icon;
                   const hasSubItems = item.subItems?.length > 0;
                   const isExpanded = expandedItems[item.label] || pathname.startsWith(item.href);
-                  const isActive = pathname === item.href;
+                  const isActive = isPathActive(item.href);
 
                   return (
                     <div

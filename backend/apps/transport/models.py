@@ -25,6 +25,8 @@ class SchoolBus(models.Model):
     )
     attendant_name = models.CharField(max_length=100, blank=True)
     attendant_phone = models.CharField(max_length=20, blank=True)
+    driver_name = models.CharField(max_length=100, blank=True)
+    driver_phone = models.CharField(max_length=20, blank=True)
     tracker_device_id = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     is_active = models.BooleanField(default=True)
@@ -189,6 +191,31 @@ class TransportFee(models.Model):
     class Meta:
         db_table = "transport_fees"
         ordering = ["-due_date", "-created_at"]
+        unique_together = ["student", "period_label"]
+
+
+class TransportFeePayment(models.Model):
+    fee = models.ForeignKey(TransportFee, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_date = models.DateField(default=timezone.now)
+    payment_method = models.CharField(max_length=20, choices=TransportFee.PAYMENT_METHOD_CHOICES)
+    transaction_id = models.CharField(max_length=120, blank=True)
+    remarks = models.TextField(blank=True)
+    collected_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transport_payments_collected",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Payment of {self.amount} for {self.fee}"
+
+    class Meta:
+        db_table = "transport_fee_payments"
+        ordering = ["-payment_date", "-created_at"]
 
 
 class TransportComplaint(models.Model):

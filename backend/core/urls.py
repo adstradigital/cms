@@ -46,6 +46,8 @@ urlpatterns = [
     path('api/timetables/', include('apps.academics.urls_timetable')),
     path('api/canteen/', include('apps.canteen.urls')),
     path('api/ai-brain/', include('apps.ai_brain.urls')),
+    path('api/expenses/', include('apps.expenses.urls')),
+    path('api/payroll/', include('apps.payroll.urls')),
 ]
 
 # Serve media files in development

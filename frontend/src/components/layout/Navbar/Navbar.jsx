@@ -21,9 +21,18 @@ export default function Navbar({ title = '', user = null, onLogout }) {
   }, []);
 
   const getProfileHref = () => {
-    const role = user?.role?.toLowerCase();
+    const role = String(user?.role || '').toLowerCase();
     if (role === 'student') return '/student/profile';
     if (role === 'admin') return '/admins/profile';
+    if (role === 'parent') return '/parent?tab=settings'; // Parent profile/settings goes to settings tab
+    return '#';
+  };
+
+  const getSettingsHref = () => {
+    const role = String(user?.role || '').toLowerCase();
+    if (role === 'student') return '/student/settings';
+    if (role === 'admin') return '/admins/settings';
+    if (role === 'parent') return '/parent?tab=settings';
     return '#';
   };
 
@@ -58,24 +67,22 @@ export default function Navbar({ title = '', user = null, onLogout }) {
               onClick={() => setShowDropdown(!showDropdown)}
             >
               <div className={styles.avatar}>
-                {user.name?.charAt(0).toUpperCase() || 'U'}
+                {user.name?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U'}
               </div>
               <div className={styles.userInfo}>
                 <span className={styles.userName}>{user.name}</span>
                 <span className={styles.userRole}>{user.role}</span>
               </div>
-              <ChevronDown 
-                size={14} 
-                className={`${styles.chevron} ${showDropdown ? styles.chevronOpen : ''}`} 
-              />
+              <ChevronDown size={14} className={styles.chevron} />
             </button>
 
+            {/* Dropdown Menu */}
             {showDropdown && (
               <div className={styles.dropdown}>
                 {/* Profile Header */}
                 <div className={styles.dropdownHeader}>
                   <div className={styles.dropdownAvatar}>
-                    {user.name?.charAt(0).toUpperCase() || 'U'}
+                    {user.name?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U'}
                   </div>
                   <div className={styles.dropdownUserInfo}>
                     <span className={styles.dropdownName}>{user.name}</span>
@@ -97,7 +104,7 @@ export default function Navbar({ title = '', user = null, onLogout }) {
                   <span>My Profile</span>
                 </a>
                 <a 
-                  href="#" 
+                  href={getSettingsHref()} 
                   className={styles.dropdownItem}
                   onClick={() => setShowDropdown(false)}
                 >

@@ -19,6 +19,7 @@ export default function AdminsGlobalLayout({ children }) {
       'super_admin': '/admins',
       'principal': '/admins',
       'staff': '/staff',
+      'driver': '/staff/transport-tracking',
       'student': '/student',
       'parent': '/parent',
     };

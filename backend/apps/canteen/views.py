@@ -8,18 +8,22 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
-    FoodItem, DailyMenu, CanteenComplaint, CanteenSupplier,
+    FoodItem, DailyMenu, CanteenComplaint, CanteenSupplier, CanteenVendor,
     CanteenInventoryItem, CanteenInventoryLog, CanteenWastageLog,
     CanteenConsumptionLog, FoodCategory, CanteenOrder, OrderItem, CanteenPayment,
-    CanteenIngredient, CanteenDish, CanteenCombo, WeeklyMenu
+    CanteenIngredient, CanteenDish, CanteenCombo, WeeklyMenu,
+    CanteenPurchaseOrder, CanteenPurchaseOrderItem,
+    CanteenStaffProfile, CanteenStaffAttendance, CanteenStaffTask,
 )
 from .serializers import (
     FoodItemSerializer, DailyMenuSerializer, CanteenComplaintSerializer,
-    CanteenSupplierSerializer, CanteenInventoryItemSerializer,
+    CanteenSupplierSerializer, CanteenVendorSerializer, CanteenInventoryItemSerializer,
     CanteenInventoryLogSerializer, CanteenWastageLogSerializer,
     CanteenConsumptionLogSerializer, FoodCategorySerializer, CanteenOrderSerializer,
     CanteenIngredientSerializer, CanteenDishSerializer, CanteenComboSerializer,
     OrderItemSerializer, CanteenPaymentSerializer, WeeklyMenuSerializer,
+    CanteenPurchaseOrderSerializer, CanteenPurchaseOrderItemSerializer,
+    CanteenStaffProfileSerializer, CanteenStaffAttendanceSerializer, CanteenStaffTaskSerializer,
 )
 
 
@@ -158,6 +162,48 @@ class CanteenSupplierViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_active=is_active.lower() == 'true')
         return qs
 
+    @action(detail=True, methods=['get'])
+    def performance(self, request, pk=None):
+        supplier = self.get_object()
+        # Mock logic or real logic if orders exist
+        return Response({
+            'quality_score': float(supplier.quality_score),
+            'delivery_score': float(supplier.delivery_score),
+            'performance_rating': float(supplier.performance_rating),
+            'total_orders': supplier.purchase_orders.count(),
+            'received_orders': supplier.purchase_orders.filter(status='received').count()
+        })
+
+
+class CanteenPurchaseOrderViewSet(viewsets.ModelViewSet):
+    queryset = CanteenPurchaseOrder.objects.prefetch_related('items').all()
+    serializer_class = CanteenPurchaseOrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=True, methods=['post'])
+    def receive_order(self, request, pk=None):
+        order = self.get_object()
+        if order.status == 'received':
+            return Response({'error': 'Order already received'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # In a real app, you'd iterate through items and update inventory
+        order.status = 'received'
+        order.save()
+        return Response({'status': 'Order marked as received'})
+
+
+class CanteenVendorViewSet(viewsets.ModelViewSet):
+    queryset = CanteenVendor.objects.all()
+    serializer_class = CanteenVendorSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() == 'true')
+        return qs
+
 
 class CanteenInventoryItemViewSet(viewsets.ModelViewSet):
     queryset = CanteenInventoryItem.objects.all()
@@ -168,6 +214,40 @@ class CanteenInventoryItemViewSet(viewsets.ModelViewSet):
     def low_stock(self, request):
         qs = self.get_queryset().filter(current_stock__lte=F('min_stock_level'))
         return Response(self.get_serializer(qs, many=True).data)
+
+    @action(detail=False, methods=['get'])
+    def near_expiry(self, request):
+        soon = timezone.now().date() + timedelta(days=7)
+        qs = self.get_queryset().filter(expiry_date__lte=soon, expiry_date__gte=timezone.now().date())
+        return Response(self.get_serializer(qs, many=True).data)
+
+
+class CanteenStaffProfileViewSet(viewsets.ModelViewSet):
+    queryset = CanteenStaffProfile.objects.select_related('user').all()
+    serializer_class = CanteenStaffProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class CanteenStaffAttendanceViewSet(viewsets.ModelViewSet):
+    queryset = CanteenStaffAttendance.objects.select_related('staff__user').all()
+    serializer_class = CanteenStaffAttendanceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        date = self.request.query_params.get('date')
+        if date:
+            qs = qs.filter(date=date)
+        return qs
+
+
+class CanteenStaffTaskViewSet(viewsets.ModelViewSet):
+    queryset = CanteenStaffTask.objects.select_related('staff__user', 'assigned_by').all()
+    serializer_class = CanteenStaffTaskSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(assigned_by=self.request.user)
 
 
 class CanteenInventoryLogViewSet(viewsets.ModelViewSet):

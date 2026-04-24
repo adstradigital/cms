@@ -131,6 +131,10 @@ class CanteenSupplier(models.Model):
     address = models.TextField(blank=True)
     category = models.CharField(max_length=100, help_text="e.g. Vegetables, Dairy, Meat")
     is_active = models.BooleanField(default=True)
+    # Performance tracking
+    quality_score = models.DecimalField(max_digits=3, decimal_places=2, default=5.00, help_text="Quality rating out of 5")
+    delivery_score = models.DecimalField(max_digits=3, decimal_places=2, default=5.00, help_text="Delivery time rating out of 5")
+    performance_rating = models.DecimalField(max_digits=3, decimal_places=2, default=5.00, help_text="Overall performance rating")
 
     def __str__(self):
         return self.name
@@ -139,12 +143,29 @@ class CanteenSupplier(models.Model):
         db_table = "canteen_suppliers"
 
 
+class CanteenVendor(models.Model):
+    name = models.CharField(max_length=150)
+    contact_person = models.CharField(max_length=100, blank=True)
+    phone = models.CharField(max_length=20)
+    email = models.EmailField(blank=True)
+    location = models.CharField(max_length=100, blank=True, help_text="e.g. Kiosk 1, Main Canteen")
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "canteen_vendors"
+
+
 class CanteenInventoryItem(models.Model):
     name = models.CharField(max_length=150)
     category = models.CharField(max_length=100, blank=True)
     unit = models.CharField(max_length=20, default="kg")
     current_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     min_stock_level = models.DecimalField(max_digits=12, decimal_places=2, default=5)
+    expiry_date = models.DateField(null=True, blank=True)
+    supplier = models.ForeignKey(CanteenSupplier, on_delete=models.SET_NULL, null=True, blank=True, related_name="supplied_items")
     last_updated = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -162,6 +183,7 @@ class CanteenInventoryLog(models.Model):
     quantity = models.DecimalField(max_digits=12, decimal_places=2)
     date = models.DateTimeField(default=timezone.now)
     supplier = models.ForeignKey(CanteenSupplier, on_delete=models.SET_NULL, null=True, blank=True)
+    vendor = models.ForeignKey(CanteenVendor, on_delete=models.SET_NULL, null=True, blank=True)
     reason = models.CharField(max_length=255, blank=True)
     recorded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
@@ -313,3 +335,119 @@ class CanteenPayment(models.Model):
     class Meta:
         db_table = "canteen_payments"
         ordering = ["-payment_date"]
+
+
+# ─── Purchase Order Models ─────────────────────────────────────────────────────
+
+class CanteenPurchaseOrder(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("ordered", "Ordered"),
+        ("received", "Received"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    supplier = models.ForeignKey(CanteenSupplier, on_delete=models.CASCADE, related_name="purchase_orders")
+    order_date = models.DateField(default=timezone.now)
+    expected_delivery = models.DateField(null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"PO-{self.id} for {self.supplier.name}"
+
+    class Meta:
+        db_table = "canteen_purchase_orders"
+        ordering = ["-order_date"]
+
+
+class CanteenPurchaseOrderItem(models.Model):
+    purchase_order = models.ForeignKey(CanteenPurchaseOrder, on_delete=models.CASCADE, related_name="items")
+    inventory_item = models.ForeignKey(CanteenInventoryItem, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    received_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = "canteen_purchase_order_items"
+
+
+# ─── Staff / Vendor Management Models ──────────────────────────────────────────
+
+class CanteenStaffProfile(models.Model):
+    ROLE_CHOICES = [
+        ("manager", "Manager"),
+        ("cook", "Cook"),
+        ("cashier", "Cashier"),
+        ("helper", "Helper"),
+        ("cleaner", "Cleaner"),
+    ]
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("inactive", "Inactive"),
+        ("on_leave", "On Leave"),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="canteen_staff_profile")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="helper")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    joined_date = models.DateField(default=timezone.now)
+    phone = models.CharField(max_length=20, blank=True)
+    salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    def __str__(self):
+        return f"{self.user.get_full_name()} - {self.role}"
+
+    class Meta:
+        db_table = "canteen_staff_profiles"
+
+
+class CanteenStaffAttendance(models.Model):
+    ATTENDANCE_STATUS = [
+        ("present", "Present"),
+        ("absent", "Absent"),
+        ("late", "Late"),
+        ("half_day", "Half Day"),
+    ]
+    staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.CASCADE, related_name="attendance")
+    date = models.DateField(default=timezone.now)
+    check_in = models.TimeField(null=True, blank=True)
+    check_out = models.TimeField(null=True, blank=True)
+    status = models.CharField(max_length=15, choices=ATTENDANCE_STATUS, default="present")
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "canteen_staff_attendance"
+        unique_together = ("staff", "date")
+
+
+class CanteenStaffTask(models.Model):
+    TASK_STATUS = [
+        ("pending", "Pending"),
+        ("in_progress", "In Progress"),
+        ("completed", "Completed"),
+        ("overdue", "Overdue"),
+    ]
+    PRIORITY_CHOICES = [
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+    ]
+    
+    staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.CASCADE, related_name="tasks")
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    deadline = models.DateTimeField()
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default="medium")
+    status = models.CharField(max_length=20, choices=TASK_STATUS, default="pending")
+    assigned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="assigned_canteen_tasks")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        db_table = "canteen_staff_tasks"
+        ordering = ["-deadline"]

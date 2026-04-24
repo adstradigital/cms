@@ -1,7 +1,10 @@
-from decimal import Decimal
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
+import json
 import re
+from urllib.parse import parse_qs, urlparse
 from xml.sax.saxutils import escape
 
 from django.http import HttpResponse
@@ -14,6 +17,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.staff.models import Staff
+from apps.students.models import Student
 from .models import Book, BookIssue, Rack, Shelf, LibrarySetting
 from .serializers import (
     BookSerializer, 
@@ -41,6 +46,242 @@ class LibrarySettingViewSet(viewsets.ModelViewSet):
     serializer_class = LibrarySettingSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = "config_key"
+
+
+def _get_setting_int(config_key, default_value):
+    setting_value = LibrarySetting.objects.filter(config_key=config_key).values_list("value", flat=True).first()
+    if setting_value in (None, ""):
+        return int(default_value)
+    try:
+        return int(setting_value)
+    except (TypeError, ValueError):
+        return int(default_value)
+
+
+def _get_setting_decimal(config_key, default_value):
+    setting_value = LibrarySetting.objects.filter(config_key=config_key).values_list("value", flat=True).first()
+    if setting_value in (None, ""):
+        return Decimal(str(default_value))
+    try:
+        return Decimal(str(setting_value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(str(default_value))
+
+
+def _normalize_scan_code(raw_value):
+    return str(raw_value or "").strip()
+
+
+def _extract_scan_tokens(raw_value):
+    text = _normalize_scan_code(raw_value)
+    if not text:
+        return []
+
+    tokens = []
+    seen = set()
+
+    def add_token(value):
+        cleaned = _normalize_scan_code(value)
+        if not cleaned:
+            return
+        lowered = cleaned.lower()
+        if lowered in seen:
+            return
+        seen.add(lowered)
+        tokens.append(cleaned)
+
+    add_token(text)
+
+    if "://" in text:
+        try:
+            parsed = urlparse(text)
+            for query_values in parse_qs(parsed.query).values():
+                for query_value in query_values:
+                    add_token(query_value)
+            for path_part in parsed.path.split("/"):
+                add_token(path_part)
+        except Exception:
+            pass
+
+    interesting_json_keys = {
+        "admission_number",
+        "roll_number",
+        "employee_id",
+        "username",
+        "user_id",
+        "student_id",
+        "staff_id",
+        "book_id",
+        "book_code",
+        "custom_id",
+        "isbn",
+        "id",
+        "code",
+        "value",
+        "uid",
+    }
+
+    def extract_json_values(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key.lower() in interesting_json_keys and isinstance(value, (str, int, float)):
+                    add_token(value)
+                elif isinstance(value, (dict, list)):
+                    extract_json_values(value)
+        elif isinstance(node, list):
+            for item in node:
+                extract_json_values(item)
+
+    try:
+        parsed_payload = json.loads(text)
+        extract_json_values(parsed_payload)
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    for segment in re.split(r"[\s,;|]+", text):
+        add_token(segment)
+        if ":" in segment:
+            add_token(segment.split(":")[-1])
+        if "=" in segment:
+            add_token(segment.split("=")[-1])
+
+    return tokens
+
+
+def _resolve_borrower_from_scan(raw_code):
+    tokens = _extract_scan_tokens(raw_code)
+    if not tokens:
+        return None, None, None
+
+    for token in tokens:
+        student_query = (
+            Q(admission_number__iexact=token)
+            | Q(roll_number__iexact=token)
+            | Q(user__username__iexact=token)
+        )
+        if token.isdigit():
+            student_query |= Q(pk=int(token))
+
+        student = Student.objects.select_related("user").filter(student_query).first()
+        if student:
+            return "student", student, token
+
+    for token in tokens:
+        staff_query = Q(employee_id__iexact=token) | Q(user__username__iexact=token)
+        if token.isdigit():
+            staff_query |= Q(pk=int(token))
+
+        staff = Staff.objects.select_related("user").filter(staff_query).first()
+        if staff:
+            return "staff", staff, token
+
+    return None, None, None
+
+
+def _resolve_book_from_scan(raw_code):
+    tokens = _extract_scan_tokens(raw_code)
+    if not tokens:
+        return None, None
+
+    for token in tokens:
+        candidates = [token]
+        compact = re.sub(r"[\s\-]+", "", token)
+        if compact and compact not in candidates:
+            candidates.append(compact)
+        alnum = re.sub(r"[^0-9A-Za-z]", "", token)
+        if alnum and alnum not in candidates:
+            candidates.append(alnum)
+
+        for candidate in candidates:
+            book_query = Q(custom_id__iexact=candidate) | Q(isbn__iexact=candidate)
+            if candidate.isdigit():
+                book_query |= Q(pk=int(candidate))
+
+            book = Book.objects.select_related("shelf", "shelf__rack").filter(book_query).first()
+            if book:
+                return book, candidate
+
+    return None, None
+
+
+def _serialize_borrower_payload(borrower_type, borrower_obj):
+    if borrower_type == "student":
+        fallback_name = getattr(borrower_obj.user, "username", "") or f"Student #{borrower_obj.id}"
+        full_name = borrower_obj.user.get_full_name().strip() or fallback_name
+        return {
+            "type": "student",
+            "id": borrower_obj.id,
+            "name": full_name,
+            "reference": borrower_obj.admission_number,
+            "secondary_reference": borrower_obj.roll_number or "",
+        }
+
+    fallback_name = getattr(borrower_obj.user, "username", "") or f"Staff #{borrower_obj.id}"
+    full_name = borrower_obj.user.get_full_name().strip() or fallback_name
+    return {
+        "type": "staff",
+        "id": borrower_obj.id,
+        "name": full_name,
+        "reference": borrower_obj.employee_id,
+        "secondary_reference": "",
+    }
+
+
+def _serialize_book_payload(book_obj):
+    return {
+        "id": book_obj.id,
+        "title": book_obj.title,
+        "author": book_obj.author,
+        "custom_id": book_obj.custom_id,
+        "isbn": book_obj.isbn,
+        "available_copies": book_obj.available_copies,
+        "rack_name": book_obj.shelf.rack.name if book_obj.shelf and book_obj.shelf.rack else "",
+        "shelf_name": book_obj.shelf.name if book_obj.shelf else "",
+    }
+
+
+def _parse_return_date(return_date_raw, issue_date):
+    if return_date_raw:
+        return_date = parse_date(str(return_date_raw))
+        if return_date is None:
+            return None, "Invalid return_date format. Use YYYY-MM-DD."
+    else:
+        return_date = timezone.now().date()
+
+    today = timezone.now().date()
+    if return_date > today:
+        return None, "Return date cannot be in the future."
+    if return_date < issue_date:
+        return None, "Return date cannot be earlier than issue date."
+    return return_date, None
+
+
+def _calculate_return_metrics(issue_obj, return_date):
+    fine_rate = _get_setting_decimal("fine_rate_per_day", 2)
+    grace_period_days = max(0, _get_setting_int("grace_period_days", 0))
+
+    raw_days_late = max(0, (return_date - issue_obj.due_date).days)
+    chargeable_days_late = max(0, raw_days_late - grace_period_days)
+    fine_amount = (fine_rate * Decimal(chargeable_days_late)).quantize(Decimal("0.01"))
+
+    return {
+        "days_late": raw_days_late,
+        "chargeable_days_late": chargeable_days_late,
+        "grace_period_days": grace_period_days,
+        "fine_rate_per_day": float(fine_rate),
+        "fine_amount": fine_amount,
+        "return_timing": "delayed" if raw_days_late > 0 else "on_time",
+    }
+
+
+def _build_issue_payload(issue_obj):
+    borrower_type = "student" if issue_obj.student_id else "staff"
+    borrower_obj = issue_obj.student if issue_obj.student_id else issue_obj.staff
+    return {
+        "issue": BookIssueSerializer(issue_obj).data,
+        "borrower": _serialize_borrower_payload(borrower_type, borrower_obj),
+        "book": _serialize_book_payload(issue_obj.book),
+    }
 
 
 def _get_library_report_data(report_type):
@@ -400,6 +641,7 @@ def book_issue_list_view(request):
             student_id = request.query_params.get("student")
             staff_id = request.query_params.get("staff")
             issue_status = request.query_params.get("status")
+            has_fine = request.query_params.get("has_fine")
             qs = BookIssue.objects.select_related(
                 "book", "student", "student__user", "staff", "staff__user", "issued_by"
             ).all()
@@ -409,6 +651,8 @@ def book_issue_list_view(request):
                 qs = qs.filter(staff_id=staff_id)
             if issue_status:
                 qs = qs.filter(status=issue_status)
+            if has_fine in {"true", "1", "yes"}:
+                qs = qs.filter(Q(fine_amount__gt=0) | Q(status="overdue") | Q(status="issued", due_date__lt=timezone.now().date()))
             return Response(BookIssueSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         issue_date = None
@@ -461,55 +705,246 @@ def book_issue_list_view(request):
 def book_return_view(request, pk):
     """Mark a book as returned and calculate fine."""
     try:
-        try:
-            issue = BookIssue.objects.select_related("book").get(pk=pk)
-        except BookIssue.DoesNotExist:
-            return Response({"error": "Issue record not found."}, status=status.HTTP_404_NOT_FOUND)
+        with transaction.atomic():
+            issue = (
+                BookIssue.objects.select_for_update()
+                .select_related("book", "student", "student__user", "staff", "staff__user")
+                .filter(pk=pk)
+                .first()
+            )
+            if not issue:
+                return Response({"error": "Issue record not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if issue.status == "returned":
-            return Response({"error": "Book already returned."}, status=status.HTTP_400_BAD_REQUEST)
+            if issue.status == "returned":
+                return Response({"error": "Book already returned."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Get fine rate from settings or default to 2
-        fine_rate_setting = LibrarySetting.objects.filter(config_key="fine_rate_per_day").first()
-        fine_rate = float(fine_rate_setting.value) if fine_rate_setting else 2.0
+            return_date, date_error = _parse_return_date(request.data.get("return_date"), issue.issue_date)
+            if date_error:
+                return Response({"error": date_error}, status=status.HTTP_400_BAD_REQUEST)
 
-        return_date_raw = request.data.get("return_date")
-        if return_date_raw:
-            return_date = parse_date(str(return_date_raw))
-            if return_date is None:
-                return Response({"error": "Invalid return_date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            return_date = timezone.now().date()
+            return_metrics = _calculate_return_metrics(issue, return_date)
 
-        today = timezone.now().date()
-        if return_date > today:
-            return Response({"error": "Return date cannot be in the future."}, status=status.HTTP_400_BAD_REQUEST)
-        if return_date < issue.issue_date:
-            return Response({"error": "Return date cannot be earlier than issue date."}, status=status.HTTP_400_BAD_REQUEST)
+            issue.return_date = return_date
+            issue.fine_amount = return_metrics["fine_amount"]
+            issue.status = "returned"
+            issue.return_condition = request.data.get("condition", "")
+            issue.save(update_fields=["return_date", "fine_amount", "status", "return_condition"])
 
-        days_late = max(0, (return_date - issue.due_date).days)
-        fine = days_late * fine_rate
-        return_timing = "delayed" if days_late > 0 else "on_time"
+            issue.book.available_copies += 1
+            issue.book.save(update_fields=["available_copies"])
 
-        issue.return_date = return_date
-        issue.fine_amount = fine
-        issue.status = "returned"
-        issue.return_condition = request.data.get("condition", "")
-        issue.save()
-
-        issue.book.available_copies += 1
-        issue.book.save()
-
-        return Response({
-            "message": "Book returned successfully.",
-            "days_late": days_late,
-            "return_timing": return_timing,
-            "fine_amount": float(fine),
-            "issue": BookIssueSerializer(issue).data,
-        }, status=status.HTTP_200_OK)
+        payload = _build_issue_payload(issue)
+        return Response(
+            {
+                "message": "Book returned successfully.",
+                "days_late": return_metrics["days_late"],
+                "chargeable_days_late": return_metrics["chargeable_days_late"],
+                "return_timing": return_metrics["return_timing"],
+                "fine_rate_per_day": return_metrics["fine_rate_per_day"],
+                "grace_period_days": return_metrics["grace_period_days"],
+                "fine_amount": float(return_metrics["fine_amount"]),
+                **payload,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def scan_borrower_view(request):
+    """Resolve a scanned student/staff ID code."""
+    scanned_code = request.data.get("code")
+    if not _normalize_scan_code(scanned_code):
+        return Response({"error": "Borrower scan code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    borrower_type, borrower_obj, matched_token = _resolve_borrower_from_scan(scanned_code)
+    if not borrower_obj:
+        return Response({"error": "Borrower not found for scanned ID."}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response(
+        {
+            "matched_token": matched_token,
+            "borrower": _serialize_borrower_payload(borrower_type, borrower_obj),
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def scan_book_view(request):
+    """Resolve a scanned book barcode/QR code."""
+    scanned_code = request.data.get("code")
+    if not _normalize_scan_code(scanned_code):
+        return Response({"error": "Book scan code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    book_obj, matched_token = _resolve_book_from_scan(scanned_code)
+    if not book_obj:
+        return Response({"error": "Book not found for scanned barcode."}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response(
+        {
+            "matched_token": matched_token,
+            "book": _serialize_book_payload(book_obj),
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def scan_issue_view(request):
+    """Issue a book using scanned borrower + scanned book codes."""
+    borrower_code = request.data.get("borrower_code")
+    book_code = request.data.get("book_code")
+    if not _normalize_scan_code(borrower_code):
+        return Response({"error": "Borrower scan code is required."}, status=status.HTTP_400_BAD_REQUEST)
+    if not _normalize_scan_code(book_code):
+        return Response({"error": "Book scan code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    borrower_type, borrower_obj, _ = _resolve_borrower_from_scan(borrower_code)
+    if not borrower_obj:
+        return Response({"error": "Borrower not found for scanned ID."}, status=status.HTTP_404_NOT_FOUND)
+    if borrower_type == "student" and not borrower_obj.is_active:
+        return Response({"error": "This student is inactive and cannot issue books."}, status=status.HTTP_400_BAD_REQUEST)
+    if borrower_type == "staff" and borrower_obj.status != "active":
+        return Response({"error": "This staff member is inactive and cannot issue books."}, status=status.HTTP_400_BAD_REQUEST)
+
+    resolved_book, _ = _resolve_book_from_scan(book_code)
+    if not resolved_book:
+        return Response({"error": "Book not found for scanned barcode."}, status=status.HTTP_404_NOT_FOUND)
+
+    with transaction.atomic():
+        book_obj = (
+            Book.objects.select_for_update()
+            .select_related("shelf", "shelf__rack")
+            .filter(pk=resolved_book.pk)
+            .first()
+        )
+        if not book_obj:
+            return Response({"error": "Book not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if book_obj.available_copies < 1:
+            return Response({"error": "No copies available."}, status=status.HTTP_400_BAD_REQUEST)
+
+        duplicate_issue_qs = BookIssue.objects.select_for_update().filter(book=book_obj, status="issued")
+        if borrower_type == "student":
+            duplicate_issue_qs = duplicate_issue_qs.filter(student=borrower_obj)
+        else:
+            duplicate_issue_qs = duplicate_issue_qs.filter(staff=borrower_obj)
+
+        if duplicate_issue_qs.exists():
+            return Response(
+                {"error": "This borrower already has an active issue for this book."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        issue_date = timezone.now().date()
+        default_issue_days = max(1, _get_setting_int("default_issue_days", 14))
+        borrower_issue_days = max(1, _get_setting_int(f"{borrower_type}_issue_days", default_issue_days))
+        due_date = issue_date + timedelta(days=borrower_issue_days)
+
+        issue_kwargs = {
+            "book": book_obj,
+            "issued_by": request.user,
+            "due_date": due_date,
+        }
+        if borrower_type == "student":
+            issue_kwargs["student"] = borrower_obj
+        else:
+            issue_kwargs["staff"] = borrower_obj
+
+        issue = BookIssue.objects.create(**issue_kwargs)
+
+        book_obj.available_copies -= 1
+        book_obj.save(update_fields=["available_copies"])
+
+    issue = BookIssue.objects.select_related("book", "student", "student__user", "staff", "staff__user").get(pk=issue.pk)
+    payload = _build_issue_payload(issue)
+    return Response(
+        {
+            "message": "Book issued successfully.",
+            "issue_window_days": borrower_issue_days,
+            "issue_date": issue.issue_date,
+            "due_date": issue.due_date,
+            **payload,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def scan_return_view(request):
+    """Return a book using scanned borrower + scanned book codes."""
+    borrower_code = request.data.get("borrower_code")
+    book_code = request.data.get("book_code")
+    if not _normalize_scan_code(borrower_code):
+        return Response({"error": "Borrower scan code is required."}, status=status.HTTP_400_BAD_REQUEST)
+    if not _normalize_scan_code(book_code):
+        return Response({"error": "Book scan code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    borrower_type, borrower_obj, _ = _resolve_borrower_from_scan(borrower_code)
+    if not borrower_obj:
+        return Response({"error": "Borrower not found for scanned ID."}, status=status.HTTP_404_NOT_FOUND)
+
+    resolved_book, _ = _resolve_book_from_scan(book_code)
+    if not resolved_book:
+        return Response({"error": "Book not found for scanned barcode."}, status=status.HTTP_404_NOT_FOUND)
+
+    with transaction.atomic():
+        issue_qs = (
+            BookIssue.objects.select_for_update()
+            .select_related("book", "student", "student__user", "staff", "staff__user")
+            .filter(book_id=resolved_book.pk, status="issued")
+        )
+        if borrower_type == "student":
+            issue_qs = issue_qs.filter(student=borrower_obj)
+        else:
+            issue_qs = issue_qs.filter(staff=borrower_obj)
+
+        issue = issue_qs.order_by("-issue_date", "-id").first()
+        if not issue:
+            return Response(
+                {"error": "No active issue record found for this borrower and book."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return_date, date_error = _parse_return_date(request.data.get("return_date"), issue.issue_date)
+        if date_error:
+            return Response({"error": date_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        return_metrics = _calculate_return_metrics(issue, return_date)
+
+        issue.return_date = return_date
+        issue.fine_amount = return_metrics["fine_amount"]
+        issue.status = "returned"
+        issue.return_condition = request.data.get("condition", "")
+        issue.save(update_fields=["return_date", "fine_amount", "status", "return_condition"])
+
+        book_obj = Book.objects.select_for_update().filter(pk=issue.book_id).first()
+        if book_obj:
+            book_obj.available_copies += 1
+            book_obj.save(update_fields=["available_copies"])
+            issue.book = book_obj
+
+    payload = _build_issue_payload(issue)
+    return Response(
+        {
+            "message": "Book returned successfully.",
+            "days_late": return_metrics["days_late"],
+            "chargeable_days_late": return_metrics["chargeable_days_late"],
+            "return_timing": return_metrics["return_timing"],
+            "fine_rate_per_day": return_metrics["fine_rate_per_day"],
+            "grace_period_days": return_metrics["grace_period_days"],
+            "fine_amount": float(return_metrics["fine_amount"]),
+            **payload,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(["GET"])

@@ -9,6 +9,7 @@ from .models import (
     StudentTransport,
     TransportComplaint,
     TransportFee,
+    TransportFeePayment,
     TransportRoute,
 )
 
@@ -20,7 +21,7 @@ class RouteStopSerializer(serializers.ModelSerializer):
 
 
 class SchoolBusSerializer(serializers.ModelSerializer):
-    driver_name = serializers.CharField(source="driver.get_full_name", read_only=True)
+    driver_user_name = serializers.CharField(source="driver.get_full_name", read_only=True)
     current_location = serializers.SerializerMethodField()
 
     class Meta:
@@ -54,6 +55,8 @@ class StudentTransportSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
     stop_name = serializers.CharField(source="stop.stop_name", read_only=True)
     route_name = serializers.CharField(source="stop.route.name", read_only=True)
+    route = serializers.IntegerField(source="stop.route.id", read_only=True)
+    bus = serializers.IntegerField(source="stop.route.bus.id", read_only=True)
     bus_name = serializers.CharField(source="stop.route.bus.name", read_only=True)
 
     class Meta:
@@ -72,12 +75,21 @@ class BusLocationLogSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class TransportFeePaymentSerializer(serializers.ModelSerializer):
+    collected_by_name = serializers.CharField(source="collected_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = TransportFeePayment
+        fields = "__all__"
+
+
 class TransportFeeSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
     admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     route_name = serializers.CharField(source="route.name", read_only=True)
     collected_by_name = serializers.CharField(source="collected_by.get_full_name", read_only=True)
     balance = serializers.SerializerMethodField()
+    payments = TransportFeePaymentSerializer(many=True, read_only=True)
 
     class Meta:
         model = TransportFee

@@ -1165,3 +1165,30 @@ def course_session_detail_view(request, pk):
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def student_submissions_view(request):
+    """
+    Returns all homework/assignment submissions for the currently authenticated student.
+    Used for the Results Center to show graded items.
+    """
+    try:
+        from apps.students.models import Student
+        student = Student.objects.filter(user=request.user).first()
+        if not student:
+            return Response({"error": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        qs = HomeworkSubmission.objects.select_related(
+            "homework", "homework__subject", "homework__assigned_by"
+        ).filter(student=student).order_by("-submitted_at")
+        
+        # Optionally filter for graded only if requested
+        if request.query_params.get("graded_only") == "true":
+            qs = qs.exclude(grade="")
+
+        serializer = HomeworkSubmissionSerializer(qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

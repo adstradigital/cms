@@ -36,8 +36,10 @@ export default function StudentResults() {
   const [testAttempts, setTestAttempts] = useState([]);
   const [activeReview, setActiveReview] = useState(null);
   const [gradingScale, setGradingScale] = useState(null);
+  const [assignmentResults, setAssignmentResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [performanceTrend, setPerformanceTrend] = useState(null); // { delta, direction }
 
@@ -127,6 +129,25 @@ export default function StudentResults() {
 
     fetchTests();
   }, [studentId]);
+  
+  // Fetch assignment results
+  useEffect(() => {
+    if (!studentId) return;
+
+    const fetchAssignments = async () => {
+      setAssignmentLoading(true);
+      try {
+        const res = await studentApi.getMySubmissions({ graded_only: 'true' });
+        setAssignmentResults(res.data || []);
+      } catch (err) {
+        console.error("Failed to fetch assignment results", err);
+      } finally {
+        setAssignmentLoading(false);
+      }
+    };
+
+    fetchAssignments();
+  }, [studentId]);
 
   // Calculate performance trend
   useEffect(() => {
@@ -204,8 +225,9 @@ export default function StudentResults() {
               onChange={(e) => setFilterMode(e.target.value)}
             >
               <option value="all">Show All Results</option>
-              <option value="academic">Academic Exams only</option>
-              <option value="online">Online Quizzes only</option>
+              <option value="academic">Real Exam Results</option>
+              <option value="online">Online Quizzes</option>
+              <option value="assignments">Assignments & Projects</option>
             </select>
           </div>
           <button className={styles.downloadBtn} onClick={handleDownload}>
@@ -451,6 +473,91 @@ export default function StudentResults() {
           </div>
         </section>
       )}
+
+      {/* 3. Assignment Results Section */}
+      {(filterMode === 'all' || filterMode === 'assignments') && (
+        <section className={styles.historySection} style={{ marginTop: filterMode === 'all' ? 48 : 0 }}>
+          <div className={styles.sectionTitle}>
+            <ClipboardList size={20} color="#10b981" />
+            <h2>Assignment & Project Evaluations</h2>
+          </div>
+
+          <div className={styles.historyTableContainer}>
+            {assignmentLoading ? (
+              <div className={styles.spinner}>
+                <Loader2 className="animate-spin" size={24} />
+                <p>Retrieving evaluations...</p>
+              </div>
+            ) : assignmentResults.length > 0 ? (
+              <table className={styles.historyTable}>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Subject</th>
+                    <th>Teacher</th>
+                    <th>Evaluated On</th>
+                    <th>Grade</th>
+                    <th>Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assignmentResults.map(res => (
+                    <tr key={res.id}>
+                      <td>
+                        <div className={styles.tableName}>
+                          <FileText size={16} className={styles.successIcon} style={{ color: '#10b981' }} />
+                          {res.homework_title}
+                        </div>
+                      </td>
+                      <td>{res.subject_name}</td>
+                      <td>{res.teacher_name}</td>
+                      <td>{new Date(res.submitted_at).toLocaleDateString()}</td>
+                      <td>
+                        <span className={`${styles.badge} ${styles.available}`} style={{ minWidth: 40, textAlign: 'center' }}>
+                          {res.grade}
+                        </span>
+                      </td>
+                      <td className={styles.remarks}>{res.remarks || "No feedback provided"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className={styles.emptyState}>
+                <ClipboardList size={40} color="#cbd5e1" />
+                <div className={styles.emptyTitle}>No Graded Assignments</div>
+                <p className={styles.emptyText}>
+                  No evaluated homework or project submissions found yet.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
+
+function ClipboardList({ size, color, ...props }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
+      <path d="M12 8h.01" />
+    </svg>
+  );
+}
+

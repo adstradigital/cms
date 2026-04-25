@@ -11,9 +11,37 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name='fooditem',
-            name='category',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='food_items', to='canteen.foodcategory'),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                # Renaming the column manually based on current DB state.
+                migrations.RunSQL(
+                    sql="ALTER TABLE canteen_food_items CHANGE COLUMN category_id category_legacy varchar(20);",
+                    reverse_sql="ALTER TABLE canteen_food_items CHANGE COLUMN category_legacy category_id varchar(20);",
+                ),
+
+                migrations.AddField(
+                    model_name="fooditem",
+                    name="category",
+                    field=models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="food_items",
+                        to="canteen.foodcategory",
+                    ),
+                ),
+            ],
+            state_operations=[
+                migrations.AlterField(
+                    model_name="fooditem",
+                    name="category",
+                    field=models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="food_items",
+                        to="canteen.foodcategory",
+                    ),
+                ),
+            ],
         ),
     ]
+
+

@@ -48,4 +48,8 @@ urlpatterns = [
     # Course Sessions
     path("course-sessions/", views.course_session_list_view, name="course-session-list"),
     path("course-sessions/<int:pk>/", views.course_session_detail_view, name="course-session-detail"),
+
+    # Student Results specific
+    path("my-submissions/", views.student_submissions_view, name="my-submissions"),
 ]
+

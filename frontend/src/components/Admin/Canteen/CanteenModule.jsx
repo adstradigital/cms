@@ -7,11 +7,11 @@ import styles from './CanteenModule.module.css';
 import {
   LayoutDashboard, UtensilsCrossed, ShoppingCart, CreditCard,
   Package, Truck, MessageSquare, BarChart3, Bell,
-  Plus, Search, RefreshCw, Loader2, Edit2, Trash2, X, Save,
+  Plus, Minus, Search, RefreshCw, Loader2, Edit2, Trash2, X, Save,
   AlertTriangle, ChevronDown, TrendingUp, DollarSign,
   CheckCircle2, Clock, Leaf, Eye, Calendar, AlertCircle,
   ArrowUpRight, Filter, ChefHat, Star, Circle, ShoppingBag,
-  Zap, Coffee, ToggleLeft, ToggleRight, FileText, LayoutGrid, Store, FolderPlus,
+  Zap, Coffee, ToggleLeft, ToggleRight, FileText, LayoutGrid, Store, FolderPlus, Printer,
 } from 'lucide-react';
 import canteenApi from '@/api/canteenApi';
 
@@ -49,6 +49,23 @@ const C = {
   primary: '#1E3A5F',
   accent: '#10B981',
 };
+
+const INVENTORY_UNITS = [
+  'kg',
+  'g',
+  'liters',
+  'ml',
+  'pieces',
+  'pack',
+  'box',
+  'bottle',
+];
+
+const INVENTORY_ITEM_TYPES = [
+  { value: 'perishable', label: 'Perishable' },
+  { value: 'non-perishable', label: 'Non-perishable' },
+  { value: 'raw_material', label: 'Raw material' },
+];
 
 /* ═══════════════════════════ SHARED MICRO-COMPONENTS ═══════════════════════ */
 
@@ -188,6 +205,7 @@ const CanteenModule = ({ activeSegment }) => {
   const [selectedVi, setSelectedVi] = useState(null);
   const [fiForm, setFiForm] = useState({ name: '', price: '', category: '', status: 'active', is_veg: true, description: '' });
   const [cats, setCats] = useState([]);
+  const [invCats, setInvCats] = useState([]);
   const [catModal, setCatModal] = useState(false);
   const [catForm, setCatForm] = useState({ name: '', icon: '🍽️', color: C.primary });
 
@@ -355,18 +373,65 @@ const CanteenModule = ({ activeSegment }) => {
   /* ─── Suppliers ─── */
   const [suppliers, setSuppliers] = useState([]);
   const [suppModal, setSuppModal] = useState(false);
-  const [suppForm, setSuppForm] = useState({ name: '', contact_person: '', phone: '', category: '', item_id: '' });
+  const [editingSupp, setEditingSupp] = useState(null);
+  const [suppForm, setSuppForm] = useState({ name: '', contact_person: '', phone: '', category_ids: [], item_ids: [] });
   const [purModal, setPurModal] = useState(false);
   const [purForm, setPurForm] = useState({ supplier_id: '', item_id: '', quantity: '', price: '' });
+  const [invOutModal, setInvOutModal] = useState(false);
+  const [invOutSubmitting, setInvOutSubmitting] = useState(false);
+  const [invOutForm, setInvOutForm] = useState({ item_id: '', quantity: '1', reason: '' });
   const [invItemModal, setInvItemModal] = useState(false);
-  const [invItemForm, setInvItemForm] = useState({ name: '', category: '', unit: '', min_stock_level: '', current_stock: '', item_type: '', unit_price: '', expiry_date: '', batch_number: '' });
+  const [editingInvItem, setEditingInvItem] = useState(null);
+  const [invItemForm, setInvItemForm] = useState({ name: '', category: '', unit: '', min_stock_level: '', current_stock: '', item_type: '', unit_price: '', manufacturing_date: '', expiry_date: '', batch_number: '' });
   const [invCatModal, setInvCatModal] = useState(false);
   const [invCatForm, setInvCatForm] = useState({ name: '' });
   
+  const [selectedPo, setSelectedPo] = useState(null);
+  const [invoiceModal, setInvoiceModal] = useState(false);
+
   const loadSuppliers = useCallback(async () => {
-    try { const r = await canteenApi.getSuppliers(); setSuppliers(r.data?.results || r.data || []); }
+    try { 
+      const [sr, cr] = await Promise.all([canteenApi.getSuppliers(), canteenApi.getInventoryCategories()]);
+      setSuppliers(sr.data?.results || sr.data || []);
+      setInvCats(cr.data?.results || cr.data || []);
+    }
     catch { /* silent */ }
   }, []);
+
+  const handleEditSupp = (s) => {
+    setEditingSupp(s);
+    setSuppForm({
+      name: s.name,
+      contact_person: s.contact_person,
+      phone: s.phone,
+      category_ids: (s.categories_detail || []).map(c => c.id),
+      item_ids: (s.items_detail || []).map(i => i.id)
+    });
+    setSuppModal(true);
+  };
+
+  const deleteSupplier = async (id) => {
+    if (!confirm('Are you sure you want to delete this supplier?')) return;
+    try {
+      await canteenApi.deleteSupplier(id);
+      loadSuppliers();
+    } catch { alert('Failed to delete supplier'); }
+  };
+
+  const saveSupplier = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingSupp) {
+        await canteenApi.updateSupplier(editingSupp.id, suppForm);
+      } else {
+        await canteenApi.createSupplier(suppForm);
+      }
+      setSuppModal(false);
+      setEditingSupp(null);
+      setSuppForm({ name: '', contact_person: '', phone: '', category_ids: [], item_ids: [] });
+      loadSuppliers();
+    } catch { alert('Failed to save supplier'); }
+  };
 
   const saveInvCategory = async (e) => {
     e.preventDefault();
@@ -381,19 +446,92 @@ const CanteenModule = ({ activeSegment }) => {
   const saveInvItem = async (e) => {
     e.preventDefault();
     try {
-      await canteenApi.createInventoryItem(invItemForm);
+      const payload = {
+        name: invItemForm.name,
+        category: invItemForm.category || null,
+        unit: invItemForm.unit,
+        current_stock: invItemForm.current_stock,
+        min_stock_level: invItemForm.min_stock_level,
+        unit_price: invItemForm.unit_price || 0,
+        manufacturing_date: invItemForm.manufacturing_date || null,
+        expiry_date: invItemForm.expiry_date || null,
+      };
+      if (editingInvItem) await canteenApi.updateInventoryItem(editingInvItem.id, payload);
+      else await canteenApi.createInventoryItem(payload);
       setInvItemModal(false);
-      setInvItemForm({ name: '', category: '', unit: '', min_stock_level: '', current_stock: '', item_type: '', unit_price: '', expiry_date: '', batch_number: '' });
+      setEditingInvItem(null);
+      setInvItemForm({ name: '', category: '', unit: '', min_stock_level: '', current_stock: '', item_type: '', unit_price: '', manufacturing_date: '', expiry_date: '', batch_number: '' });
       loadInventory();
-    } catch { alert('Failed to create inventory item'); }
+    } catch { alert('Failed to save inventory item'); }
+  };
+
+  const handleEditInvItem = (item) => {
+    setEditingInvItem(item);
+    setInvItemForm({
+      name: item.name || '',
+      category: item.category || '',
+      unit: item.unit || '',
+      min_stock_level: item.min_stock_level ?? '',
+      current_stock: item.current_stock ?? '',
+      item_type: item.item_type || '',
+      unit_price: item.unit_price ?? '',
+      manufacturing_date: item.manufacturing_date || '',
+      expiry_date: item.expiry_date || '',
+      batch_number: item.batch_number || '',
+    });
+    setInvItemModal(true);
+  };
+
+  const deleteInvItem = async (id) => {
+    if (!confirm('Are you sure you want to delete this inventory item?')) return;
+    try {
+      await canteenApi.deleteInventoryItem(id);
+      loadInventory();
+    } catch { alert('Failed to delete inventory item'); }
+  };
+
+  const openInvOutModal = (item) => {
+    setInvOutForm({ item_id: item.id, quantity: '1', reason: '' });
+    setInvOutModal(true);
+  };
+
+  const recordStockOut = async (e) => {
+    e.preventDefault();
+    if (!invOutForm.item_id) return;
+    setInvOutSubmitting(true);
+    try {
+      await canteenApi.createInventoryLog({
+        item: invOutForm.item_id,
+        log_type: 'out',
+        quantity: invOutForm.quantity,
+        reason: invOutForm.reason,
+      });
+      setInvOutModal(false);
+      setInvOutForm({ item_id: '', quantity: '1', reason: '' });
+      loadInventory();
+    } catch { alert('Failed to reduce stock'); }
+    finally { setInvOutSubmitting(false); }
   };
 
   /* ─── Feedback ─── */
   const [complaints, setComplaints] = useState([]);
+  const [feedbackModal, setFeedbackModal] = useState(false);
+  const [feedbackForm, setFeedbackForm] = useState({ subject: '', description: '', rating: 5 });
+
   const loadComplaints = useCallback(async () => {
     try { const r = await canteenApi.getComplaints(); setComplaints(r.data?.results || r.data || []); }
     catch { /* silent */ }
   }, []);
+
+  const saveFeedback = async (e) => {
+    e.preventDefault();
+    try {
+      await canteenApi.createComplaint(feedbackForm);
+      setFeedbackModal(false);
+      setFeedbackForm({ subject: '', description: '', rating: 5 });
+      loadComplaints();
+    } catch { alert('Failed to submit feedback'); }
+  };
 
   /* ─── Staff Management ─── */
   const [staffList, setStaffList] = useState([]);
@@ -421,12 +559,76 @@ const CanteenModule = ({ activeSegment }) => {
   /* ─── Purchase Orders ─── */
   const [pos, setPos] = useState([]);
   const [poModal, setPoModal] = useState(false);
-  const [poForm, setPoForm] = useState({ supplier: '', order_date: fmtDate(), status: 'pending', notes: '' });
+  const [poForm, setPoForm] = useState({ supplier: '', order_date: fmtDate(), status: 'pending', notes: '', items: [] });
+  const [poItemForm, setPoItemForm] = useState({ category_id: '', inventory_item_id: '', quantity: 1, unit_price: 0 });
 
   const loadPOs = useCallback(async () => {
     try { const r = await canteenApi.getPurchaseOrders(); setPos(r.data?.results || r.data || []); }
     catch { /* silent */ }
   }, []);
+
+  const addPoItem = () => {
+    if (!poItemForm.inventory_item_id) return;
+    const item = invItems.find(i => i.id == poItemForm.inventory_item_id);
+    if (!item) return;
+    
+    const newItem = {
+      inventory_item: item.id,
+      item_name: item.name,
+      quantity: parseFloat(poItemForm.quantity),
+      unit_price: parseFloat(poItemForm.unit_price) || parseFloat(item.unit_price) || 0,
+    };
+
+    setPoForm(p => ({
+      ...p,
+      items: [...p.items, newItem]
+    }));
+    setPoItemForm({ category_id: '', inventory_item_id: '', quantity: 1, unit_price: 0 });
+  };
+
+  const removePoItem = (index) => {
+    setPoForm(p => ({
+      ...p,
+      items: p.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updatePoPaymentStatus = async (id, status) => {
+    try {
+      await canteenApi.updatePurchaseOrder(id, { payment_status: status });
+      loadPOs();
+    } catch (err) {
+      alert('Failed to update payment status');
+    }
+  };
+
+  const handlePoStatusChange = async (poId, newStatus) => {
+    try {
+      if (newStatus === 'received') {
+        if (!confirm('Marking as RECEIVED will automatically update inventory stock. Proceed?')) return;
+        await canteenApi.receivePurchaseOrder(poId);
+      } else {
+        await canteenApi.updatePurchaseOrder(poId, { status: newStatus });
+      }
+      loadPOs();
+      loadInventory();
+    } catch (err) {
+      alert('Failed to update PO status');
+    }
+  };
+
+  const handleReceiptUpload = async (poId, file) => {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('receipt_file', file);
+    try {
+      await canteenApi.updatePurchaseOrder(poId, fd);
+      loadPOs();
+      alert('Receipt uploaded successfully');
+    } catch {
+      alert('Failed to upload receipt');
+    }
+  };
 
   /* ─── Reports ─── */
   const [reports, setReports] = useState(null);
@@ -728,7 +930,7 @@ const CanteenModule = ({ activeSegment }) => {
           {cats.map(cat => (
             <div key={cat.id} style={{ background: '#fff', padding: 20, borderRadius: 16, border: `1px solid ${C.border}`, textAlign: 'center' }}>
               <div style={{ width: 48, height: 48, borderRadius: 12, background: `${cat.color || C.primary}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: cat.color || C.primary }}>
-                 <p style={{ margin: 0, fontSize: 18 }}>{cat.icon || '🍽\uFE0F'}</p>
+                 <p style={{ margin: 0, fontSize: 18 }}>{cat.icon || '🍽️'}</p>
               </div>
               <h6 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>{cat.name}</h6>
               <p style={{ margin: 0, fontSize: 12, color: C.muted }}>{cat.food_items_count || 0} items listed</p>
@@ -1134,11 +1336,10 @@ const CanteenModule = ({ activeSegment }) => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h4 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Inventory & Stock Level</h4>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted, fontWeight: 600 }}>Real-time tracking of ingredients, snacks, and drinks</p>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted, fontWeight: 600 }}>Real-time tracking of stock levels</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <Btn onClick={() => setInvItemModal(true)} variant="success"><Plus size={16} /> Add Item</Btn>
-            <Btn onClick={() => setPurModal(true)} variant="outline"><ShoppingCart size={16} /> Record Purchase</Btn>
           </div>
         </div>
 
@@ -1150,12 +1351,12 @@ const CanteenModule = ({ activeSegment }) => {
         </div>
 
         <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
-          {['all', 'low', 'expiring', 'snacks', 'ingredients', 'drinks'].map(f => (
+          {['all', 'low', 'expiring'].map(f => (
             <button key={f} onClick={() => setInvFilter(f)} style={{
               padding: '8px 16px', borderRadius: 10, border: `1px solid ${invFilter === f ? C.primary : C.border}`,
               background: invFilter === f ? C.primary : '#fff', color: invFilter === f ? '#fff' : C.muted,
               fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'capitalize', whiteSpace: 'nowrap'
-            }}>{f}</button>
+            }}>{f === 'expiring' ? 'expired' : f}</button>
           ))}
         </div>
 
@@ -1163,24 +1364,46 @@ const CanteenModule = ({ activeSegment }) => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ textAlign: 'left', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
-                {['Item', 'Category', 'Stock Level', 'Unit', 'Min Level', 'Expiry', 'Actions'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
+                {['Item', 'Category', 'Stock Level', 'Unit', 'Min Level', 'Mfg Date', 'Expiry', 'Actions'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {filteredItems.map(i => (
                 <tr key={i.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                   <td style={{ padding: '16px 20px', fontWeight: 700 }}>{i.name}</td>
-                  <td style={{ padding: '16px 20px' }}><span style={{ padding: '3px 8px', borderRadius: 6, background: '#F1F5F9', fontSize: 11, fontWeight: 700 }}>{i.category}</span></td>
+                  <td style={{ padding: '16px 20px' }}><span style={{ padding: '3px 8px', borderRadius: 6, background: '#F1F5F9', fontSize: 11, fontWeight: 700 }}>{i.category_name || i.category || '—'}</span></td>
                   <td style={{ padding: '16px 20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 800, color: Number(i.current_stock) <= Number(i.min_stock_level) ? '#EF4444' : C.accent }}>{i.current_stock}</span>
-                      <div style={{ width: 60, height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(100, (Number(i.current_stock) / (Number(i.min_stock_level) * 2)) * 100)}%`, height: '100%', background: Number(i.current_stock) <= Number(i.min_stock_level) ? '#EF4444' : C.accent }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 800, color: Number(i.current_stock) <= Number(i.min_stock_level) ? '#EF4444' : C.accent }}>{i.current_stock}</span>
+                        <div style={{ width: 60, height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ width: `${Math.min(100, (Number(i.current_stock) / (Number(i.min_stock_level) * 2)) * 100)}%`, height: '100%', background: Number(i.current_stock) <= Number(i.min_stock_level) ? '#EF4444' : C.accent }} />
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => openInvOutModal(i)}
+                        title="Reduce stock"
+                        style={{
+                          width: 28, height: 28, borderRadius: 8,
+                          background: '#FEE2E2', border: '1px solid #FECACA',
+                          color: '#B91C1C', cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                        }}
+                      >
+                        <Minus size={14} />
+                      </button>
                     </div>
                   </td>
                   <td style={{ padding: '16px 20px', fontSize: 13, color: C.muted }}>{i.unit}</td>
                   <td style={{ padding: '16px 20px', fontSize: 13 }}>{i.min_stock_level}</td>
+                  <td style={{ padding: '16px 20px' }}>
+                    {i.manufacturing_date ? (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
+                        {new Date(i.manufacturing_date).toLocaleDateString()}
+                      </span>
+                    ) : '—'}
+                  </td>
                   <td style={{ padding: '16px 20px' }}>
                     {i.expiry_date ? (
                       <span style={{ fontSize: 12, fontWeight: 700, color: new Date(i.expiry_date) <= new Date() ? '#EF4444' : expiringSoon.includes(i) ? '#F59E0B' : C.text }}>
@@ -1190,8 +1413,8 @@ const CanteenModule = ({ activeSegment }) => {
                   </td>
                   <td style={{ padding: '16px 20px' }}>
                     <div style={{ display: 'flex', gap: 10 }}>
-                      <button style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><Edit2 size={16} /></button>
-                      <button style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }}><Trash2 size={16} /></button>
+                      <button type="button" onClick={() => handleEditInvItem(i)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }} title="Edit"><Edit2 size={16} /></button>
+                      <button type="button" onClick={() => deleteInvItem(i.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }} title="Delete"><Trash2 size={16} /></button>
                     </div>
                   </td>
                 </tr>
@@ -1211,7 +1434,7 @@ const CanteenModule = ({ activeSegment }) => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h4 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Supplier & Purchase Orders</h4>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted, fontWeight: 600 }}>Manage vendors, purchase history, and performance</p>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted, fontWeight: 600 }}>Manage vendors and purchase history</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <Btn onClick={() => setSuppModal(true)} variant="success"><Plus size={16} /> New Supplier</Btn>
@@ -1220,7 +1443,7 @@ const CanteenModule = ({ activeSegment }) => {
         </div>
 
         <div style={{ display: 'flex', gap: 12, borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
-          {['list', 'purchase-orders', 'performance'].map(t => (
+          {['list', 'purchase-orders'].map(t => (
             <button key={t} onClick={() => setSupTab(t)} style={{
               background: 'none', border: 'none', padding: '8px 16px', fontSize: 14, fontWeight: 700,
               color: supTab === t ? C.primary : C.muted, borderBottom: supTab === t ? `2px solid ${C.primary}` : 'none', cursor: 'pointer',
@@ -1234,7 +1457,7 @@ const CanteenModule = ({ activeSegment }) => {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ textAlign: 'left', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
-                  {['Supplier', 'Contact', 'Phone', 'Category', 'Performance', 'Actions'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
+                  {['Supplier', 'Contact', 'Phone', 'Category', 'Actions'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -1243,15 +1466,19 @@ const CanteenModule = ({ activeSegment }) => {
                     <td style={{ padding: '16px 20px', fontWeight: 700 }}>{s.name}</td>
                     <td style={{ padding: '16px 20px', fontSize: 14 }}>{s.contact_person}</td>
                     <td style={{ padding: '16px 20px', fontSize: 14 }}>{s.phone}</td>
-                    <td style={{ padding: '16px 20px' }}><span style={{ padding: '3px 8px', borderRadius: 6, background: '#F1F5F9', fontSize: 11, fontWeight: 700 }}>{s.category}</span></td>
                     <td style={{ padding: '16px 20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Star size={14} fill="#F59E0B" color="#F59E0B" />
-                        <span style={{ fontWeight: 800 }}>{s.performance_rating || 5.0}</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {(s.categories_detail || []).map(cat => (
+                          <span key={cat.id} style={{ padding: '3px 8px', borderRadius: 6, background: '#F1F5F9', fontSize: 10, fontWeight: 700 }}>{cat.name}</span>
+                        ))}
+                        {(!s.categories_detail || s.categories_detail.length === 0) && <span style={{ color: C.muted, fontSize: 11 }}>—</span>}
                       </div>
                     </td>
                     <td style={{ padding: '16px 20px' }}>
-                      <Btn size="sm" variant="outline" onClick={() => {}}>View</Btn>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => handleEditSupp(s)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }} title="Edit"><Edit2 size={16} /></button>
+                        <button onClick={() => deleteSupplier(s.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }} title="Delete"><Trash2 size={16} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1265,7 +1492,7 @@ const CanteenModule = ({ activeSegment }) => {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ textAlign: 'left', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
-                  {['PO ID', 'Supplier', 'Date', 'Amount', 'Status', 'Actions'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
+                  {['PO ID', 'Supplier', 'Date', 'Amount', 'Status', 'Payment', 'Actions'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -1276,9 +1503,50 @@ const CanteenModule = ({ activeSegment }) => {
                     <td style={{ padding: '16px 20px', fontSize: 13 }}>{new Date(po.order_date).toLocaleDateString()}</td>
                     <td style={{ padding: '16px 20px', fontWeight: 800 }}>₹{Number(po.total_amount).toLocaleString()}</td>
                     <td style={{ padding: '16px 20px' }}>
-                      <span style={{ padding: '4px 10px', borderRadius: 99, background: po.status === 'received' ? '#DCFCE7' : '#FEF3C7', color: po.status === 'received' ? '#166534' : '#92400E', fontSize: 11, fontWeight: 800, textTransform: 'uppercase' }}>{po.status}</span>
+                      <select 
+                        value={po.status} 
+                        onChange={(e) => handlePoStatusChange(po.id, e.target.value)}
+                        style={{ 
+                          padding: '4px 8px', borderRadius: 6, border: '1px solid #E2E8F0', fontSize: 11, fontWeight: 800,
+                          background: po.status === 'received' ? '#DCFCE7' : '#FEF3C7',
+                          color: po.status === 'received' ? '#166534' : '#92400E',
+                          outline: 'none', cursor: 'pointer', textTransform: 'uppercase'
+                        }}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="received">Received</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
                     </td>
-                    <td style={{ padding: '16px 20px' }}><Btn size="sm" variant="ghost">Details</Btn></td>
+                    <td style={{ padding: '16px 20px' }}>
+                      <select 
+                        disabled={po.status !== 'received'}
+                        value={po.payment_status} 
+                        onChange={(e) => updatePoPaymentStatus(po.id, e.target.value)}
+                        style={{ 
+                          padding: '4px 8px', borderRadius: 6, border: '1px solid #E2E8F0', fontSize: 11, fontWeight: 800,
+                          background: po.payment_status === 'paid' ? '#DCFCE7' : '#FEE2E2',
+                          color: po.payment_status === 'paid' ? '#166534' : '#991B1B',
+                          outline: 'none', cursor: po.status === 'received' ? 'pointer' : 'not-allowed', textTransform: 'uppercase',
+                          opacity: po.status === 'received' ? 1 : 0.6
+                        }}
+                      >
+                        <option value="unpaid">Unpaid</option>
+                        <option value="partially_paid">Partial</option>
+                        <option value="paid">Paid</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '16px 20px' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {po.status === 'received' && (
+                          <>
+                            <Btn size="sm" variant="ghost" onClick={() => { setSelectedPo(po); setInvoiceModal(true); }}>
+                              <FileText size={14} /> {po.payment_status === 'paid' ? 'Receipt' : 'Invoice'}
+                            </Btn>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1401,27 +1669,43 @@ const CanteenModule = ({ activeSegment }) => {
 
   const renderFeedback = () => (
     <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-      <div style={{ padding: '20px', borderBottom: `1px solid ${C.border}` }}><h5 style={{ margin: 0, fontWeight: 800 }}>Customer Feedback & Reviews</h5></div>
+      <div style={{ padding: '20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h5 style={{ margin: 0, fontWeight: 800 }}>Customer Feedback & Reviews</h5>
+        <Btn size="sm" onClick={() => setFeedbackModal(true)}><Plus size={16} /> Add Feedback</Btn>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {complaints.map(c => (
-          <div key={c.id} style={{ padding: '20px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 20 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 24, background: '#F1F5F9', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: C.primary }}>{c.user_name?.charAt(0)}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <h6 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>{c.subject}</h6>
-                <span style={{ fontSize: 12, color: C.muted }}>{new Date(c.created_at).toLocaleDateString()}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 2, marginBottom: 8 }}>
-                {[1, 2, 3, 4, 5].map(i => <Star key={i} size={14} fill={i <= c.rating ? '#F59E0B' : 'none'} color={i <= c.rating ? '#F59E0B' : '#CBD5E1'} />)}
-              </div>
-              <p style={{ fontSize: 14, margin: 0, color: '#475569', lineHeight: 1.5 }}>{c.description}</p>
-              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 4, background: c.status === 'resolved' ? '#DCFCE7' : '#FEE2E2', color: c.status === 'resolved' ? '#166534' : '#991B1B' }}>{c.status}</span>
-                {c.status !== 'resolved' && <button style={{ background: 'none', border: 'none', color: C.primary, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Reply to consumer</button>}
+        {complaints.length === 0 ? (
+          <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+            <MessageSquare size={48} color={C.border} style={{ marginBottom: 16 }} />
+            <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.muted }}>No Feedback Yet</p>
+            <p style={{ margin: '8px 0 0', fontSize: 13, color: '#94A3B8' }}>Customer feedback and complaints will appear here.</p>
+          </div>
+        ) : (
+          complaints.map(c => (
+            <div key={c.id} style={{ padding: '20px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 20 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 24, background: '#F1F5F9', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: C.primary }}>{c.user_name?.charAt(0)}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <h6 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>{c.subject}</h6>
+                  <span style={{ fontSize: 12, color: C.muted }}>{new Date(c.created_at).toLocaleDateString()}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 2, marginBottom: 8 }}>
+                  {[1, 2, 3, 4, 5].map(i => <Star key={i} size={14} fill={i <= c.rating ? '#F59E0B' : 'none'} color={i <= c.rating ? '#F59E0B' : '#CBD5E1'} />)}
+                </div>
+                <p style={{ fontSize: 14, margin: 0, color: '#475569', lineHeight: 1.5 }}>{c.description}</p>
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 4, background: c.status === 'resolved' ? '#DCFCE7' : '#FEE2E2', color: c.status === 'resolved' ? '#166534' : '#991B1B' }}>{c.status}</span>
+                  {c.status !== 'resolved' && <button onClick={async () => {
+                    try {
+                      await canteenApi.updateComplaintStatus(c.id, 'resolved', 'Resolved by admin');
+                      loadComplaints();
+                    } catch { alert('Failed to update status'); }
+                  }} style={{ background: 'none', border: 'none', color: C.primary, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Mark as Resolved</button>}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
@@ -2130,40 +2414,138 @@ const CanteenModule = ({ activeSegment }) => {
         </div>
       </Modal>
     {/* Supplier Modal */}
-      <Modal open={suppModal} onClose={() => setSuppModal(false)} title="Add Supplier" Icon={Truck}>
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            await canteenApi.createSupplier(suppForm);
-            setSuppModal(false);
-            setSuppForm({ name: '', contact_person: '', phone: '', category: '', item_id: '' });
-            loadSuppliers();
-          } catch { alert('Failed to create supplier'); }
-        }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Modal open={suppModal} onClose={() => { setSuppModal(false); setEditingSupp(null); }} title={editingSupp ? "Edit Supplier" : "Add Supplier"} Icon={Truck}>
+        <form onSubmit={saveSupplier} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <FInput label="Supplier Name" required value={suppForm.name} onChange={e => setSuppForm(p => ({ ...p, name: e.target.value }))} />
           <FInput label="Contact Person" value={suppForm.contact_person} onChange={e => setSuppForm(p => ({ ...p, contact_person: e.target.value }))} />
           <FInput label="Phone" required value={suppForm.phone} onChange={e => setSuppForm(p => ({ ...p, phone: e.target.value }))} />
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <FSelect label="Category" value={suppForm.category} onChange={e => setSuppForm(p => ({ ...p, category: e.target.value }))}>
-                <option value="">-- Choose Category --</option>
-                {[...new Set(invItems.map(i => i.category).filter(Boolean))].map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </FSelect>
-            </div>
-            <Btn type="button" variant="outline" size="sm" onClick={() => setInvCatModal(true)} style={{ marginBottom: 24 }}><Plus size={14} /> Category</Btn>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <MultiSelect 
+              label="Categories"
+              placeholder="Choose Categories..."
+              options={invCats.map(c => ({ value: c.id, label: c.name }))}
+              selected={suppForm.category_ids}
+              onChange={ids => setSuppForm(p => ({ ...p, category_ids: ids }))}
+            />
+            <Btn type="button" variant="ghost" size="sm" onClick={() => setInvCatModal(true)} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> New Category</Btn>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <FSelect label="Item Supplied" value={suppForm.item_id} onChange={e => setSuppForm(p => ({ ...p, item_id: e.target.value }))}>
-                <option value="">-- Choose Item --</option>
-                {invItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
-              </FSelect>
-            </div>
-            <Btn type="button" variant="outline" size="sm" onClick={() => setInvItemModal(true)} style={{ marginBottom: 24 }}><Plus size={14} /> Item</Btn>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <MultiSelect 
+              label="Items Supplied"
+              placeholder="Choose Items..."
+              options={invItems.map(i => ({ value: i.id, label: `${i.name} (${i.unit})` }))}
+              selected={suppForm.item_ids}
+              onChange={ids => setSuppForm(p => ({ ...p, item_ids: ids }))}
+            />
+            <Btn type="button" variant="ghost" size="sm" onClick={() => setInvItemModal(true)} style={{ alignSelf: 'flex-start' }}><Plus size={14} /> New Item</Btn>
           </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-            <Btn variant="outline" onClick={() => setSuppModal(false)}>Cancel</Btn>
-            <Btn type="submit">Save Supplier</Btn>
+            <Btn variant="outline" onClick={() => { setSuppModal(false); setEditingSupp(null); }}>Cancel</Btn>
+            <Btn type="submit">{editingSupp ? "Update Supplier" : "Save Supplier"}</Btn>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Purchase Order Modal */}
+      <Modal open={poModal} onClose={() => setPoModal(false)} title="Create Purchase Order" Icon={ShoppingCart} width="700px">
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          if (poForm.items.length === 0) {
+            alert('Please add at least one item to the purchase order.');
+            return;
+          }
+          try {
+            await canteenApi.createPurchaseOrder(poForm);
+            setPoModal(false);
+            setPoForm({ supplier: '', order_date: fmtDate(), status: 'pending', notes: '', items: [] });
+            loadPOs();
+          } catch { alert('Failed to create purchase order'); }
+        }} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <FSelect label="Supplier" required value={poForm.supplier} onChange={e => setPoForm(p => ({ ...p, supplier: e.target.value }))}>
+              <option value="">-- Select Supplier --</option>
+              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </FSelect>
+            <FInput label="Order Date" type="date" value={poForm.order_date} onChange={e => setPoForm(p => ({ ...p, order_date: e.target.value }))} />
+          </div>
+
+          <div style={{ padding: 16, background: '#F8FAFC', borderRadius: 12, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <h6 style={{ margin: 0, fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: C.primary }}>Add Items</h6>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <FSelect label="Category" value={poItemForm.category_id} onChange={e => setPoItemForm(p => ({ ...p, category_id: e.target.value, inventory_item_id: '' }))}>
+                <option value="">-- All Categories --</option>
+                {invCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </FSelect>
+              <FSelect label="Item" value={poItemForm.inventory_item_id} onChange={e => {
+                const item = invItems.find(i => i.id == e.target.value);
+                setPoItemForm(p => ({ ...p, inventory_item_id: e.target.value, unit_price: item?.unit_price || 0 }));
+              }}>
+                <option value="">-- Select Item --</option>
+                {invItems.filter(i => !poItemForm.category_id || String(i.category) === String(poItemForm.category_id)).map(i => (
+                  <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
+                ))}
+              </FSelect>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <FInput label="QTY" type="number" step="0.01" value={poItemForm.quantity} onChange={e => setPoItemForm(p => ({ ...p, quantity: e.target.value }))} />
+              <FInput label="Unit Price" type="number" step="0.01" value={poItemForm.unit_price} onChange={e => setPoItemForm(p => ({ ...p, unit_price: e.target.value }))} />
+            </div>
+
+            {poItemForm.category_id && invItems.filter(i => String(i.category) === String(poItemForm.category_id)).length === 0 && (
+              <p style={{ margin: 0, fontSize: 12, color: '#DC2626', fontWeight: 600 }}>No items found for this category.</p>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Btn type="button" size="sm" onClick={addPoItem} disabled={!poItemForm.inventory_item_id} style={{ background: '#1E3A5F' }}>Add Item</Btn>
+            </div>
+
+            {poForm.items.length > 0 && (
+              <div style={{ marginTop: 8, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: C.muted }}>
+                      <th style={{ padding: '4px 8px' }}>Item</th>
+                      <th style={{ padding: '4px 8px' }}>Qty</th>
+                      <th style={{ padding: '4px 8px' }}>Price</th>
+                      <th style={{ padding: '4px 8px' }}>Total</th>
+                      <th style={{ padding: '4px 8px' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {poForm.items.map((it, idx) => (
+                      <tr key={idx} style={{ borderBottom: `1px solid ${C.bg}` }}>
+                        <td style={{ padding: '8px' }}>{it.item_name}</td>
+                        <td style={{ padding: '8px' }}>{it.quantity}</td>
+                        <td style={{ padding: '8px' }}>₹{it.unit_price}</td>
+                        <td style={{ padding: '8px' }}>₹{(it.quantity * it.unit_price).toFixed(2)}</td>
+                        <td style={{ padding: '8px' }}>
+                          <button type="button" onClick={() => removePoItem(idx)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }}><X size={14} /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan="3" style={{ padding: '12px 8px', fontWeight: 800, textAlign: 'right' }}>Total Amount:</td>
+                      <td style={{ padding: '12px 8px', fontWeight: 800 }}>₹{poForm.items.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0).toFixed(2)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <FTextarea label="Notes" value={poForm.notes} onChange={e => setPoForm(p => ({ ...p, notes: e.target.value }))} />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <Btn variant="outline" onClick={() => setPoModal(false)}>Cancel</Btn>
+            <Btn type="submit" style={{ background: '#10B981' }}>Create Purchase Order</Btn>
           </div>
         </form>
       </Modal>
@@ -2174,10 +2556,11 @@ const CanteenModule = ({ activeSegment }) => {
           e.preventDefault();
           try {
             await canteenApi.createInventoryLog({
-               item: purForm.item_id,
-               log_type: 'in',
-               quantity: purForm.quantity,
-               supplier: purForm.supplier_id
+              item: purForm.item_id,
+              log_type: 'in',
+              quantity: purForm.quantity,
+              unit_price: purForm.price,
+              supplier: purForm.supplier_id
             });
             setPurModal(false);
             setPurForm({ supplier_id: '', item_id: '', quantity: '', price: '' });
@@ -2207,6 +2590,36 @@ const CanteenModule = ({ activeSegment }) => {
         </form>
       </Modal>
 
+      {/* Reduce Stock Modal (Out) */}
+      <Modal open={invOutModal} onClose={() => { setInvOutModal(false); setInvOutForm({ item_id: '', quantity: '1', reason: '' }); }} title="Reduce Stock (Stock Out)" Icon={Package} color="#EF4444">
+        <form onSubmit={recordStockOut} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {(() => {
+            const sel = invItems.find(i => String(i.id) === String(invOutForm.item_id));
+            return (
+              <div style={{ padding: 12, background: '#F8FAFC', borderRadius: 12, border: `1px solid ${C.border}` }}>
+                <p style={{ margin: 0, fontWeight: 800 }}>{sel?.name || 'Inventory Item'}</p>
+                {sel && (
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: C.muted }}>
+                    Current stock: <strong>{sel.current_stock}</strong> {sel.unit}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
+          <FInput label="Quantity to Reduce" type="number" step="0.01" required value={invOutForm.quantity} onChange={e => setInvOutForm(p => ({ ...p, quantity: e.target.value }))} />
+          <FInput label="Reason (optional)" value={invOutForm.reason} onChange={e => setInvOutForm(p => ({ ...p, reason: e.target.value }))} placeholder="e.g. Used in kitchen, damaged, spillage" />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
+            <Btn variant="outline" onClick={() => { setInvOutModal(false); setInvOutForm({ item_id: '', quantity: '1', reason: '' }); }}>Cancel</Btn>
+            <Btn type="submit" variant="danger" disabled={invOutSubmitting}>
+              {invOutSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Minus size={18} />}
+              Reduce Stock
+            </Btn>
+          </div>
+        </form>
+      </Modal>
+
       {/* Inventory Category Modal */}
       <Modal open={invCatModal} onClose={() => setInvCatModal(false)} title="Add Inventory Category" Icon={FolderPlus}>
         <form onSubmit={saveInvCategory} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -2219,16 +2632,33 @@ const CanteenModule = ({ activeSegment }) => {
       </Modal>
 
       {/* Inventory Item Modal */}
-      <Modal open={invItemModal} onClose={() => setInvItemModal(false)} title="Add Inventory Item" Icon={Package}>
+      <Modal
+        open={invItemModal}
+        onClose={() => { setInvItemModal(false); setEditingInvItem(null); setInvItemForm({ name: '', category: '', unit: '', min_stock_level: '', current_stock: '', item_type: '', unit_price: '', manufacturing_date: '', expiry_date: '', batch_number: '' }); }}
+        title={editingInvItem ? "Edit Inventory Item" : "Add Inventory Item"}
+        Icon={Package}
+      >
         <form onSubmit={saveInvItem} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <FInput label="Item Name" required value={invItemForm.name} onChange={e => setInvItemForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Rice, Milk, Bread" />
           <FSelect label="Category" required value={invItemForm.category} onChange={e => setInvItemForm(p => ({ ...p, category: e.target.value }))}>
             <option value="">-- Choose Category --</option>
-            {[...new Set(invItems.map(i => i.category))].map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            {invCats.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
           </FSelect>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <FInput label="Unit" required value={invItemForm.unit} onChange={e => setInvItemForm(p => ({ ...p, unit: e.target.value }))} placeholder="e.g. kg, liters, pieces" />
-            <FInput label="Item Type" value={invItemForm.item_type} onChange={e => setInvItemForm(p => ({ ...p, item_type: e.target.value }))} placeholder="perishable, non-perishable, raw_material" />
+            <FSelect label="Unit" required value={invItemForm.unit} onChange={e => setInvItemForm(p => ({ ...p, unit: e.target.value }))}>
+              <option value="">-- Choose Unit --</option>
+              {INVENTORY_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              {invItemForm.unit && !INVENTORY_UNITS.includes(invItemForm.unit) && (
+                <option value={invItemForm.unit}>{invItemForm.unit}</option>
+              )}
+            </FSelect>
+            <FSelect label="Item Type" value={invItemForm.item_type} onChange={e => setInvItemForm(p => ({ ...p, item_type: e.target.value }))}>
+              <option value="">-- Choose Type --</option>
+              {INVENTORY_ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              {invItemForm.item_type && !INVENTORY_ITEM_TYPES.some(t => t.value === invItemForm.item_type) && (
+                <option value={invItemForm.item_type}>{invItemForm.item_type}</option>
+              )}
+            </FSelect>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <FInput label="Current Stock" type="number" step="0.01" required value={invItemForm.current_stock} onChange={e => setInvItemForm(p => ({ ...p, current_stock: e.target.value }))} />
@@ -2238,10 +2668,13 @@ const CanteenModule = ({ activeSegment }) => {
             <FInput label="Unit Price (₹)" type="number" step="0.01" value={invItemForm.unit_price} onChange={e => setInvItemForm(p => ({ ...p, unit_price: e.target.value }))} />
             <FInput label="Batch Number" value={invItemForm.batch_number} onChange={e => setInvItemForm(p => ({ ...p, batch_number: e.target.value }))} />
           </div>
-          <FInput label="Expiry Date" type="date" value={invItemForm.expiry_date} onChange={e => setInvItemForm(p => ({ ...p, expiry_date: e.target.value }))} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <FInput label="Manufactured Date" type="date" value={invItemForm.manufacturing_date} onChange={e => setInvItemForm(p => ({ ...p, manufacturing_date: e.target.value }))} />
+            <FInput label="Expiry Date" type="date" value={invItemForm.expiry_date} onChange={e => setInvItemForm(p => ({ ...p, expiry_date: e.target.value }))} />
+          </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-            <Btn variant="outline" onClick={() => setInvItemModal(false)}>Cancel</Btn>
-            <Btn type="submit">Create Item</Btn>
+            <Btn variant="outline" onClick={() => { setInvItemModal(false); setEditingInvItem(null); setInvItemForm({ name: '', category: '', unit: '', min_stock_level: '', current_stock: '', item_type: '', unit_price: '', manufacturing_date: '', expiry_date: '', batch_number: '' }); }}>Cancel</Btn>
+            <Btn type="submit">{editingInvItem ? "Update Item" : "Create Item"}</Btn>
           </div>
         </form>
       </Modal>
@@ -2328,31 +2761,208 @@ const CanteenModule = ({ activeSegment }) => {
         </form>
       </Modal>
 
-      {/* Purchase Order Modal */}
-      <Modal open={poModal} onClose={() => setPoModal(false)} title="Create Purchase Order" Icon={ShoppingCart}>
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            await canteenApi.createPurchaseOrder(poForm);
-            setPoModal(false);
-            setPoForm({ supplier: '', order_date: fmtDate(), status: 'pending', notes: '' });
-            loadPOs();
-          } catch { alert('Failed to create purchase order'); }
-        }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <FSelect label="Supplier" required value={poForm.supplier} onChange={e => setPoForm(p => ({ ...p, supplier: e.target.value }))}>
-            <option value="">-- Select Supplier --</option>
-            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+      <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title="Purchase Order Invoice" Icon={FileText} width="800px">
+        {selectedPo && (
+          <div id="po-invoice-content" style={{ padding: '10px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 30, borderBottom: `2px solid ${C.primary}`, paddingBottom: 20 }}>
+              <div>
+                <h2 style={{ margin: 0, color: C.primary, fontSize: 24, fontWeight: 900 }}>{selectedPo.payment_status === 'paid' ? 'PAYMENT RECEIPT' : 'INVOICE'}</h2>
+                <p style={{ margin: '4px 0', fontSize: 13, color: C.muted }}>PO ID: <strong>PO-{selectedPo.id}</strong></p>
+                <p style={{ margin: '4px 0', fontSize: 13, color: C.muted }}>Date: {new Date(selectedPo.order_date).toLocaleDateString()}</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>School Canteen Management</h4>
+                <p style={{ margin: '4px 0', fontSize: 12, color: C.muted }}>Canteen Administration Office</p>
+                <p style={{ margin: '4px 0', fontSize: 12, color: C.muted }}>Payment Status: <span style={{ color: selectedPo.payment_status === 'paid' ? '#10B981' : '#EF4444', fontWeight: 800 }}>{selectedPo.payment_status?.toUpperCase()}</span></p>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginBottom: 30 }}>
+              <div>
+                <h6 style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>Vendor / Supplier</h6>
+                <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>{selectedPo.supplier_name}</p>
+                <p style={{ margin: '4px 0', fontSize: 13, color: C.muted }}>{suppliers.find(s => s.id === selectedPo.supplier)?.address || 'Address not provided'}</p>
+                <p style={{ margin: '4px 0', fontSize: 13, color: C.muted }}>Phone: {suppliers.find(s => s.id === selectedPo.supplier)?.phone || 'N/A'}</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <h6 style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>Ship To</h6>
+                <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>Main Campus Canteen</p>
+                <p style={{ margin: '4px 0', fontSize: 13, color: C.muted }}>Internal Receiving Department</p>
+              </div>
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 30 }}>
+              <thead>
+                <tr style={{ background: C.primary, color: '#fff' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12 }}>Item Description</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12 }}>Qty</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12 }}>Unit Price</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12 }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(selectedPo.items || []).map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 600 }}>{item.item_name}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: 14 }}>{item.quantity} {item.unit}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 14 }}>₹{Number(item.unit_price).toLocaleString()}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 14, fontWeight: 700 }}>₹{(Number(item.quantity) * Number(item.unit_price)).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ width: 250 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+                  <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Subtotal</span>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>₹{Number(selectedPo.total_amount).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', marginTop: 8 }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: C.primary }}>Grand Total</span>
+                  <span style={{ fontSize: 18, fontWeight: 900, color: C.primary }}>₹{Number(selectedPo.total_amount).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 50, paddingTop: 20, borderTop: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.muted }}>Notes</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12 }}>{selectedPo.notes || 'No additional notes provided.'}</p>
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.muted }}>Payment Receipt</p>
+                {selectedPo.receipt_file ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <Btn size="sm" variant="ghost" onClick={() => window.open(selectedPo.receipt_file, '_blank')}><Eye size={14} /> View Receipt</Btn>
+                    <label style={{ cursor: 'pointer' }}>
+                      <input type="file" style={{ display: 'none' }} onChange={e => handleReceiptUpload(selectedPo.id, e.target.files[0])} />
+                      <span style={{ fontSize: 11, color: C.primary, textDecoration: 'underline' }}>Update</span>
+                    </label>
+                  </div>
+                ) : (
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4, cursor: 'pointer', padding: '6px 12px', border: `1px dashed ${C.border}`, borderRadius: 8, fontSize: 12, color: C.muted }}>
+                    <Plus size={14} /> Upload Receipt
+                    <input type="file" style={{ display: 'none' }} onChange={e => handleReceiptUpload(selectedPo.id, e.target.files[0])} />
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 30, textAlign: 'right' }}>
+                <div style={{ width: 150, borderBottom: `1px solid ${C.text}`, margin: '0 0 8px auto', height: 40 }}></div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 800, textTransform: 'uppercase' }}>Authorized Signature</p>
+            </div>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24, borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+          <Btn variant="outline" onClick={() => setInvoiceModal(false)}>Close</Btn>
+          <Btn variant="primary" onClick={() => {
+            const content = document.getElementById('po-invoice-content').innerHTML;
+            const win = window.open('', '', 'height=700,width=900');
+            win.document.write('<html><head><title>PO Invoice</title>');
+            win.document.write('<style>body { font-family: sans-serif; padding: 40px; color: #1E293B; } table { width: 100%; border-collapse: collapse; } th, td { padding: 12px; border-bottom: 1px solid #E2E8F0; } th { background: #1E3A5F !important; color: white !important; -webkit-print-color-adjust: exact; }</style>');
+            win.document.write('</head><body>');
+            win.document.write(content);
+            win.document.write('</body></html>');
+            win.document.close();
+            win.print();
+          }}><Printer size={16} /> Print Invoice</Btn>
+        </div>
+      </Modal>
+
+      {/* Add Feedback Modal */}
+      <Modal open={feedbackModal} onClose={() => setFeedbackModal(false)} title="Submit Feedback" Icon={MessageSquare}>
+        <form onSubmit={saveFeedback} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <FInput label="Subject" required value={feedbackForm.subject} onChange={e => setFeedbackForm(p => ({ ...p, subject: e.target.value }))} placeholder="e.g. Food Quality, Service, Cleanliness" />
+          <FSelect label="Rating" required value={feedbackForm.rating} onChange={e => setFeedbackForm(p => ({ ...p, rating: parseInt(e.target.value) }))}>
+            <option value={5}>5 Stars - Excellent</option>
+            <option value={4}>4 Stars - Good</option>
+            <option value={3}>3 Stars - Average</option>
+            <option value={2}>2 Stars - Poor</option>
+            <option value={1}>1 Star - Terrible</option>
           </FSelect>
-          <FInput label="Order Date" type="date" value={poForm.order_date} onChange={e => setPoForm(p => ({ ...p, order_date: e.target.value }))} />
-          <FTextarea label="Notes" value={poForm.notes} onChange={e => setPoForm(p => ({ ...p, notes: e.target.value }))} />
+          <FTextarea label="Description" required value={feedbackForm.description} onChange={e => setFeedbackForm(p => ({ ...p, description: e.target.value }))} placeholder="Please provide details about your experience..." />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-            <Btn variant="outline" onClick={() => setPoModal(false)}>Cancel</Btn>
-            <Btn type="submit">Create PO</Btn>
+            <Btn type="button" variant="outline" onClick={() => setFeedbackModal(false)}>Cancel</Btn>
+            <Btn type="submit">Submit Feedback</Btn>
           </div>
         </form>
       </Modal>
+
     </div>
   );
 };
 
 export default CanteenModule;
+
+/* ─── Premium Multi-Select Component ─── */
+const MultiSelect = ({ label, options, selected = [], onChange, placeholder = "Select options..." }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+  const toggle = (id) => {
+    const next = selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id];
+    onChange(next);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}>
+      {label && <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>{label}</label>}
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ 
+          padding: '8px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', minHeight: 42,
+          display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', cursor: 'pointer'
+        }}
+      >
+        {selected.length === 0 && <span style={{ color: C.muted, fontSize: 14 }}>{placeholder}</span>}
+        {selected.map(id => {
+          const opt = options.find(o => o.value === id);
+          return (
+            <span key={id} style={{ background: '#F1F5F9', padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {opt?.label || id}
+              <X size={12} onClick={(e) => { e.stopPropagation(); toggle(id); }} />
+            </span>
+          );
+        })}
+        <div style={{ marginLeft: 'auto' }}><ChevronDown size={16} color={C.muted} /></div>
+      </div>
+
+      {isOpen && (
+        <div style={{ 
+          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', 
+          borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+          zIndex: 100, maxHeight: 240, overflowY: 'auto', padding: 8
+        }}>
+          <input 
+            autoFocus
+            placeholder="Search..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onClick={e => e.stopPropagation()}
+            style={{ width: '100%', padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 8, outline: 'none', fontSize: 13 }}
+          />
+          {filtered.map(o => (
+            <div 
+              key={o.value}
+              onClick={(e) => { e.stopPropagation(); toggle(o.value); }}
+              style={{ 
+                padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                background: selected.includes(o.value) ? `${C.primary}12` : 'transparent',
+                color: selected.includes(o.value) ? C.primary : C.text,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }}
+            >
+              {o.label}
+              {selected.includes(o.value) && <CheckCircle2 size={14} />}
+            </div>
+          ))}
+          {filtered.length === 0 && <p style={{ textAlign: 'center', color: C.muted, fontSize: 12, padding: 8 }}>No options found</p>}
+        </div>
+      )}
+      {isOpen && <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setIsOpen(false)} />}
+    </div>
+  );
+};

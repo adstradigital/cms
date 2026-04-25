@@ -67,6 +67,9 @@ const canteenApi = {
   deleteInventoryItem: (id) => instance.delete(`/canteen/inventory-items/${id}/`),
   getLowStockItems: () => instance.get('/canteen/inventory-items/low_stock/'),
 
+  getInventoryCategories: () => instance.get('/canteen/inventory-categories/'),
+  createInventoryCategory: (data) => instance.post('/canteen/inventory-categories/', data),
+
   getInventoryLogs: (params) => instance.get('/canteen/inventory-logs/', { params }),
   createInventoryLog: (data) => instance.post('/canteen/inventory-logs/', data),
 
@@ -95,6 +98,20 @@ const canteenApi = {
   // ── Customer Search (Students/Staff) ─────────────────────────────────────────
   searchStudents: (query, params = {}) => instance.get('/students/students/', { params: { search: query, ...params } }),
   searchStaff: (query, params = {}) => instance.get('/staff/', { params: { q: query, ...params } }),
+
+  // ── Purchase Orders ──────────────────────────────────────────────────────────
+  getPurchaseOrders: (params) => instance.get('/canteen/purchase-orders/', { params }),
+  createPurchaseOrder: (data) => instance.post('/canteen/purchase-orders/', data),
+  updatePurchaseOrder: (id, data) => instance.patch(`/canteen/purchase-orders/${id}/`, data),
+  receivePurchaseOrder: (id) => instance.post(`/canteen/purchase-orders/${id}/receive_order/`),
+
+  // ── Staff Profiles & Attendance ──────────────────────────────────────────────
+  getStaffProfiles: (params) => instance.get('/canteen/staff-profiles/', { params }),
+  createStaffProfile: (data) => instance.post('/canteen/staff-profiles/', data),
+  getStaffAttendance: (params) => instance.get('/canteen/staff-attendance/', { params }),
+  createStaffAttendance: (data) => instance.post('/canteen/staff-attendance/', data),
+  getStaffTasks: (params) => instance.get('/canteen/staff-tasks/', { params }),
+  createStaffTask: (data) => instance.post('/canteen/staff-tasks/', data),
 };
 
 export default canteenApi;

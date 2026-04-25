@@ -14,6 +14,10 @@ from .models import (
     CanteenIngredient, CanteenDish, CanteenCombo, WeeklyMenu,
     CanteenPurchaseOrder, CanteenPurchaseOrderItem,
     CanteenStaffProfile, CanteenStaffAttendance, CanteenStaffTask,
+    CanteenShift, CanteenStaffShiftAssignment,
+    CanteenStaffDocument, CanteenStaffLeaveRequest, CanteenStaffPerformanceLog,
+    CanteenStaffAnnouncement, CanteenPayrollRecord,
+    CanteenInventoryCategory,
 )
 from .serializers import (
     FoodItemSerializer, DailyMenuSerializer, CanteenComplaintSerializer,
@@ -24,6 +28,11 @@ from .serializers import (
     OrderItemSerializer, CanteenPaymentSerializer, WeeklyMenuSerializer,
     CanteenPurchaseOrderSerializer, CanteenPurchaseOrderItemSerializer,
     CanteenStaffProfileSerializer, CanteenStaffAttendanceSerializer, CanteenStaffTaskSerializer,
+    CanteenShiftSerializer, CanteenStaffShiftAssignmentSerializer,
+    CanteenStaffDocumentSerializer, CanteenStaffLeaveRequestSerializer,
+    CanteenStaffPerformanceLogSerializer, CanteenStaffAnnouncementSerializer,
+    CanteenPayrollRecordSerializer,
+    CanteenInventoryCategorySerializer,
 )
 
 
@@ -186,10 +195,26 @@ class CanteenPurchaseOrderViewSet(viewsets.ModelViewSet):
         if order.status == 'received':
             return Response({'error': 'Order already received'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # In a real app, you'd iterate through items and update inventory
+        # Iterate through items and update inventory
+        for item in order.items.all():
+            inv_item = item.inventory_item
+            if inv_item:
+                inv_item.current_stock += item.quantity
+                inv_item.save()
+                
+                # Log the inbound movement
+                CanteenInventoryLog.objects.create(
+                    item=inv_item,
+                    log_type='in',
+                    quantity=item.quantity,
+                    supplier=order.supplier,
+                    reason=f"Received via Purchase Order PO-{order.id}",
+                    recorded_by=request.user
+                )
+
         order.status = 'received'
         order.save()
-        return Response({'status': 'Order marked as received'})
+        return Response({'status': 'Order marked as received and inventory updated'})
 
 
 class CanteenVendorViewSet(viewsets.ModelViewSet):
@@ -240,6 +265,51 @@ class CanteenStaffAttendanceViewSet(viewsets.ModelViewSet):
             qs = qs.filter(date=date)
         return qs
 
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        qs = self.get_queryset()
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        staff_id = request.query_params.get("staff")
+
+        if staff_id:
+            qs = qs.filter(staff_id=staff_id)
+        if date_from:
+            qs = qs.filter(date__gte=date_from)
+        if date_to:
+            qs = qs.filter(date__lte=date_to)
+
+        by_status = {
+            "present": qs.filter(status="present").count(),
+            "late": qs.filter(status="late").count(),
+            "absent": qs.filter(status="absent").count(),
+            "half_day": qs.filter(status="half_day").count(),
+        }
+
+        # Per-staff rollup (lightweight, for reports dashboards)
+        rollup = {}
+        for rec in qs.select_related("staff__user"):
+            sid = rec.staff_id
+            if sid not in rollup:
+                rollup[sid] = {
+                    "staff": sid,
+                    "staff_name": rec.staff.user.get_full_name(),
+                    "role": rec.staff.role,
+                    "present": 0,
+                    "late": 0,
+                    "absent": 0,
+                    "half_day": 0,
+                    "total": 0,
+                }
+            rollup[sid][rec.status] = rollup[sid].get(rec.status, 0) + 1
+            rollup[sid]["total"] += 1
+
+        return Response({
+            "total_records": qs.count(),
+            "by_status": by_status,
+            "by_staff": list(rollup.values()),
+        })
+
 
 class CanteenStaffTaskViewSet(viewsets.ModelViewSet):
     queryset = CanteenStaffTask.objects.select_related('staff__user', 'assigned_by').all()
@@ -248,6 +318,174 @@ class CanteenStaffTaskViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(assigned_by=self.request.user)
+
+
+class CanteenStaffDocumentViewSet(viewsets.ModelViewSet):
+    queryset = CanteenStaffDocument.objects.select_related("staff__user").all()
+    serializer_class = CanteenStaffDocumentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        staff_id = self.request.query_params.get("staff")
+        if staff_id:
+            qs = qs.filter(staff_id=staff_id)
+        return qs
+
+
+class CanteenShiftViewSet(viewsets.ModelViewSet):
+    queryset = CanteenShift.objects.all()
+    serializer_class = CanteenShiftSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        is_active = self.request.query_params.get("is_active")
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() == "true")
+        return qs
+
+
+class CanteenStaffShiftAssignmentViewSet(viewsets.ModelViewSet):
+    queryset = CanteenStaffShiftAssignment.objects.select_related("staff__user", "shift", "created_by").all()
+    serializer_class = CanteenStaffShiftAssignmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        date_from = self.request.query_params.get("date_from")
+        date_to = self.request.query_params.get("date_to")
+        staff_id = self.request.query_params.get("staff")
+        shift_id = self.request.query_params.get("shift")
+        if staff_id:
+            qs = qs.filter(staff_id=staff_id)
+        if shift_id:
+            qs = qs.filter(shift_id=shift_id)
+        if date_from:
+            qs = qs.filter(date__gte=date_from)
+        if date_to:
+            qs = qs.filter(date__lte=date_to)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class CanteenStaffLeaveRequestViewSet(viewsets.ModelViewSet):
+    queryset = CanteenStaffLeaveRequest.objects.select_related("staff__user", "reviewed_by").all()
+    serializer_class = CanteenStaffLeaveRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        status_q = self.request.query_params.get("status")
+        staff_id = self.request.query_params.get("staff")
+        if staff_id:
+            qs = qs.filter(staff_id=staff_id)
+        if status_q:
+            qs = qs.filter(status=status_q)
+        return qs
+
+    def perform_update(self, serializer):
+        prev = self.get_object()
+        updated = serializer.save()
+        if prev.status != updated.status and updated.status in {"approved", "rejected"}:
+            updated.reviewed_by = self.request.user
+            updated.reviewed_at = timezone.now()
+            updated.save(update_fields=["reviewed_by", "reviewed_at"])
+
+
+class CanteenStaffPerformanceLogViewSet(viewsets.ModelViewSet):
+    queryset = CanteenStaffPerformanceLog.objects.select_related("staff__user", "created_by").all()
+    serializer_class = CanteenStaffPerformanceLogSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        staff_id = self.request.query_params.get("staff")
+        if staff_id:
+            qs = qs.filter(staff_id=staff_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class CanteenStaffAnnouncementViewSet(viewsets.ModelViewSet):
+    queryset = CanteenStaffAnnouncement.objects.select_related("created_by", "target_staff__user").all()
+    serializer_class = CanteenStaffAnnouncementSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        category = self.request.query_params.get("category")
+        target_staff = self.request.query_params.get("target_staff")
+        if category:
+            qs = qs.filter(category=category)
+        if target_staff:
+            qs = qs.filter(target_staff_id=target_staff)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class CanteenPayrollRecordViewSet(viewsets.ModelViewSet):
+    queryset = CanteenPayrollRecord.objects.select_related("staff__user", "generated_by").all()
+    serializer_class = CanteenPayrollRecordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        month = self.request.query_params.get("month")  # YYYY-MM-01 recommended
+        staff_id = self.request.query_params.get("staff")
+        if staff_id:
+            qs = qs.filter(staff_id=staff_id)
+        if month:
+            qs = qs.filter(month=month)
+        return qs
+
+    def _compute_net(self, base_amount, overtime_amount, deductions):
+        try:
+            return (base_amount or 0) + (overtime_amount or 0) - (deductions or 0)
+        except Exception:
+            return 0
+
+    def perform_create(self, serializer):
+        data = serializer.validated_data
+        staff = data.get("staff")
+        month = data.get("month")
+        base_amount = data.get("base_amount")
+
+        if (base_amount is None or float(base_amount) == 0) and staff is not None:
+            base_amount = staff.salary
+
+        days_present = data.get("days_present")
+        if (days_present is None or int(days_present) == 0) and staff is not None and month is not None:
+            start = month.replace(day=1)
+            end = (start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            days_present = CanteenStaffAttendance.objects.filter(
+                staff=staff,
+                date__gte=start,
+                date__lte=end,
+                status__in=["present", "late", "half_day"],
+            ).count()
+
+        overtime_amount = data.get("overtime_amount")
+        deductions = data.get("deductions")
+        net_pay = self._compute_net(base_amount, overtime_amount, deductions)
+
+        serializer.save(
+            generated_by=self.request.user,
+            base_amount=base_amount,
+            days_present=days_present or 0,
+            net_pay=net_pay,
+        )
+
+    def perform_update(self, serializer):
+        updated = serializer.save()
+        updated.net_pay = self._compute_net(updated.base_amount, updated.overtime_amount, updated.deductions)
+        updated.save(update_fields=["net_pay"])
 
 
 class CanteenInventoryLogViewSet(viewsets.ModelViewSet):
@@ -488,3 +726,7 @@ def canteen_reports_view(request):
         'payment_breakdown': payment_breakdown,
         'wastage_loss': float(wastage_loss),
     })
+class CanteenInventoryCategoryViewSet(viewsets.ModelViewSet):
+    queryset = CanteenInventoryCategory.objects.all()
+    serializer_class = CanteenInventoryCategorySerializer
+    permission_classes = [IsAuthenticated]

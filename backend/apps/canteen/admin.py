@@ -57,9 +57,14 @@ class CanteenComplaintAdmin(admin.ModelAdmin):
 
 @admin.register(CanteenSupplier)
 class CanteenSupplierAdmin(admin.ModelAdmin):
-    list_display = ('name', 'contact_person', 'phone', 'category', 'is_active')
-    list_filter = ('category', 'is_active')
+    list_display = ('name', 'contact_person', 'phone', 'display_categories', 'is_active')
+    list_filter = ('categories', 'is_active')
     search_fields = ('name', 'contact_person')
+    filter_horizontal = ('categories',)
+
+    def display_categories(self, obj):
+        return ", ".join([c.name for c in obj.categories.all()])
+    display_categories.short_description = 'Categories'
 
 @admin.register(CanteenInventoryItem)
 class CanteenInventoryItemAdmin(admin.ModelAdmin):

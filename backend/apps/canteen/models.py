@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.core.validators import MaxValueValidator, MinValueValidator
 from apps.accounts.models import User
 from apps.students.models import Student
 from apps.staff.models import Staff
@@ -123,13 +124,25 @@ class CanteenComplaint(models.Model):
         ordering = ["-created_at"]
 
 
+class CanteenInventoryCategory(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "canteen_inventory_categories"
+
+
 class CanteenSupplier(models.Model):
     name = models.CharField(max_length=150)
     contact_person = models.CharField(max_length=100, blank=True)
     phone = models.CharField(max_length=20)
+    alternate_phone = models.CharField(max_length=20, blank=True, null=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
-    category = models.CharField(max_length=100, help_text="e.g. Vegetables, Dairy, Meat")
+    categories = models.ManyToManyField(CanteenInventoryCategory, blank=True, related_name="suppliers")
     is_active = models.BooleanField(default=True)
     # Performance tracking
     quality_score = models.DecimalField(max_digits=3, decimal_places=2, default=5.00, help_text="Quality rating out of 5")
@@ -154,16 +167,16 @@ class CanteenVendor(models.Model):
     def __str__(self):
         return self.name
 
-    class Meta:
-        db_table = "canteen_vendors"
 
 
 class CanteenInventoryItem(models.Model):
     name = models.CharField(max_length=150)
-    category = models.CharField(max_length=100, blank=True)
+    category = models.ForeignKey(CanteenInventoryCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name="inventory_items")
     unit = models.CharField(max_length=20, default="kg")
     current_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     min_stock_level = models.DecimalField(max_digits=12, decimal_places=2, default=5)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    manufacturing_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
     supplier = models.ForeignKey(CanteenSupplier, on_delete=models.SET_NULL, null=True, blank=True, related_name="supplied_items")
     last_updated = models.DateTimeField(auto_now=True)
@@ -347,12 +360,20 @@ class CanteenPurchaseOrder(models.Model):
         ("cancelled", "Cancelled"),
     ]
 
+    PAYMENT_STATUS_CHOICES = [
+        ("unpaid", "Unpaid"),
+        ("partially_paid", "Partially Paid"),
+        ("paid", "Paid"),
+    ]
+
     supplier = models.ForeignKey(CanteenSupplier, on_delete=models.CASCADE, related_name="purchase_orders")
     order_date = models.DateField(default=timezone.now)
     expected_delivery = models.DateField(null=True, blank=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="unpaid")
     notes = models.TextField(blank=True)
+    receipt_file = models.FileField(upload_to="canteen/po_receipts/", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -389,12 +410,34 @@ class CanteenStaffProfile(models.Model):
         ("inactive", "Inactive"),
         ("on_leave", "On Leave"),
     ]
+    WAGE_TYPE_CHOICES = [
+        ("monthly", "Monthly Salary"),
+        ("daily", "Daily Wage"),
+    ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="canteen_staff_profile")
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="helper")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     joined_date = models.DateField(default=timezone.now)
     phone = models.CharField(max_length=20, blank=True)
+    alternate_phone = models.CharField(max_length=20, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    photo = models.ImageField(upload_to="canteen/staff/photos/", null=True, blank=True)
+
+    emergency_contact_name = models.CharField(max_length=100, blank=True)
+    emergency_contact_phone = models.CharField(max_length=20, blank=True)
+    emergency_contact_relation = models.CharField(max_length=50, blank=True)
+
+    # Role-based access flags (canteen module only)
+    can_access_inventory = models.BooleanField(default=False)
+    can_handle_orders = models.BooleanField(default=False)
+    can_view_reports = models.BooleanField(default=False)
+    can_access_billing = models.BooleanField(default=False)
+
+    # Leave balance tracking (simple allowance per staff; can be tuned per policy)
+    leave_allowance_days = models.DecimalField(max_digits=5, decimal_places=1, default=0)
+
+    wage_type = models.CharField(max_length=20, choices=WAGE_TYPE_CHOICES, default="monthly")
     salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     def __str__(self):
@@ -439,6 +482,7 @@ class CanteenStaffTask(models.Model):
     staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.CASCADE, related_name="tasks")
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    checklist = models.JSONField(default=list, blank=True, help_text="Optional checklist items for the task")
     deadline = models.DateTimeField()
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default="medium")
     status = models.CharField(max_length=20, choices=TASK_STATUS, default="pending")
@@ -451,3 +495,170 @@ class CanteenStaffTask(models.Model):
     class Meta:
         db_table = "canteen_staff_tasks"
         ordering = ["-deadline"]
+
+
+class CanteenStaffDocument(models.Model):
+    DOC_TYPE_CHOICES = [
+        ("id_proof", "ID Proof"),
+        ("address_proof", "Address Proof"),
+        ("contract", "Contract"),
+        ("medical", "Medical"),
+        ("other", "Other"),
+    ]
+
+    staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.CASCADE, related_name="documents")
+    doc_type = models.CharField(max_length=20, choices=DOC_TYPE_CHOICES, default="id_proof")
+    title = models.CharField(max_length=120, blank=True, default="")
+    file = models.FileField(upload_to="canteen/staff/documents/")
+    notes = models.CharField(max_length=255, blank=True, default="")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "canteen_staff_documents"
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return f"{self.staff} - {self.doc_type}"
+
+
+class CanteenShift(models.Model):
+    name = models.CharField(max_length=80)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    color = models.CharField(max_length=20, blank=True, default="#3B82F6")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "canteen_shifts"
+        ordering = ["start_time", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.start_time}-{self.end_time})"
+
+
+class CanteenStaffShiftAssignment(models.Model):
+    STATUS_CHOICES = [
+        ("scheduled", "Scheduled"),
+        ("swapped", "Swapped"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.CASCADE, related_name="shift_assignments")
+    date = models.DateField()
+    shift = models.ForeignKey(CanteenShift, on_delete=models.CASCADE, related_name="assignments")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="scheduled")
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_canteen_shift_assignments")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "canteen_staff_shift_assignments"
+        ordering = ["-date"]
+        unique_together = ("staff", "date", "shift")
+
+    def __str__(self):
+        return f"{self.staff} - {self.shift} - {self.date}"
+
+
+class CanteenStaffLeaveRequest(models.Model):
+    TYPE_CHOICES = [
+        ("sick", "Sick Leave"),
+        ("casual", "Casual Leave"),
+        ("emergency", "Emergency Leave"),
+    ]
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
+    staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.CASCADE, related_name="leave_requests")
+    leave_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="casual")
+    from_date = models.DateField()
+    to_date = models.DateField()
+    reason = models.TextField(blank=True, default="")
+    is_emergency = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="canteen_staff_leave_reviews")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "canteen_staff_leave_requests"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.staff} - {self.leave_type} - {self.status}"
+
+
+class CanteenStaffPerformanceLog(models.Model):
+    ACTION_CHOICES = [
+        ("note", "Note"),
+        ("reward", "Reward"),
+        ("warning", "Warning"),
+    ]
+
+    staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.CASCADE, related_name="performance_logs")
+    rating = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    hygiene_compliant = models.BooleanField(null=True, blank=True)
+    incident = models.CharField(max_length=255, blank=True, default="")
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default="note")
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_canteen_staff_performance_logs")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "canteen_staff_performance_logs"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.staff} - {self.action}"
+
+
+class CanteenStaffAnnouncement(models.Model):
+    CATEGORY_CHOICES = [
+        ("announcement", "Announcement"),
+        ("menu_change", "Menu Change"),
+        ("inspection", "Inspection"),
+        ("holiday", "Holiday"),
+        ("shift_reminder", "Shift Reminder"),
+        ("emergency", "Emergency Alert"),
+    ]
+
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default="announcement")
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    target_staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name="announcements")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_canteen_staff_announcements")
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_published = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "canteen_staff_announcements"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
+
+
+class CanteenPayrollRecord(models.Model):
+    staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.CASCADE, related_name="payroll_records")
+    month = models.DateField(help_text="Use the first day of the month for grouping, e.g. 2026-04-01")
+    base_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    days_present = models.PositiveSmallIntegerField(default=0)
+    overtime_hours = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    overtime_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    deductions = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    net_pay = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    notes = models.TextField(blank=True, default="")
+    generated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="generated_canteen_payroll_records")
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "canteen_payroll_records"
+        ordering = ["-month", "staff_id"]
+        unique_together = ("staff", "month")
+
+    def __str__(self):
+        return f"{self.staff} - {self.month}"

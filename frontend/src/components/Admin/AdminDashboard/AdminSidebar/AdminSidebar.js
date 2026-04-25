@@ -374,7 +374,6 @@ const SECTIONS = {
     { label: "Payments", href: "/admins/canteen/payments" },
     { label: "Inventory", href: "/admins/canteen/inventory" },
     { label: "Suppliers", href: "/admins/canteen/suppliers" },
-    { label: "Feedback", href: "/admins/canteen/feedback" },
     { label: "Reports", href: "/admins/canteen/reports" },
   ],
   hostel: [

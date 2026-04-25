@@ -7,7 +7,7 @@ const VALID_SEGMENTS = new Set([
   'payments',
   'inventory',
   'suppliers',
-  'vendors',
+  'staff',
   'feedback',
   'reports',
 ]);

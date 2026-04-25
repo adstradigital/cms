@@ -105,7 +105,8 @@ const AttendanceView = ({ section }) => {
   const dayStatusByStudentId = useMemo(() => {
     const map = new Map();
     for (const rec of dayRecords) {
-      map.set(rec.student?.id || rec.student_id, rec.status);
+      const sid = rec.student?.id || rec.student_id || rec.student;
+      map.set(sid, rec.status);
     }
     return map;
   }, [dayRecords]);
@@ -137,7 +138,7 @@ const AttendanceView = ({ section }) => {
     const map = new Map();
     for (const rec of monthRecords) {
       const dayKey = rec.date;
-      const sid = rec.student?.id || rec.student_id;
+      const sid = rec.student?.id || rec.student_id || rec.student;
       if (!map.has(dayKey)) map.set(dayKey, new Map());
       map.get(dayKey).set(sid, rec.status);
     }

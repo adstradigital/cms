@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp, AlertCircle, BookOpen,
-  Download, Share2, Printer, ArrowUpRight, ArrowDownRight, Star
+  Download, Printer, ArrowUpRight, ArrowDownRight, Star
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,

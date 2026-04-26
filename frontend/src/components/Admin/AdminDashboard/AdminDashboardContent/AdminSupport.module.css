@@ -2,20 +2,15 @@
   padding: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  animation: fadeIn 0.4s ease-out;
+  gap: 1.25rem;
+  animation: fadeIn 0.35s ease-out;
 }
 
-/* ─── Header ─────────────────────────────────────────────── */
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
+/* ── Header ──────────────────────────────────────────── */
+.header { margin-bottom: 0.25rem; }
 
 .title {
-  font-size: 1.875rem;
+  font-size: 1.75rem;
   font-weight: 800;
   color: var(--theme-text);
   margin: 0;
@@ -23,171 +18,135 @@
 }
 
 .subtitle {
-  color: var(--theme-text-muted);
   font-size: 0.875rem;
-  margin: 0.25rem 0 0 0;
+  color: var(--theme-text-muted);
+  margin: 0.2rem 0 0;
 }
 
-/* ─── Grid Layout ────────────────────────────────────────── */
+/* ── Stats Row ───────────────────────────────────────── */
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.statCard {
+  background: var(--theme-surface);
+  border-radius: 1rem;
+  padding: 1.125rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+
+.statIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.statValue  { font-size: 1.5rem;   font-weight: 800; line-height: 1; margin-bottom: 0.15rem; }
+.statLabel  { font-size: 0.8rem;   font-weight: 600; color: var(--theme-text); }
+.statSub    { font-size: 0.7rem;   color: var(--theme-text-muted); margin-top: 0.1rem; }
+
+/* ── Main Grid ───────────────────────────────────────── */
 .grid {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 1.5rem;
+  grid-template-columns: 1fr 360px;
+  gap: 1.25rem;
   align-items: start;
 }
 
-.mainColumn {
+.mainCol, .sideCol {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
-.sideColumn {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+/* ── Bottom Grid ─────────────────────────────────────── */
+.bottomGrid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1.25rem;
+  align-items: start;
 }
 
-/* ─── Section Card (shared) ──────────────────────────────── */
+/* ── Section Card ────────────────────────────────────── */
 .section {
   background: var(--theme-surface);
-  border-radius: 1.25rem;
-  padding: 1.75rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  border-radius: 1.125rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.04);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.sectionHeader h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--theme-text);
+  margin: 0;
 }
 
 .sectionHeaderBetween {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
-  gap: 1.5rem;
-}
-
-.sectionHeader h2 {
-  font-size: 1.125rem;
-  font-weight: 700;
-  margin: 0;
-  color: var(--theme-text);
-}
-
-.searchBox {
-  flex: 1;
-  max-width: 280px;
-}
-
-.searchBox input {
-  width: 100%;
-  padding: 0.5rem 1rem;
-  border: 1.5px solid #eef2f6;
-  border-radius: 0.75rem;
-  font-size: 0.875rem;
-  background: #f8fafc;
-  outline: none;
-  transition: all 0.2s;
-}
-
-.searchBox input:focus {
-  border-color: var(--color-primary);
-  background: white;
-  box-shadow: 0 0 0 4px rgba(0, 166, 118, 0.1);
-}
-
-.sectionIcon {
-  color: var(--color-primary);
-}
-
-/* ─── FAQ Accordion ──────────────────────────────────────── */
-.faqList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-}
-
-.faqItem {
-  border: 1.5px solid #eef2f6;
-  border-radius: 1rem;
-  overflow: hidden;
-  transition: border-color 0.2s ease;
-}
-
-.faqItem.open {
-  border-color: var(--color-primary);
-}
-
-.faqQuestion {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 1rem 1.25rem;
   gap: 1rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.sectionHeaderBetween .sectionHeader {
+  margin-bottom: 0;
+}
+
+.sectionIcon { color: var(--color-primary); flex-shrink: 0; }
+
+/* ── Form ────────────────────────────────────────────── */
+.fieldLabel {
+  display: block;
+  font-size: 0.775rem;
   font-weight: 600;
-  color: var(--theme-text);
-  transition: background 0.15s ease;
-}
-
-.faqQuestion:hover {
-  background: #f8fafc;
-}
-
-.faqChevron {
-  flex-shrink: 0;
   color: var(--theme-text-muted);
-  transition: transform 0.25s ease;
+  margin-bottom: 0.4rem;
 }
 
-.faqChevron.rotated {
-  transform: rotate(180deg);
-  color: var(--color-primary);
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
 }
 
-.faqAnswer {
-  padding: 0 1.25rem 1.25rem;
-  font-size: 0.8375rem;
-  color: var(--theme-text-muted);
-  line-height: 1.7;
-  animation: slideDown 0.2s ease-out;
-}
-
-.noResults {
-  padding: 2rem;
-  text-align: center;
-  color: var(--theme-text-muted);
-  font-size: 0.875rem;
-  font-style: italic;
-}
-
-/* ─── Contact Form ───────────────────────────────────────── */
 .formGroup {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
-}
-
-.formGroup label {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--theme-text-muted);
+  margin-bottom: 0.875rem;
 }
 
 .formGroup input,
 .formGroup select,
 .formGroup textarea {
-  padding: 0.75rem 1rem;
-  border: 1.5px solid #eef2f6;
-  border-radius: 0.75rem;
-  font-size: 0.9375rem;
-  background: #f8fafc;
-  transition: all 0.2s ease;
+  padding: 0.6rem 0.875rem;
+  border: 1.5px solid var(--theme-border, #eef2f6);
+  border-radius: 0.6875rem;
+  font-size: 0.875rem;
+  background: var(--theme-bg, #f8fafc);
+  color: var(--theme-text);
   font-family: inherit;
   resize: vertical;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .formGroup input:focus,
@@ -195,100 +154,215 @@
 .formGroup textarea:focus {
   outline: none;
   border-color: var(--color-primary);
-  background: white;
-  box-shadow: 0 0 0 4px rgba(0, 166, 118, 0.1);
+  box-shadow: 0 0 0 3px rgba(0,166,118,0.1);
 }
 
-.submitButton {
+.formFooter {
   display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.slaPill {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.7375rem;
+  flex: 1;
+}
+
+.submitBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 1.25rem;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light, #00c98d) 100%);
+  color: #fff;
+  border: none;
+  border-radius: 0.6875rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(0,166,118,0.2);
+  transition: transform 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 18px rgba(0,166,118,0.28);
+}
+
+.submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.spin { animation: spinning 0.8s linear infinite; }
+
+/* ── Priority Selector ───────────────────────────────── */
+.priorityGroup { margin-bottom: 1rem; }
+
+.priorityGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.priorityCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.55rem 0.375rem;
+  border: 1.5px solid var(--theme-border, #eef2f6);
+  border-radius: 0.75rem;
+  background: var(--theme-bg, #f8fafc);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.priorityCard:hover { border-color: #cbd5e1; }
+
+.prioritySel { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+.pCardLabel { font-size: 0.7rem; font-weight: 700; color: var(--theme-text-muted); }
+.pSla       { font-size: 0.6rem; color: var(--theme-text-muted); opacity: 0.65; }
+
+/* ── Tabs ────────────────────────────────────────────── */
+.tabs { display: flex; gap: 0.3rem; flex-shrink: 0; }
+
+.tabBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.625rem;
+  border: 1.5px solid var(--theme-border, #eef2f6);
+  border-radius: 0.5rem;
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.tabBtn:hover  { border-color: var(--color-primary); color: var(--color-primary); }
+
+.tabActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.tabCount {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.85rem 1.5rem;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light, #00c98d) 100%);
-  color: white;
-  border: none;
-  border-radius: 0.75rem;
-  font-weight: 600;
-  font-size: 0.9375rem;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 166, 118, 0.2);
-  transition: all 0.2s ease;
-  margin-top: 0.5rem;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: rgba(255,255,255,0.25);
 }
 
-.submitButton:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 166, 118, 0.3);
+.tabBtn:not(.tabActive) .tabCount {
+  background: var(--theme-bg, #f1f5f9);
+  color: var(--theme-text-muted);
 }
 
-.submitButton:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
+/* ── Ticket List ─────────────────────────────────────── */
+.ticketList { display: flex; flex-direction: column; gap: 0.5rem; }
 
-/* ─── Service Health ─────────────────────────────────────── */
-.healthList {
+.ticketRow {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.healthItem {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.875rem;
+  border: 1.5px solid var(--theme-border, #f1f5f9);
+  border-radius: 0.75rem;
+  background: var(--theme-bg, #fafbfc);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.healthInfo {
+.ticketRow:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0,166,118,0.07);
+}
+
+.ticketLeft {
   display: flex;
   flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
 }
 
-.serviceName {
+.ticketId {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--theme-text-muted);
+  font-family: monospace;
+  letter-spacing: 0.02em;
+}
+
+.ticketSubject {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--theme-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 520px;
 }
 
-.serviceDelay {
-  font-size: 0.75rem;
-  color: var(--theme-text-muted);
-}
-
-.healthStatus {
+.ticketMeta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-}
-
-.statusIndicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.statusIndicator.operational { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
-.statusIndicator.degraded { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
-.statusIndicator.down { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
-
-.statusText {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
+  gap: 0.3rem;
+  font-size: 0.72rem;
   color: var(--theme-text-muted);
 }
 
-.statusPulse {
-  width: 10px;
-  height: 10px;
+.dot { opacity: 0.4; }
+
+.ticketBadges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.175rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.675rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ── System Status ───────────────────────────────────── */
+.pulseDot {
+  width: 9px;
+  height: 9px;
   background: #10b981;
   border-radius: 50%;
   position: relative;
+  flex-shrink: 0;
 }
 
-.statusPulse::after {
+.pulseDot::after {
   content: '';
   position: absolute;
   inset: -4px;
@@ -297,142 +371,291 @@
   animation: pulse 2s infinite;
 }
 
-@keyframes pulse {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(2); opacity: 0; }
-}
+.healthList { display: flex; flex-direction: column; gap: 0.625rem; }
 
-/* ─── Helpline ───────────────────────────────────────────── */
-.phoneRow {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
-}
-
-.phoneRow strong { color: #34d399; }
-
-.helplineText {
-  font-size: 0.8125rem;
-  opacity: 0.8;
-  line-height: 1.5;
-  margin-bottom: 1.25rem;
-}
-
-.supportHours {
+.healthRow {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255,255,255,0.1);
-  font-size: 0.75rem;
-  opacity: 0.9;
+  justify-content: space-between;
 }
 
-/* ─── Keyboard Shortcuts ──────────────────────────── */
-.shortcutsGrid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.healthLeft { display: flex; align-items: center; gap: 0.625rem; }
+
+.dot8 {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
+
+.dot8.operational { background: #10b981; box-shadow: 0 0 5px rgba(16,185,129,0.5); }
+.dot8.degraded    { background: #f59e0b; box-shadow: 0 0 5px rgba(245,158,11,0.5); }
+.dot8.down        { background: #ef4444; box-shadow: 0 0 5px rgba(239,68,68,0.5);  }
+
+.svcName   { font-size: 0.8125rem; font-weight: 600; color: var(--theme-text); }
+.svcMeta   { font-size: 0.7rem;    color: var(--theme-text-muted); }
+.svcStatus { font-size: 0.7rem;    font-weight: 700; text-transform: capitalize; }
+
+/* ── SLA Grid (2×2) ──────────────────────────────────── */
+.slaGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.slaCell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.625rem;
+  background: var(--theme-bg, #f8fafc);
+  border-radius: 0.625rem;
+  border: 1px solid var(--theme-border, #f1f5f9);
+}
+
+.slaCellLeft { display: flex; align-items: center; gap: 0.35rem; }
+.slaDot      { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.slaLabel    { font-size: 0.775rem; font-weight: 700; }
+.slaTime     { font-size: 0.7rem;   font-weight: 600; color: var(--theme-text-muted); }
+
+.slaNoteText {
+  font-size: 0.7rem;
+  color: var(--theme-text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── Contact Channels (2×2) ──────────────────────────── */
+.contactGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.contactCell {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.625rem;
+  border: 1px solid var(--theme-border, #f1f5f9);
+  border-radius: 0.625rem;
+  background: var(--theme-bg, #f8fafc);
+}
+
+.contactIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.contactText  { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.contactLabel { font-size: 0.7rem;  font-weight: 600; color: var(--theme-text); }
+.contactEmail {
+  font-size: 0.675rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contactEmail:hover { text-decoration: underline; }
+
+/* ── Helpline strip (horizontal) ─────────────────────── */
+.helpline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0.875rem 1rem;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.helplineItem { display: flex; align-items: center; gap: 0.5rem; flex: 1; }
+.helplineDivider { width: 1px; height: 36px; background: rgba(255,255,255,0.12); flex-shrink: 0; }
+
+.hlLabel  { font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.1rem; }
+.hlNumber { font-size: 0.85rem; color: #fff; }
+
+.helplineHours {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.675rem;
+  color: rgba(255,255,255,0.55);
+}
+
+/* ── FAQ ─────────────────────────────────────────────── */
+.searchWrap { flex-shrink: 0; }
+
+.searchInput {
+  padding: 0.425rem 0.875rem;
+  border: 1.5px solid var(--theme-border, #eef2f6);
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  background: var(--theme-bg, #f8fafc);
+  color: var(--theme-text);
+  outline: none;
+  width: 200px;
+  transition: border-color 0.15s;
+}
+
+.searchInput:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0,166,118,0.1);
+}
+
+.faqList { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.faqItem {
+  border: 1.5px solid var(--theme-border, #eef2f6);
+  border-radius: 0.875rem;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.faqOpen { border-color: var(--color-primary); }
+
+.faqQ {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.875rem 1.125rem;
+  gap: 0.875rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--theme-text);
+  transition: background 0.15s;
+}
+
+.faqQ:hover { background: var(--theme-bg, #f8fafc); }
+
+.chevron { flex-shrink: 0; color: var(--theme-text-muted); transition: transform 0.22s; }
+.chevronOpen { transform: rotate(180deg); color: var(--color-primary); }
+
+.faqA {
+  padding: 0 1.125rem 1.125rem;
+  font-size: 0.8375rem;
+  color: var(--theme-text-muted);
+  line-height: 1.7;
+  animation: slideDown 0.18s ease-out;
+}
+
+.empty {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--theme-text-muted);
+  font-style: italic;
+}
+
+/* ── Keyboard Shortcuts ──────────────────────────────── */
+.shortcutList { display: flex; flex-direction: column; gap: 0.25rem; }
 
 .shortcutRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.6rem 0.25rem;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--theme-border, #f1f5f9);
 }
 
-.shortcutRow:last-child {
-  border-bottom: none;
-}
+.shortcutRow:last-child { border-bottom: none; }
 
-.shortcutLabel {
-  font-size: 0.8125rem;
-  color: var(--theme-text-muted);
-}
+.shortcutLabel { font-size: 0.8rem; color: var(--theme-text-muted); }
 
-.shortcutKeys {
-  display: flex;
-  gap: 0.35rem;
-}
+.keys { display: flex; gap: 0.275rem; }
 
-.shortcutKeys kbd {
+.keys kbd,
+.shortcutTip kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 0.4rem;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 0.375rem;
   background: linear-gradient(180deg, #f1f5f9, #e2e8f0);
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 0.6875rem;
+  border-radius: 5px;
+  font-size: 0.6375rem;
   font-weight: 700;
   color: var(--theme-text);
   font-family: inherit;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
-/* ─── Success Toast ──────────────────────────────── */
-.successToast {
+.shortcutTip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--theme-border, #e2e8f0);
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+}
+
+.tipIcon { color: var(--color-primary); flex-shrink: 0; }
+
+/* ── Toast ───────────────────────────────────────────── */
+.toast {
   position: fixed;
   bottom: 2rem;
   right: 2rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  background: var(--color-primary);
-  color: white;
-  border-radius: 1rem;
-  font-weight: 600;
+  padding: 0.875rem 1.375rem;
+  background: #10b981;
+  color: #fff;
+  border-radius: 0.875rem;
   font-size: 0.875rem;
-  box-shadow: 0 12px 32px rgba(0, 166, 118, 0.3);
-  z-index: 10000;
-  animation: slideUp 0.35s ease-out;
+  box-shadow: 0 10px 28px rgba(16,185,129,0.35);
+  z-index: 9999;
+  animation: slideUp 0.3s ease-out;
+  max-width: 400px;
 }
 
-/* ─── Animations ─────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+/* ── Animations ──────────────────────────────────────── */
+@keyframes fadeIn   { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: none; } }
+@keyframes slideDown{ from { opacity:0; transform: translateY(-5px); } to { opacity:1; transform: none; } }
+@keyframes slideUp  { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: none; } }
+@keyframes pulse    { 0% { transform:scale(1); opacity:.8; } 100% { transform:scale(2); opacity:0; } }
+@keyframes spinning { to { transform: rotate(360deg); } }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .statsRow    { grid-template-columns: repeat(2, 1fr); }
+  .grid        { grid-template-columns: 1fr; }
+  .bottomGrid  { grid-template-columns: 1fr; }
 }
 
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+@media (max-width: 768px) {
+  .statsRow    { grid-template-columns: repeat(2, 1fr); }
+  .priorityGrid{ grid-template-columns: repeat(2, 1fr); }
+  .formRow     { grid-template-columns: 1fr; }
+  .slaGrid     { grid-template-columns: 1fr; }
+  .contactGrid { grid-template-columns: 1fr; }
+  .tabs        { flex-wrap: wrap; }
+  .helpline    { flex-direction: column; }
+  .helplineDivider { display: none; }
 }
 
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ─── Loading ────────────────────────────────────── */
-.loading {
-  height: 400px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  color: var(--theme-text-muted);
-}
-
-/* ─── Responsive ─────────────────────────────────── */
-@media (max-width: 1024px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-  .quickHelpGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 640px) {
-  .quickHelpGrid {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 480px) {
+  .statsRow { grid-template-columns: 1fr; }
 }

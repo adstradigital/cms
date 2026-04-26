@@ -87,6 +87,8 @@
   grid-template-columns: 1fr 340px;
   gap: 20px;
 }
+.leftCol { display: flex; flex-direction: column; min-width: 0; }
+.rightCol { display: flex; flex-direction: column; min-width: 0; }
 
 /* Statistics Grid */
 .statsGrid {

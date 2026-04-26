@@ -14,6 +14,10 @@ frontend/yarn-error.log*
 frontend/.pnpm-debug.log*
 frontend/.npm-cache/
 
+# Django migrations (ignored to prevent merge conflicts — run makemigrations locally)
+**/migrations/*.py
+!**/migrations/__init__.py
+
 # Backend & Python
 **/__pycache__/
 **/*.py[cod]

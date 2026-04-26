@@ -98,7 +98,14 @@ def get_database_inventory(
     """
     Exposes database aliases and all registered ORM models.
     Helps AI brain stay schema-aware as apps/tables grow.
+    Cached for 5 minutes to avoid repeated heavy DB introspection.
     """
+    from django.core.cache import cache
+    cache_key = f"ai_brain_inventory_{school_id}_{academic_year_id}_{include_models}_{include_entity_counts}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     aliases = list(connections.databases.keys())
     model_labels = sorted([model._meta.label for model in apps.get_models()])
     app_labels = sorted({label.split(".", 1)[0] for label in model_labels if "." in label})
@@ -255,4 +262,5 @@ def get_database_inventory(
 
         inventory["entity_counts"] = entity_counts
 
+    cache.set(cache_key, inventory, timeout=300)  # 5-minute TTL
     return inventory

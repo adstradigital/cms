@@ -491,3 +491,141 @@
   display: flex;
   gap: 6px;
 }
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 3000;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 0.825rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-lg);
+  animation: slideIn 0.2s ease;
+}
+.toastSuccess { background-color: var(--color-success); color: #fff; }
+.toastError { background-color: var(--color-danger); color: #fff; }
+
+@keyframes slideIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Loading bar */
+.loadingBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  font-size: 0.825rem;
+  color: var(--theme-text-muted);
+  margin-bottom: 16px;
+}
+
+/* Spin animation */
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Search item in filter row */
+.searchItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  color: var(--theme-text-muted);
+  pointer-events: none;
+}
+.searchInput {
+  width: 100%;
+  padding: 8px 12px 8px 30px;
+  background-color: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  color: var(--theme-text);
+  font-size: 0.825rem;
+  outline: none;
+}
+.searchInput::placeholder { color: var(--theme-text-muted); }
+
+/* Clickable row */
+.clickableRow {
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.clickableRow:hover td { background-color: var(--color-surface-hover); }
+
+/* Student cell in table */
+.stdName { font-weight: 600; font-size: 0.875rem; }
+.stdRank { font-size: 0.7rem; color: var(--theme-text-muted); }
+
+/* Mini button in table */
+.miniBtn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.miniBtn:hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+/* Grade chip */
+.gradeChip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--color-surface-hover);
+  color: var(--theme-text);
+}
+
+/* File upload label */
+.fileLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px dashed var(--theme-border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.fileLabel:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* Empty detail state */
+.emptyDetail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 20px;
+  color: var(--theme-text-muted);
+  text-align: center;
+}
+.emptyIcon { color: var(--theme-border); }
+.emptyDetail p { font-size: 0.925rem; max-width: 340px; }

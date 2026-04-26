@@ -60,6 +60,18 @@ export default function OnlineTestTab() {
     }
   };
 
+  const handleDeleteTest = async (id) => {
+    if (!confirm('Delete this test? All questions and submissions will be permanently removed.')) return;
+    try {
+      await adminApi.deleteOnlineTest(id);
+      if (selectedTestId === id) setSelectedTestId(null);
+      fetchData();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to delete test.');
+    }
+  };
+
   const navigateTo = (newMode, testId = null) => {
     if (testId) setSelectedTestId(testId);
     setMode(newMode);
@@ -101,13 +113,15 @@ export default function OnlineTestTab() {
         ) : (
           <>
             {mode === 'dashboard' && (
-              <TestDashboard 
-                tests={onlineTests} 
-                sections={sections} 
-                subjects={subjects} 
+              <TestDashboard
+                tests={onlineTests}
+                sections={sections}
+                subjects={subjects}
                 onCreate={handleCreateTest}
                 onSelect={(id) => navigateTo('builder', id)}
                 onPublish={handlePublishTest}
+                onDelete={handleDeleteTest}
+                onGradingQueue={(id) => navigateTo('queue', id)}
               />
             )}
 

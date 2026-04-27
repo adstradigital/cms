@@ -251,14 +251,47 @@ class StudentRegistrationSerializer(serializers.Serializer):
         return instance
 
 
+class LeadActivitySerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = __import__('apps.students.models', fromlist=['LeadActivity']).LeadActivity
+        fields = ['id', 'activity_type', 'description', 'created_by', 'created_by_name', 'created_at']
+        read_only_fields = ['created_by', 'created_at']
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return 'System'
+
+
 class AdmissionInquirySerializer(serializers.ModelSerializer):
     class_requested_name = serializers.CharField(source='class_requested.name', read_only=True)
+    assigned_to_name = serializers.SerializerMethodField()
+    activity_count = serializers.SerializerMethodField()
 
     class Meta:
         model = __import__('apps.students.models', fromlist=['AdmissionInquiry']).AdmissionInquiry
         fields = [
             'id', 'school', 'guardian_name', 'contact_phone', 'contact_email',
             'student_name', 'class_requested', 'class_requested_name',
-            'previous_school', 'status', 'notes', 'inquiry_date', 'last_updated'
+            'previous_school', 'status', 'source', 'priority', 'follow_up_date',
+            'assigned_to', 'assigned_to_name', 'notes', 'activity_count',
+            'inquiry_date', 'last_updated'
         ]
         read_only_fields = ['school', 'inquiry_date', 'last_updated']
+
+    def get_assigned_to_name(self, obj):
+        if obj.assigned_to:
+            return obj.assigned_to.get_full_name() or obj.assigned_to.username
+        return None
+
+    def get_activity_count(self, obj):
+        return obj.activities.count()
+
+
+class AdmissionInquiryDetailSerializer(AdmissionInquirySerializer):
+    activities = LeadActivitySerializer(many=True, read_only=True)
+
+    class Meta(AdmissionInquirySerializer.Meta):
+        fields = AdmissionInquirySerializer.Meta.fields + ['activities']

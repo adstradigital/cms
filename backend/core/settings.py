@@ -81,6 +81,10 @@ INSTALLED_APPS = [
     'apps.ai_brain',
     'apps.expenses',
     'apps.payroll',
+
+    # Celery result backend
+    'django_celery_results',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -180,3 +184,62 @@ else:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     X_FRAME_OPTIONS = 'DENY'
+
+
+# ── Cache ──────────────────────────────────────────────────────────────────────
+# Uses in-memory cache by default; switch to Redis in production via CACHE_URL env var.
+_cache_url = os.getenv('CACHE_URL', '')
+if _cache_url.startswith('redis'):
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _cache_url,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'cms-default',
+        }
+    }
+
+
+# ── Celery ─────────────────────────────────────────────────────────────────────
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'django-cache'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    # Daily at 17:00 IST — check for sections that haven't marked attendance
+    'daily-attendance-incomplete-check': {
+        'task': 'ai_brain.daily_attendance_incomplete_check',
+        'schedule': crontab(hour=17, minute=0),
+    },
+    # Daily at 07:00 IST — alert for students absent 3+ consecutive days
+    'daily-consecutive-absence-alert': {
+        'task': 'ai_brain.daily_consecutive_absence_alert',
+        'schedule': crontab(hour=7, minute=0),
+    },
+    # Every Friday at 16:00 IST — school-wide at-risk sweep
+    'weekly-at-risk-sweep': {
+        'task': 'ai_brain.weekly_at_risk_sweep',
+        'schedule': crontab(hour=16, minute=0, day_of_week='friday'),
+    },
+    # Every Friday at 16:30 IST — section performance digests
+    'weekly-performance-digest': {
+        'task': 'ai_brain.weekly_performance_digest',
+        'schedule': crontab(hour=16, minute=30, day_of_week='friday'),
+    },
+    # Every Sunday at midnight — clean up discarded AI drafts older than 30 days
+    'weekly-draft-cleanup': {
+        'task': 'ai_brain.cleanup_old_drafts',
+        'schedule': crontab(hour=0, minute=0, day_of_week='sunday'),
+    },
+}

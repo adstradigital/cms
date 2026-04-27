@@ -87,52 +87,67 @@
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  transition: all 0.2s;
-  cursor: pointer;
+  gap: 10px;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .testCard:hover {
   border-color: var(--color-primary, #3B82F6);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
 .testHeader {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 12px;
 }
 
 .testTitle {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
-  margin: 0;
+  margin: 0 0 4px;
   color: var(--theme-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .testMeta {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   font-size: 0.75rem;
   color: var(--theme-text-secondary, #94A3B8);
 }
 
+.metaDot {
+  opacity: 0.4;
+}
+
 .badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: 500;
-  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .badgeDraft {
-  background: rgba(148, 163, 184, 0.1);
+  background: rgba(148, 163, 184, 0.12);
   color: #94A3B8;
 }
 
 .badgePublished {
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(16, 185, 129, 0.12);
   color: #10B981;
+}
+
+.badgePending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
 }
 
 .badgeAuto {
@@ -140,31 +155,129 @@
   color: #3B82F6;
 }
 
+/* Stat chips row */
+.statRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.statChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--theme-border, #334155);
+  font-size: 0.72rem;
+  color: var(--theme-text-secondary, #94A3B8);
+}
+
+.gradingChip {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #60A5FA;
+}
+
+/* Attempt row */
+.attemptRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--theme-text-secondary, #94A3B8);
+}
+
+/* Schedule row */
+.scheduleRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--theme-text-secondary, #94A3B8);
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+/* Empty state */
+.emptyState {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 20px;
+  opacity: 0.45;
+  text-align: center;
+}
+
 .testActions {
   margin-top: auto;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   border-top: 1px solid var(--theme-border, #334155);
-  padding-top: 12px;
+  padding-top: 10px;
 }
 
 .actionBtn {
   flex: 1;
-  padding: 6px;
+  padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid var(--theme-border, #334155);
   background: transparent;
   color: var(--theme-text);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
 }
 
 .actionBtn:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-primary, #3B82F6);
+}
+
+.actionBtnDanger {
+  flex: none;
+  color: #F87171;
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+.actionBtnDanger:hover {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: #F87171;
+}
+
+/* Form helpers */
+.optionalLabel {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--theme-text-secondary, #94A3B8);
+  cursor: pointer;
+  padding: 10px 0;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--color-primary, #3B82F6);
 }
 
 /* Builder Layout */

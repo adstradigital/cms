@@ -80,6 +80,22 @@ class AdmissionInquiry(models.Model):
         ("Rejected", "Rejected"),
         ("Enrolled", "Enrolled"),
     ]
+    SOURCE_CHOICES = [
+        ("Website", "Website"),
+        ("Phone Call", "Phone Call"),
+        ("Referral", "Referral"),
+        ("Walk-In", "Walk-In"),
+        ("Social Media", "Social Media"),
+        ("School Event", "School Event"),
+        ("Agent", "Agent"),
+        ("Other", "Other"),
+    ]
+    PRIORITY_CHOICES = [
+        ("Hot", "Hot"),
+        ("Warm", "Warm"),
+        ("Cold", "Cold"),
+    ]
+
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="admission_inquiries")
     guardian_name = models.CharField(max_length=255)
     contact_phone = models.CharField(max_length=20)
@@ -88,6 +104,12 @@ class AdmissionInquiry(models.Model):
     class_requested = models.ForeignKey(Class, on_delete=models.SET_NULL, null=True, related_name="admission_inquiries")
     previous_school = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="New")
+    source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default="Other", blank=True)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default="Warm")
+    follow_up_date = models.DateField(null=True, blank=True)
+    assigned_to = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_leads"
+    )
     notes = models.TextField(blank=True)
     inquiry_date = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
@@ -98,3 +120,26 @@ class AdmissionInquiry(models.Model):
     class Meta:
         db_table = "admission_inquiries"
         ordering = ["-inquiry_date"]
+
+
+class LeadActivity(models.Model):
+    ACTIVITY_TYPES = [
+        ("Call", "Call"),
+        ("Email", "Email"),
+        ("Visit", "Campus Visit"),
+        ("Note", "Note"),
+        ("Status Change", "Status Change"),
+        ("Follow-up", "Follow-up Scheduled"),
+    ]
+    inquiry = models.ForeignKey(AdmissionInquiry, on_delete=models.CASCADE, related_name="activities")
+    activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPES)
+    description = models.TextField()
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="lead_activities")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.activity_type} — {self.inquiry.student_name}"
+
+    class Meta:
+        db_table = "lead_activities"
+        ordering = ["-created_at"]

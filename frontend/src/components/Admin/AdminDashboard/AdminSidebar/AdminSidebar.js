@@ -4,17 +4,17 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
+import {
   Atom,
-  Home, 
-  Users, 
-  GraduationCap, 
-  LayoutGrid, 
-  Calendar, 
-  BookOpen, 
-  FileText, 
-  Settings, 
-  HelpCircle, 
+  Home,
+  Users,
+  GraduationCap,
+  LayoutGrid,
+  Calendar,
+  BookOpen,
+  FileText,
+  Settings,
+  HelpCircle,
   LogOut,
   ChevronDown,
   PanelLeftClose,
@@ -23,7 +23,7 @@ import {
   Bed,
   Utensils,
   Library,
-  DollarSign
+  DollarSign,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import styles from './AdminSidebar.module.css';
@@ -96,8 +96,9 @@ const AdminSidebar = () => {
     else if (pathname?.startsWith('/admins/canteen')) setExpandedMenu('Canteen');
     else if (pathname?.startsWith('/admins/transport')) setExpandedMenu('Transport');
     else if (pathname?.startsWith('/admins/finance')) setExpandedMenu('Finance');
+    else if (pathname?.startsWith('/admins/ai-brain')) setExpandedMenu('AI Brain');
   }, [pathname]);
-  
+
   const isStudentsPath = pathname?.startsWith('/admins/students');
   const isClassesPath = pathname?.startsWith('/admins/classes');
   const isStaffPath = pathname?.startsWith('/admins/staff');
@@ -319,6 +320,23 @@ const AdminSidebar = () => {
           scheduleHide={scheduleHide}
           pathname={pathname}
         />
+
+        {/* AI Brain section commented out — links moved to Students section
+        <ExpandableSection
+          label="AI Brain"
+          icon={<BrainCircuit size={18} />}
+          sectionKey="AI Brain"
+          items={SECTIONS.aiBrain}
+          isActivePath={isAiBrainPath}
+          collapsedHref="/admins/ai-brain"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
+        */}
       </nav>
 
       {/* Flyout Portal — rendered into body, outside sidebar overflow */}
@@ -359,6 +377,7 @@ const SECTIONS = {
   students: [
     { label: "Directory", href: "/admins/students/directory" },
     { label: "Attendance", href: "/admins/students/attendance" },
+    { label: "At-Risk Students", href: "/admins/ai-brain/at-risk" },
     { label: "Performance", href: "/admins/students/performance" },
   ],
   classes: [
@@ -422,7 +441,11 @@ const SECTIONS = {
     { label: "Budget", href: "/admins/finance/budget" },
     { label: "Reports", href: "/admins/finance/reports" },
     { label: "Donations", href: "/admins/finance/donations" },
-  ]
+  ],
+  // aiBrain: [
+  //   { label: "Automation Hub", href: "/admins/ai-brain" },
+  //   { label: "At-Risk Students", href: "/admins/ai-brain/at-risk" },
+  // ],
 };
 
 // ── Expandable Section Component ─────────────────────────────────────────────

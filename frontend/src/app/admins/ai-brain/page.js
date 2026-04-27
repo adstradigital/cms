@@ -1,8 +1,9 @@
 'use client';
 
-import AIBrainHub from '@/components/Admin/AIBrain/AIBrainHub';
+import AIBrainHub from '@/components/Admin/AIBrain/Hub/AIBrainHub';
 
-export default function AIBrainHubPage() {
+export default function AIBrainPage() {
   return <AIBrainHub />;
 }
+
 

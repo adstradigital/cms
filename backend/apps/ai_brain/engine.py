@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, Optional, Callable, Any
+
+from typing import Dict, Optional, Callable, Any,List
+
+
+
 
 from apps.accounts.models import AcademicYear
 from apps.students.models import Section
@@ -17,22 +21,27 @@ from .access.classes import (
     get_school_active_academic_year,
     get_section,
 )
-from .actions import apply_timetable_preview, create_ai_brain_draft, save_timetable_draft
+from .actions import (
+    apply_timetable_preview,
+    create_ai_brain_draft,
+    resolve_at_risk_record,
+    rollback_timetable_draft,
+    save_at_risk_records,
+    save_timetable_draft,
+)
 from .automation.at_risk_detector import AtRiskDetector
 from .automation.report_card_builder import ReportCardBuilder
 from .automation.timetable_generator import TimetableConstraintValidator, TimetableDraftGenerator
 from .data_context import get_database_inventory
+
 from .llm import merge_constraint_preferences
-from .models import AIBrainDraft
+
+from .models import AIBrainDraft, AtRiskRecord
 from .permissions import has_ai_brain_access
 from .result import AIBrainResult
 
 
 class AIBrainEngine:
-    """
-    Central entry point for all AI-brain capabilities.
-    """
-
     def __init__(self):
         self.report_card_builder = ReportCardBuilder()
         self.at_risk_detector = AtRiskDetector()
@@ -91,15 +100,7 @@ class AIBrainEngine:
 
         return section, academic_year, None
 
-    def run_timetable_validation(
-        self,
-        *,
-        section: Section,
-        academic_year: AcademicYear,
-        periods_per_day: int,
-        break_periods,
-        working_days,
-    ) -> Dict:
+    def run_timetable_validation(self, *, section, academic_year, periods_per_day, break_periods, working_days) -> Dict:
         validator = TimetableConstraintValidator(section=section, academic_year=academic_year)
         result = validator.validate_existing(
             periods_per_day=periods_per_day,
@@ -120,15 +121,7 @@ class AIBrainEngine:
         )
         return result
 
-    def run_timetable_generation(
-        self,
-        *,
-        section: Section,
-        academic_year: AcademicYear,
-        config: Dict,
-        requested_by,
-        persist: bool = False,
-    ) -> Dict:
+    def run_timetable_generation(self, *, section, academic_year, config, requested_by, persist=False) -> Dict:
         allocation_sync = ensure_subject_allocations(section=section, academic_year=academic_year)
         if not allocation_sync.get("success"):
             return allocation_sync
@@ -137,8 +130,7 @@ class AIBrainEngine:
         class_teacher_sync = None
         if preferences.get("class_teacher_first_period"):
             class_teacher_sync = ensure_class_teacher_first_period_support(
-                section=section,
-                academic_year=academic_year,
+                section=section, academic_year=academic_year
             )
             if not class_teacher_sync.get("success"):
                 return class_teacher_sync
@@ -190,24 +182,14 @@ class AIBrainEngine:
             draft.save(update_fields=["status", "is_applied", "updated_at"])
         return result
 
-    def run_report_card_builder(self, *, student_id: int, exam_id: int, persist: bool = False) -> Dict:
+    def run_report_card_builder(self, *, student_id: int, exam_id: int, persist=False) -> Dict:
         return self.report_card_builder.build_student_report_card_payload(
-            student_id=student_id,
-            exam_id=exam_id,
-            persist=persist,
+            student_id=student_id, exam_id=exam_id, persist=persist
         )
 
-    def run_report_card_builder_for_section(
-        self,
-        *,
-        section_id: int,
-        exam_id: int,
-        persist: bool = True,
-    ) -> Dict:
+    def run_report_card_builder_for_section(self, *, section_id: int, exam_id: int, persist=True) -> Dict:
         return self.report_card_builder.build_section_report_cards(
-            section_id=section_id,
-            exam_id=exam_id,
-            persist=persist,
+            section_id=section_id, exam_id=exam_id, persist=persist
         )
 
     def run_at_risk_detector(
@@ -217,15 +199,91 @@ class AIBrainEngine:
         exam_id: int,
         min_attendance_pct: float = 75.0,
         min_marks_pct: float = 40.0,
+        persist: bool = False,
+        actor=None,
     ) -> Dict:
-        return self.at_risk_detector.detect_section_risks(
+        result = self.at_risk_detector.detect_section_risks(
             section_id=section_id,
             exam_id=exam_id,
             min_attendance_pct=min_attendance_pct,
             min_marks_pct=min_marks_pct,
         )
+        if persist and result.get("success") and result.get("flagged_students"):
+            section = get_section(section_id)
+            from apps.exams.models import Exam
+            exam = Exam.objects.filter(id=exam_id).first()
+            school = section.school_class.school if section else None
+            persist_result = save_at_risk_records(
+                flagged_students=result["flagged_students"],
+                section=section,
+                school=school,
+                exam=exam,
+                actor=actor,
+            )
+            result["persisted"] = persist_result
+        return result
 
-    def apply_timetable_draft(self, *, draft_id: int, actor, manual_override_payload: Optional[Dict] = None) -> Dict:
+    def run_school_at_risk_sweep(
+        self,
+        *,
+        school_id: int,
+        exam_id: int,
+        min_attendance_pct: float = 75.0,
+        min_marks_pct: float = 40.0,
+        actor=None,
+    ) -> Dict:
+        from apps.students.models import Section as SectionModel
+        from apps.exams.models import Exam
+        from apps.accounts.models import School
+
+        school = School.objects.filter(id=school_id).first()
+        if not school:
+            return {"success": False, "error": "School not found."}
+
+        exam = Exam.objects.filter(id=exam_id).first()
+        if not exam:
+            return {"success": False, "error": "Exam not found."}
+
+        sections = SectionModel.objects.filter(school_class__school_id=school_id)
+        total_flagged = 0
+        sections_swept = 0
+
+        for section in sections:
+            result = self.at_risk_detector.detect_section_risks(
+                section_id=section.id,
+                exam_id=exam_id,
+                min_attendance_pct=min_attendance_pct,
+                min_marks_pct=min_marks_pct,
+            )
+            flagged = result.get("flagged_students", [])
+            if flagged:
+                save_at_risk_records(
+                    flagged_students=flagged,
+                    section=section,
+                    school=school,
+                    exam=exam,
+                    actor=actor,
+                )
+                total_flagged += len(flagged)
+            sections_swept += 1
+
+        return {
+            "success": True,
+            "school_id": school_id,
+            "exam_id": exam_id,
+            "sections_swept": sections_swept,
+            "total_flagged": total_flagged,
+        }
+
+    def resolve_at_risk(self, *, record_id: int, actor) -> Dict:
+        record = AtRiskRecord.objects.filter(id=record_id).first()
+        if not record:
+            return {"success": False, "error": "At-risk record not found."}
+        if record.resolved:
+            return {"success": False, "error": "Record already resolved."}
+        return resolve_at_risk_record(record=record, actor=actor)
+
+    def apply_timetable_draft(self, *, draft_id: int, actor, manual_override_payload=None) -> Dict:
         draft = AIBrainDraft.objects.filter(id=draft_id, draft_type="timetable").first()
         if not draft:
             return {"success": False, "error": "Timetable draft not found."}
@@ -234,14 +292,16 @@ class AIBrainEngine:
             return {"success": False, "error": reason}
         return apply_timetable_preview(draft=draft, actor=actor, manual_override_payload=manual_override_payload)
 
-    def get_data_inventory(
-        self,
-        *,
-        school_id: Optional[int] = None,
-        academic_year_id: Optional[int] = None,
-        include_models: bool = True,
-        include_entity_counts: bool = True,
-    ) -> Dict:
+    def rollback_timetable(self, *, draft_id: int, actor) -> Dict:
+        draft = AIBrainDraft.objects.filter(id=draft_id, draft_type="timetable").first()
+        if not draft:
+            return {"success": False, "error": "Timetable draft not found."}
+        allowed, reason = has_ai_brain_access(actor, section=draft.section)
+        if not allowed:
+            return {"success": False, "error": reason}
+        return rollback_timetable_draft(draft=draft, actor=actor)
+
+    def get_data_inventory(self, *, school_id=None, academic_year_id=None, include_models=True, include_entity_counts=True) -> Dict:
         return get_database_inventory(
             school_id=school_id,
             academic_year_id=academic_year_id,
@@ -250,7 +310,7 @@ class AIBrainEngine:
         )
 
     @staticmethod
-    def _resolve_academic_year(section: Section, academic_year_id: Optional[int] = None):
+    def _resolve_academic_year(section, academic_year_id=None):
         if academic_year_id:
             return AcademicYear.objects.filter(id=academic_year_id).first()
         return get_school_active_academic_year(section.school_class.school_id)

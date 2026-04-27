@@ -68,7 +68,9 @@ class SubjectSerializer(serializers.ModelSerializer):
         fields = [
             "id", "school", "school_class", "global_subject", "global_subject_details",
             "syllabus_master", "syllabus_master_details", "name", "code", "description",
-            "weekly_periods", "color_code", "term_type", "created_at", "units", "allocation_count"
+            "weekly_periods", "color_code", "term_type",
+            "is_active", "is_compulsory",
+            "created_at", "units", "allocation_count"
         ]
 
     def get_units(self, obj):

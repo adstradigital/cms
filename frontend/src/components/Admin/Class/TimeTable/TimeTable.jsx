@@ -83,7 +83,13 @@ const normalizeSchedule = (rawSchedule, days, periods) => {
   return schedule;
 };
 
-const getTodayDayName = () => ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+const getTodayDayName = (timeZone = DEFAULT_TIMEZONE, locale = DEFAULT_LOCALE) => {
+  try {
+    return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone }).format(new Date());
+  } catch {
+    return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+  }
+};
 const parseRange = (range = '') => {
   const [start = '', end = ''] = String(range).split('-').map((s) => s.trim());
   return { start, end };
@@ -116,7 +122,7 @@ const TimeTable = () => {
   
   const [activeClass, setActiveClass] = useState('');
   const [viewMode, setViewMode] = useState('admin');
-  const [selectedTeacherId, setSelectedTeacherId] = useState(null);
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
 
   const [days, setDays] = useState(DEFAULT_DAYS);
   const [periods, setPeriods] = useState(DEFAULT_PERIODS);
@@ -145,10 +151,19 @@ const TimeTable = () => {
   const [draftPeriods, setDraftPeriods] = useState(DEFAULT_PERIODS);
   const [classTeacherFirstPeriod, setClassTeacherFirstPeriod] = useState(true);
   const [allowSameSubjectTwiceDay, setAllowSameSubjectTwiceDay] = useState(false);
+  const [maxConsecutivePeriodsTeacher, setMaxConsecutivePeriodsTeacher] = useState(4);
+  const [minTeacherFreePeriodsPerDay, setMinTeacherFreePeriodsPerDay] = useState(1);
+  const [maxTeacherLoadPerWeek, setMaxTeacherLoadPerWeek] = useState(30);
+  const [maxTeacherPeriodsPerDay, setMaxTeacherPeriodsPerDay] = useState(6);
+  const [enforceConsecutiveLabs, setEnforceConsecutiveLabs] = useState(true);
+  const [avoidFixedPeriodPatterns, setAvoidFixedPeriodPatterns] = useState(true);
+  const [preferredMorningSubjectIds, setPreferredMorningSubjectIds] = useState([]);
+  const [aiStrategy, setAiStrategy] = useState('balanced');
+  const [showAdvancedRules, setShowAdvancedRules] = useState(false);
 
   const [showSubstituteModal, setShowSubstituteModal] = useState(false);
   const [absence, setAbsence] = useState({ loading: false, isDetected: false, absentTeacher: '', affectedPeriodIndexes: [] });
-  const [selectedSubTeacherId, setSelectedSubTeacherId] = useState(null);
+  const [selectedSubTeacherId, setSelectedSubTeacherId] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [isSchoolWide, setIsSchoolWide] = useState(false);
   const [expandedSections, setExpandedSections] = useState({ subjects: true, teachers: true });
@@ -159,12 +174,18 @@ const TimeTable = () => {
   const [showPublishModal, setShowPublishModal] = useState(false);
 
   const activeSchedule = useMemo(() => schedulesByClass[activeClass] || buildEmptySchedule(days, periods), [schedulesByClass, activeClass, days, periods]);
-  const selectedTeacher = useMemo(() => teachers.find((t) => t.id === Number(selectedTeacherId)) || { name: 'Select Teacher' }, [selectedTeacherId, teachers]);
+  const selectedTeacher = useMemo(() => {
+    const teacher = teachers.find((t) => t.id === Number(selectedTeacherId));
+    if (!teacher) return { id: null, name: 'Select Teacher' };
+    const name = `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim();
+    return { ...teacher, name: name || teacher.full_name || teacher.name || 'Teacher' };
+  }, [selectedTeacherId, teachers]);
   const activeSection = useMemo(
     () => sectionRecords.find((s) => `${s.class_name} - ${s.name}` === activeClass) || null,
     [sectionRecords, activeClass]
   );
   const teacherOptionsForSlot = useMemo(() => {
+    if (slotForm.isEvent) return teachers;
     if (!slotForm.subject) return teachers;
     const selectedSubject = subjects.find((s) => s.name === slotForm.subject);
     const filteredAllocations = subjectAllocations.filter((a) => {
@@ -190,9 +211,9 @@ const TimeTable = () => {
     return teachers.filter((t) => allowedTeacherIds.has(Number(t.id)));
   }, [slotForm.subject, teachers, subjects, subjectAllocations]);
   const todayDay = useMemo(() => {
-    const today = getTodayDayName();
+    const today = getTodayDayName(timeZone, regionLocale);
     return days.includes(today) ? today : days[0];
-  }, [days]);
+  }, [days, timeZone, regionLocale]);
 
   const globalSchedules = useMemo(() => {
     const global = {};
@@ -203,6 +224,22 @@ const TimeTable = () => {
           if (!global[slot.teacher]) global[slot.teacher] = {};
           if (!global[slot.teacher][day]) global[slot.teacher][day] = {};
           global[slot.teacher][day][idx] = sectionLabel;
+        });
+      });
+    });
+    return global;
+  }, [schedulesByClass]);
+
+  const globalRoomSchedules = useMemo(() => {
+    const global = {};
+    Object.entries(schedulesByClass).forEach(([sectionLabel, schedule]) => {
+      Object.entries(schedule || {}).forEach(([day, slots]) => {
+        (slots || []).forEach((slot, idx) => {
+          const room = slot?.room;
+          if (!room || room === 'TBD' || slot?.isBreak) return;
+          if (!global[room]) global[room] = {};
+          if (!global[room][day]) global[room][day] = {};
+          global[room][day][idx] = sectionLabel;
         });
       });
     });
@@ -236,7 +273,7 @@ const TimeTable = () => {
     return subjects.map(s => ({
       ...s,
       current: counts[s.name] || 0,
-      target: s.weekly_periods
+      target: Number(s.weekly_periods) || 0
     }));
   }, [activeSchedule, subjects]);
 
@@ -267,6 +304,13 @@ const TimeTable = () => {
     return null;
   }, [globalSchedules, activeClass]);
 
+  const getRoomClash = useCallback((room, day, periodIdx) => {
+    if (!room || room === 'TBD' || !globalRoomSchedules[room]) return null;
+    const busyInSection = globalRoomSchedules[room]?.[day]?.[periodIdx];
+    if (busyInSection && busyInSection !== activeClass) return busyInSection;
+    return null;
+  }, [globalRoomSchedules, activeClass]);
+
   const validateSlot = useCallback((form, day, pIdx) => {
     const warnings = [];
     if (!form.subject && !form.teacher) return warnings;
@@ -275,22 +319,32 @@ const TimeTable = () => {
     const clash = getTeacherClash(form.teacher, day, pIdx);
     if (clash) warnings.push({ type: 'error', msg: `Teacher busy in ${clash}` });
 
-    // 2. Same subject same day
-    const daySlots = activeSchedule[day] || [];
-    const hasSameSub = daySlots.some((s, idx) => s && s.subject === form.subject && idx !== pIdx);
-    if (hasSameSub) warnings.push({ type: 'warning', msg: `Subject already placed on ${day}` });
+    // 2. Room Clash
+    if (form.room && form.room !== 'TBD') {
+      const roomClash = getRoomClash(form.room, day, pIdx);
+      if (roomClash) warnings.push({ type: 'error', msg: `Room already booked in ${roomClash}` });
+    }
 
-    // 3. Subject over-quota
-    const subData = subjects.find(s => s.name === form.subject);
-    if (subData) {
-      const currentCount = subjectCompletion.find(sc => sc.name === form.subject)?.current || 0;
-      // If we are ADDING a new slot (was null before) and already at quota
-      if (!activeSchedule[day][pIdx] && currentCount >= subData.weekly_periods) {
-        warnings.push({ type: 'warning', msg: `Quota exceeded (${currentCount}/${subData.weekly_periods})` });
+    if (!form.isEvent) {
+      // 3. Same subject same day
+      if (!allowSameSubjectTwiceDay && form.subject) {
+        const daySlots = activeSchedule[day] || [];
+        const hasSameSub = daySlots.some((s, idx) => s && s.subject === form.subject && idx !== pIdx);
+        if (hasSameSub) warnings.push({ type: 'warning', msg: `Subject already placed on ${day}` });
+      }
+
+      // 4. Subject over-quota
+      const subData = subjects.find(s => s.name === form.subject);
+      if (subData) {
+        const currentCount = subjectCompletion.find(sc => sc.name === form.subject)?.current || 0;
+        // If we are ADDING a new slot (was null before) and already at quota
+        if (!activeSchedule[day][pIdx] && currentCount >= subData.weekly_periods) {
+          warnings.push({ type: 'warning', msg: `Quota exceeded (${currentCount}/${subData.weekly_periods})` });
+        }
       }
     }
 
-    // 4. Class Teacher First Period Rule
+    // 5. Class Teacher First Period Rule
     if (classTeacherFirstPeriod && pIdx === 0 && form.teacher) {
       if (activeSection?.class_teacher_name && form.teacher !== activeSection.class_teacher_name) {
         warnings.push({ type: 'warning', msg: `Period 1 should ideally be assigned to class teacher (${activeSection.class_teacher_name})` });
@@ -298,7 +352,7 @@ const TimeTable = () => {
     }
 
     return warnings;
-  }, [getTeacherClash, activeSchedule, subjects, subjectCompletion, classTeacherFirstPeriod, activeSection]);
+  }, [getTeacherClash, getRoomClash, activeSchedule, subjects, subjectCompletion, classTeacherFirstPeriod, activeSection, allowSameSubjectTwiceDay]);
 
   const globalWorkload = useMemo(() => {
     const counts = {};
@@ -321,32 +375,56 @@ const TimeTable = () => {
     Object.entries(activeSchedule).forEach(([day, slots]) => {
       slots.forEach((slot, idx) => {
         if (!slot || !slot.teacher) return;
+        const messages = [];
+
         const clash = getTeacherClash(slot.teacher, day, idx);
-        if (clash) {
-          if (!map[day]) map[day] = {};
-          map[day][idx] = `Teacher busy in ${clash}`;
-        }
+        if (clash) messages.push(`Teacher busy in ${clash}`);
+
+        const roomClash = slot.room ? getRoomClash(slot.room, day, idx) : null;
+        if (roomClash) messages.push(`Room ${slot.room} busy in ${roomClash}`);
 
         // Rule: Class Teacher First Period
         if (classTeacherFirstPeriod && idx === 0 && slot.teacher && activeSection?.class_teacher_name) {
           if (slot.teacher !== activeSection.class_teacher_name) {
-            if (!map[day]) map[day] = {};
-            // Don't overwrite teacher clash if it exists
-            if (!map[day][idx]) {
-              map[day][idx] = `Period 1 rule: Assigned to ${slot.teacher} instead of class teacher ${activeSection.class_teacher_name}`;
-            }
+            messages.push(`Period 1 rule: Assigned to ${slot.teacher} instead of class teacher ${activeSection.class_teacher_name}`);
           }
+        }
+
+        if (messages.length > 0) {
+          if (!map[day]) map[day] = {};
+          map[day][idx] = messages.join('\n');
         }
       });
     });
     return map;
-  }, [activeSchedule, globalSchedules, activeClass, getTeacherClash, classTeacherFirstPeriod, activeSection]);
+  }, [activeSchedule, getTeacherClash, getRoomClash, classTeacherFirstPeriod, activeSection]);
+
+  const flattenedConflicts = useMemo(() => {
+    return Object.entries(conflictMap).flatMap(([day, dayConflicts]) =>
+      Object.entries(dayConflicts || {}).map(([idx, msg]) => ({ day, idx: Number(idx), msg }))
+    );
+  }, [conflictMap]);
 
   const upsertActiveSchedule = (nextSchedule) => {
     setSchedulesByClass((prev) => ({ ...prev, [activeClass]: nextSchedule }));
     setDirty(true);
   };
   const displayRange = (range) => formatRangeForDisplay(range, timeFormat);
+  const formatTimeStamp = useCallback((iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString(regionLocale, {
+        timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        day: '2-digit',
+        month: 'short',
+      });
+    } catch {
+      return new Date(iso).toLocaleString();
+    }
+  }, [regionLocale, timeZone]);
 
   const fetchMetadata = async () => {
     try {
@@ -361,7 +439,7 @@ const TimeTable = () => {
       setSectionRecords(sectionData);
       setSections(sectionList);
       setTeachers(teachersRes.data);
-      setSubjects(subjectsRes.data);
+      setSubjects((Array.isArray(subjectsRes.data) ? subjectsRes.data : []).filter((s) => s?.is_active !== false));
       
       const serverDays = DEFAULT_DAYS; // We'll assume a standard for pre-fill
       const serverPeriods = DEFAULT_PERIODS;
@@ -393,10 +471,11 @@ const TimeTable = () => {
             }
             
             allSchedules[sectionLabel][dayName][idx] = {
-              subject: p.subject_name || (p.subject?.name) || '',
+              subject: p.period_type === 'custom' ? (p.custom_title || 'Special Event') : (p.subject_name || (p.subject?.name) || ''),
               teacher: tName,
               room: p.room || 'TBD',
-              isEvent: p.period_type === 'event'
+              isEvent: p.period_type === 'custom',
+              customTitle: p.custom_title || ''
             };
 
 
@@ -427,6 +506,7 @@ const TimeTable = () => {
       const serverPeriods = Array.isArray(settingsRes?.data?.periods) ? settingsRes.data.periods : DEFAULT_PERIODS;
       const serverTimeFormat = settingsRes?.data?.time_format;
       const serverTimeZone = settingsRes?.data?.time_zone;
+      const serverPreferences = settingsRes?.data?.preferences && typeof settingsRes.data.preferences === 'object' ? settingsRes.data.preferences : null;
       setDays(serverDays);
       setPeriods(serverPeriods);
       setDraftDays(serverDays);
@@ -436,6 +516,38 @@ const TimeTable = () => {
         setTimeZone(serverTimeZone);
         const region = TIMEZONE_OPTIONS.find((z) => z.value === serverTimeZone);
         if (region?.locale) setRegionLocale(region.locale);
+      }
+      if (serverPreferences) {
+        if (typeof serverPreferences.class_teacher_first_period === 'boolean') {
+          setClassTeacherFirstPeriod(serverPreferences.class_teacher_first_period);
+        }
+        if (typeof serverPreferences.allow_same_subject_twice_day === 'boolean') {
+          setAllowSameSubjectTwiceDay(serverPreferences.allow_same_subject_twice_day);
+        }
+        if (Number.isFinite(Number(serverPreferences.max_consecutive_periods_teacher))) {
+          setMaxConsecutivePeriodsTeacher(Math.max(0, Number(serverPreferences.max_consecutive_periods_teacher)));
+        }
+        if (Number.isFinite(Number(serverPreferences.min_teacher_free_periods_per_day))) {
+          setMinTeacherFreePeriodsPerDay(Math.max(0, Number(serverPreferences.min_teacher_free_periods_per_day)));
+        }
+        if (Number.isFinite(Number(serverPreferences.max_teacher_load_per_week))) {
+          setMaxTeacherLoadPerWeek(Math.max(0, Number(serverPreferences.max_teacher_load_per_week)));
+        }
+        if (Number.isFinite(Number(serverPreferences.max_teacher_periods_per_day))) {
+          setMaxTeacherPeriodsPerDay(Math.max(0, Number(serverPreferences.max_teacher_periods_per_day)));
+        }
+        if (typeof serverPreferences.enforce_consecutive_labs === 'boolean') {
+          setEnforceConsecutiveLabs(serverPreferences.enforce_consecutive_labs);
+        }
+        if (typeof serverPreferences.avoid_fixed_period_patterns === 'boolean') {
+          setAvoidFixedPeriodPatterns(serverPreferences.avoid_fixed_period_patterns);
+        }
+        if (Array.isArray(serverPreferences.preferred_morning_subject_ids)) {
+          setPreferredMorningSubjectIds(serverPreferences.preferred_morning_subject_ids.map(Number).filter(Number.isFinite));
+        }
+        if (typeof serverPreferences.ai_strategy === 'string') {
+          setAiStrategy(serverPreferences.ai_strategy);
+        }
       }
       
       const rawRecords = timetableRes?.data || [];
@@ -459,10 +571,11 @@ const TimeTable = () => {
             }
 
             normalized[dayName][idx] = {
-              subject: p.subject_name || (p.subject?.name) || '',
+              subject: p.period_type === 'custom' ? (p.custom_title || 'Special Event') : (p.subject_name || (p.subject?.name) || ''),
               teacher: tName || 'No Teacher',
               room: p.room || 'TBD',
-              isEvent: p.period_type === 'event'
+              isEvent: p.period_type === 'custom',
+              customTitle: p.custom_title || ''
             };
           });
         }
@@ -493,6 +606,30 @@ const TimeTable = () => {
       }
       if (typeof parsed?.allow_same_subject_twice_day === 'boolean') {
         setAllowSameSubjectTwiceDay(parsed.allow_same_subject_twice_day);
+      }
+      if (Number.isFinite(Number(parsed?.max_consecutive_periods_teacher))) {
+        setMaxConsecutivePeriodsTeacher(Math.max(0, Number(parsed.max_consecutive_periods_teacher)));
+      }
+      if (Number.isFinite(Number(parsed?.min_teacher_free_periods_per_day))) {
+        setMinTeacherFreePeriodsPerDay(Math.max(0, Number(parsed.min_teacher_free_periods_per_day)));
+      }
+      if (Number.isFinite(Number(parsed?.max_teacher_load_per_week))) {
+        setMaxTeacherLoadPerWeek(Math.max(0, Number(parsed.max_teacher_load_per_week)));
+      }
+      if (Number.isFinite(Number(parsed?.max_teacher_periods_per_day))) {
+        setMaxTeacherPeriodsPerDay(Math.max(0, Number(parsed.max_teacher_periods_per_day)));
+      }
+      if (typeof parsed?.enforce_consecutive_labs === 'boolean') {
+        setEnforceConsecutiveLabs(parsed.enforce_consecutive_labs);
+      }
+      if (typeof parsed?.avoid_fixed_period_patterns === 'boolean') {
+        setAvoidFixedPeriodPatterns(parsed.avoid_fixed_period_patterns);
+      }
+      if (Array.isArray(parsed?.preferred_morning_subject_ids)) {
+        setPreferredMorningSubjectIds(parsed.preferred_morning_subject_ids.map(Number).filter(Number.isFinite));
+      }
+      if (typeof parsed?.ai_strategy === 'string') {
+        setAiStrategy(parsed.ai_strategy);
       }
     } catch {
       // ignore malformed local settings
@@ -601,9 +738,15 @@ const TimeTable = () => {
         initial_draft: schedulePayload.draft,
         preferences: {
           class_teacher_first_period: classTeacherFirstPeriod,
-          min_teacher_free_periods_per_day: 0,
-          max_consecutive_periods_teacher: 4,
+          min_teacher_free_periods_per_day: minTeacherFreePeriodsPerDay,
+          max_consecutive_periods_teacher: maxConsecutivePeriodsTeacher,
+          max_teacher_load_per_week: maxTeacherLoadPerWeek,
+          max_teacher_periods_per_day: maxTeacherPeriodsPerDay,
+          enforce_consecutive_labs: enforceConsecutiveLabs,
+          avoid_fixed_period_patterns: avoidFixedPeriodPatterns,
           allow_same_subject_twice_day: allowSameSubjectTwiceDay,
+          preferred_morning_subject_ids: preferredMorningSubjectIds,
+          ai_strategy: aiStrategy,
         },
         persist: false,
       });
@@ -629,6 +772,24 @@ const TimeTable = () => {
                 teacher: slot.teacher_name || '',
                 room: 'TBD',
                 isEvent: false,
+                aiMeta: {
+                  score: typeof slot.score === 'number' ? slot.score : null,
+                  reasons: Array.isArray(slot.reasons) ? slot.reasons : [],
+                  source: slot.source || 'ai',
+                },
+              };
+            } else if (slot.type === 'custom') {
+              nextSchedule[dayName][idx] = {
+                subject: slot.custom_title || 'Special Event',
+                teacher: slot.teacher_name || '',
+                room: 'TBD',
+                isEvent: true,
+                customTitle: slot.custom_title || '',
+                aiMeta: {
+                  score: typeof slot.score === 'number' ? slot.score : null,
+                  reasons: Array.isArray(slot.reasons) ? slot.reasons : [],
+                  source: slot.source || 'seed',
+                },
               };
             } else {
               nextSchedule[dayName][idx] = null;
@@ -872,7 +1033,15 @@ const TimeTable = () => {
           time_zone: timeZone, 
           locale: regionLocale,
           class_teacher_first_period: classTeacherFirstPeriod,
-          allow_same_subject_twice_day: allowSameSubjectTwiceDay 
+          allow_same_subject_twice_day: allowSameSubjectTwiceDay,
+          max_consecutive_periods_teacher: maxConsecutivePeriodsTeacher,
+          min_teacher_free_periods_per_day: minTeacherFreePeriodsPerDay,
+          max_teacher_load_per_week: maxTeacherLoadPerWeek,
+          max_teacher_periods_per_day: maxTeacherPeriodsPerDay,
+          enforce_consecutive_labs: enforceConsecutiveLabs,
+          avoid_fixed_period_patterns: avoidFixedPeriodPatterns,
+          preferred_morning_subject_ids: preferredMorningSubjectIds,
+          ai_strategy: aiStrategy,
         })
       );
     }
@@ -883,6 +1052,18 @@ const TimeTable = () => {
         time_format: timeFormat,
         time_zone: timeZone,
         locale: regionLocale,
+        preferences: {
+          class_teacher_first_period: classTeacherFirstPeriod,
+          allow_same_subject_twice_day: allowSameSubjectTwiceDay,
+          max_consecutive_periods_teacher: maxConsecutivePeriodsTeacher,
+          min_teacher_free_periods_per_day: minTeacherFreePeriodsPerDay,
+          max_teacher_load_per_week: maxTeacherLoadPerWeek,
+          max_teacher_periods_per_day: maxTeacherPeriodsPerDay,
+          enforce_consecutive_labs: enforceConsecutiveLabs,
+          avoid_fixed_period_patterns: avoidFixedPeriodPatterns,
+          preferred_morning_subject_ids: preferredMorningSubjectIds,
+          ai_strategy: aiStrategy,
+        },
       });
       push('Settings updated and saved globally.', 'success');
     } catch {
@@ -905,17 +1086,18 @@ const TimeTable = () => {
   const assignSubstitute = async () => {
     const teacher = teachers.find((t) => t.id === Number(selectedSubTeacherId));
     if (!teacher || !absence.isDetected) return;
+    const substituteName = `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim() || teacher.full_name || teacher.name || '';
     const todaySlots = [...(activeSchedule[todayDay] || [])];
     absence.affectedPeriodIndexes.forEach((idx) => {
       const slot = todaySlots[idx];
       if (!slot || slot.isBreak) return;
-      todaySlots[idx] = { ...slot, substituteFor: absence.absentTeacher, teacher: teacher.name };
+      todaySlots[idx] = { ...slot, substituteFor: absence.absentTeacher, teacher: substituteName };
     });
     upsertActiveSchedule({ ...activeSchedule, [todayDay]: todaySlots });
     setAbsence({ loading: false, isDetected: false, absentTeacher: '', affectedPeriodIndexes: [] });
     setShowSubstituteModal(false);
     try {
-      await instance.post('/timetables/assign-substitute/', { class_name: activeClass, day: todayDay, teacher: teacher.name, periods: absence.affectedPeriodIndexes });
+      await instance.post('/timetables/assign-substitute/', { class_name: activeClass, day: todayDay, teacher: substituteName, periods: absence.affectedPeriodIndexes });
     } catch {}
   };
 
@@ -939,8 +1121,134 @@ const TimeTable = () => {
 
   const teacherTodaySlots = useMemo(() => {
     const todaySlots = activeSchedule?.[todayDay] || [];
-    return periods.map((period, idx) => ({ period, idx, slot: todaySlots[idx] })).filter(({ period, slot }) => !period.isBreak && slot && slot.teacher === selectedTeacher.name);
+    return periods
+      .map((period, idx) => ({ period, idx, slot: todaySlots[idx] }))
+      .filter(({ period, slot }) => !period.isBreak && slot && slot.teacher === selectedTeacher.name);
   }, [activeSchedule, todayDay, periods, selectedTeacher]);
+
+  const aiSuggestions = useMemo(() => {
+    const suggestions = [];
+
+    const conflictEntries = flattenedConflicts;
+    if (conflictEntries.length > 0) {
+      const first = conflictEntries[0];
+      suggestions.push({
+        type: 'error',
+        title: `Resolve ${conflictEntries.length} conflict${conflictEntries.length === 1 ? '' : 's'}`,
+        detail: `${first.day} P${first.idx + 1}: ${first.msg}`,
+        jump: { day: first.day, idx: first.idx },
+      });
+    }
+
+    const emptySlots = [];
+    Object.entries(activeSchedule || {}).forEach(([day, daySlots]) => {
+      (daySlots || []).forEach((slot, idx) => {
+        if (periods[idx]?.isBreak) return;
+        if (!slot) emptySlots.push({ day, idx });
+      });
+    });
+    if (emptySlots.length > 0) {
+      const first = emptySlots[0];
+      suggestions.push({
+        type: 'warning',
+        title: `${emptySlots.length} empty slot${emptySlots.length === 1 ? '' : 's'} remaining`,
+        detail: `Start filling from ${first.day} P${first.idx + 1}.`,
+        jump: { day: first.day, idx: first.idx },
+      });
+    }
+
+    const underfilled = subjectCompletion.filter((sc) => sc.target > 0 && sc.current < sc.target);
+    if (underfilled.length > 0) {
+      const top = underfilled.slice(0, 3).map((s) => `${s.name} (${s.current}/${s.target})`).join(', ');
+      suggestions.push({
+        type: 'info',
+        title: 'Subjects below weekly quota',
+        detail: top + (underfilled.length > 3 ? ` (+${underfilled.length - 3} more)` : ''),
+      });
+    }
+
+    const subjectDays = {};
+    Object.entries(activeSchedule || {}).forEach(([day, daySlots]) => {
+      (daySlots || []).forEach((slot, idx) => {
+        if (!slot || slot.isBreak || periods[idx]?.isBreak) return;
+        if (!slot.subject) return;
+        if (!subjectDays[slot.subject]) subjectDays[slot.subject] = new Set();
+        subjectDays[slot.subject].add(day);
+      });
+    });
+    const spreadWarnings = Object.entries(subjectDays)
+      .map(([subject, daySet]) => {
+        const row = subjectCompletion.find((s) => s.name === subject);
+        const total = row?.target || row?.current || 0;
+        const daysUsed = daySet.size;
+        const idealDays = Math.min(days.length || 1, Math.max(2, Math.ceil(total / 2)));
+        if (total >= 4 && daysUsed > 0 && daysUsed < idealDays) {
+          return { subject, daysUsed, idealDays };
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (spreadWarnings.length > 0) {
+      const w = spreadWarnings[0];
+      suggestions.push({
+        type: 'warning',
+        title: 'Improve subject spread',
+        detail: `${w.subject} is concentrated in ${w.daysUsed} day(s). Aim for ~${w.idealDays} days.`,
+      });
+    }
+
+    const overloaded = Object.entries(globalWorkload)
+      .filter(([, count]) => count >= 30)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+    if (overloaded.length > 0) {
+      suggestions.push({
+        type: 'warning',
+        title: 'Teacher weekly load high',
+        detail: overloaded.map(([name, count]) => `${name} (${count})`).join(', '),
+      });
+    }
+
+    if (unmappedSubjects.length > 0) {
+      suggestions.push({
+        type: 'warning',
+        title: 'Map teachers to subjects',
+        detail: unmappedSubjects.slice(0, 4).map((s) => s.name).join(', ') + (unmappedSubjects.length > 4 ? ` (+${unmappedSubjects.length - 4} more)` : ''),
+      });
+    }
+
+    const consecutive = Object.entries(globalSchedules).flatMap(([teacherName, byDay]) => {
+      return Object.entries(byDay || {}).map(([day, byIdx]) => {
+        const indices = Object.keys(byIdx || {})
+          .map(Number)
+          .filter((idx) => Number.isFinite(idx) && !periods[idx]?.isBreak)
+          .sort((a, b) => a - b);
+        let best = 0;
+        let current = 0;
+        let prev = null;
+        indices.forEach((idx) => {
+          if (prev === null || idx !== prev + 1) current = 1;
+          else current += 1;
+          if (current > best) best = current;
+          prev = idx;
+        });
+        return { teacherName, day, best };
+      });
+    })
+      .filter((row) => row.best >= 5)
+      .sort((a, b) => b.best - a.best)
+      .slice(0, 2);
+    if (consecutive.length > 0) {
+      const top = consecutive[0];
+      suggestions.push({
+        type: 'warning',
+        title: 'Reduce consecutive periods',
+        detail: `${top.teacherName} has ${top.best} consecutive periods on ${top.day}.`,
+      });
+    }
+
+    return suggestions.slice(0, 6);
+  }, [activeSchedule, periods, subjectCompletion, flattenedConflicts, globalWorkload, days.length, unmappedSubjects, globalSchedules]);
 
   const applyOverride = () => {
     if (!overrideReason.trim() || selectedOverridePeriods.length === 0) return alert('Select periods and enter reason/event.');
@@ -963,6 +1271,10 @@ const TimeTable = () => {
     }
 
     const conflict = conflictMap[day]?.[periodIdx];
+    const aiExplain = Array.isArray(data?.aiMeta?.reasons) && data.aiMeta.reasons.length > 0
+      ? `AI: ${data.aiMeta.reasons.join(' • ')}`
+      : '';
+    const hoverTitle = [conflict, aiExplain].filter(Boolean).join('\n');
 
     if (data) {
       return (
@@ -972,7 +1284,7 @@ const TimeTable = () => {
             draggable 
             onDragStart={() => onDragStartSlot(day, periodIdx)} 
             onClick={() => openSlotModal(day, periodIdx)} 
-            title={conflict || ''}
+            title={hoverTitle || ''}
             style={data.isEvent ? { borderLeft: '4px solid #f97316', background: '#fff7ed' } : {}}
           >
             <div>
@@ -1040,7 +1352,7 @@ const TimeTable = () => {
             <div className={`${styles.radioBtn} ${viewMode === 'teacher' ? styles.active : ''}`} onClick={() => setViewMode('teacher')}>Today</div>
           </div>
           {viewMode === 'teacher' && (
-            <select className={styles.classSelect} value={selectedTeacherId} onChange={(e) => setSelectedTeacherId(Number(e.target.value))}>
+            <select className={styles.classSelect} value={selectedTeacherId} onChange={(e) => setSelectedTeacherId(e.target.value)}>
               <option value="">Select Teacher</option>
               {teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.first_name} {teacher.last_name}</option>)}
             </select>
@@ -1062,7 +1374,7 @@ const TimeTable = () => {
 
       <div className={styles.metaRow}>
         <span><Clock size={14} /> {loading ? 'Loading timetable...' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
-        <span>{lastSavedAt ? `Last saved: ${new Date(lastSavedAt).toLocaleTimeString()}` : 'No draft saved yet'}</span>
+        <span>{lastSavedAt ? `Last saved: ${formatTimeStamp(lastSavedAt)}` : 'No draft saved yet'}</span>
       </div>
 
       <div className={styles.mainLayout}>
@@ -1085,6 +1397,33 @@ const TimeTable = () => {
         {viewMode === 'admin' && (
           <div className={`${styles.sidebar} ${isSidebarCollapsed ? styles.collapsed : ''}`}>
             <div className={styles.sidebarSection}>
+              <h4 className={styles.sectionHeader} style={{ cursor: 'default' }}>
+                <span>AI Suggestions</span>
+                <Zap size={16} style={{ color: 'var(--color-primary)' }} />
+              </h4>
+              <div className={styles.suggestionsList}>
+                {aiSuggestions.length === 0 ? (
+                  <div className={styles.emptyText}>No suggestions right now.</div>
+                ) : (
+                  aiSuggestions.map((s, idx) => (
+                    <button
+                      key={`${s.title}-${idx}`}
+                      type="button"
+                      className={`${styles.suggestionItem} ${s.jump ? styles.suggestionClickable : ''} ${s.type === 'error' ? styles.suggestionError : s.type === 'warning' ? styles.suggestionWarn : styles.suggestionInfo}`}
+                      onClick={() => {
+                        if (s.jump) openSlotModal(s.jump.day, s.jump.idx);
+                      }}
+                      title={s.jump ? 'Click to open slot' : undefined}
+                    >
+                      <div className={styles.suggestionTitle}>{s.title}</div>
+                      <div className={styles.suggestionDetail}>{s.detail}</div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className={styles.sidebarSection}>
               <h4 onClick={() => setExpandedSections(prev => ({ ...prev, subjects: !prev.subjects }))} className={styles.sectionHeader}>
                 <span>Subject Load Analysis</span>
                 {expandedSections.subjects ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -1101,7 +1440,7 @@ const TimeTable = () => {
                         <div 
                           className={styles.progressFill} 
                           style={{ 
-                            width: `${Math.min(100, (sc.current/sc.target)*100)}%`,
+                            width: `${sc.target > 0 ? Math.min(100, (sc.current / sc.target) * 100) : 0}%`,
                             background: sc.current > sc.target ? 'var(--color-danger)' : sc.current === sc.target ? 'var(--color-success)' : 'var(--color-primary)'
                           }}
                         />
@@ -1146,29 +1485,15 @@ const TimeTable = () => {
                 <AlertTriangle size={16} style={{ color: 'var(--color-warning)' }} />
               </h4>
               <div className={styles.conflictSummary}>
-                {Object.entries(activeSchedule).flatMap(([day, daySlots]) => 
-                  daySlots.map((slot, idx) => {
-                    const clash = slot?.teacher ? getTeacherClash(slot.teacher, day, idx) : null;
-                    if (clash) return (
-                      <div key={`${day}-${idx}`} className={styles.conflictItem}>
-                        <b>{day} P{idx+1}</b>: {slot.teacher} busy in {clash}
-                      </div>
-                    );
-                    return null;
-                  })
-                ).filter(Boolean).length === 0 ? <div className={styles.emptyText}>No conflicts detected in current view.</div> : 
-                  Object.entries(activeSchedule).flatMap(([day, daySlots]) => 
-                    daySlots.map((slot, idx) => {
-                      const clash = slot?.teacher ? getTeacherClash(slot.teacher, day, idx) : null;
-                      if (clash) return (
-                        <div key={`${day}-${idx}`} className={styles.conflictItem}>
-                          <b>{day} P{idx+1}</b>: {slot.teacher} busy in {clash}
-                        </div>
-                      );
-                      return null;
-                    })
-                  ).filter(Boolean)
-                }
+                {flattenedConflicts.length === 0 ? (
+                  <div className={styles.emptyText}>No conflicts detected in current view.</div>
+                ) : (
+                  flattenedConflicts.map((c) => (
+                    <div key={`${c.day}-${c.idx}`} className={styles.conflictItem}>
+                      <b>{c.day} P{c.idx + 1}</b>: {c.msg}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -1179,7 +1504,7 @@ const TimeTable = () => {
         <div className={styles.teacherView}>
           <div className={styles.teacherViewHeader}>
             <h3>{selectedTeacher.name} - {todayDay}</h3>
-            <p>Showing only this teacher's periods for today in {activeClass}.</p>
+            <p>Showing only this teacher&apos;s periods for today in {activeClass}.</p>
           </div>
           {teacherTodaySlots.length === 0 ? <div className={styles.teacherEmpty}>No periods assigned for today.</div> : (
             <div className={styles.teacherCards}>
@@ -1211,6 +1536,18 @@ const TimeTable = () => {
                   </div>
                 </div>
               )}
+
+              {Array.isArray(activeSchedule?.[slotModal.day]?.[slotModal.periodIdx]?.aiMeta?.reasons) &&
+                activeSchedule[slotModal.day][slotModal.periodIdx].aiMeta.reasons.length > 0 && (
+                  <div className={styles.aiExplainBox}>
+                    <div className={styles.aiExplainTitle}>AI explanation (last generate)</div>
+                    <div className={styles.aiExplainList}>
+                      {activeSchedule[slotModal.day][slotModal.periodIdx].aiMeta.reasons.slice(0, 6).map((r, i) => (
+                        <div key={i} className={styles.aiExplainItem}>• {r}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               
               {slotForm.isEvent ? (
                 <div className={styles.formGroup}>
@@ -1255,7 +1592,9 @@ const TimeTable = () => {
                 
                 {slotForm.teacher && (
                   <div className={styles.availabilityTimeline}>
-                    <div className={styles.timelineLabel}>{slotForm.teacher.split(' ')[0]}'s {slotModal.day} Schedule:</div>
+                    <div className={styles.timelineLabel}>
+                      {`${slotForm.teacher.split(' ')[0]}'s`} {slotModal.day} Schedule:
+                    </div>
                     <div className={styles.timelineTrack}>
                       {periods.map((p, idx) => {
                         const busy = globalSchedules[slotForm.teacher]?.[slotModal.day]?.[idx];
@@ -1349,6 +1688,154 @@ const TimeTable = () => {
                 </div>
                 <div className={styles.infoBox}>Display region: {timeZone} | Format: {timeFormat.toUpperCase()}</div>
               </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>AI Rules</label>
+                <div className={styles.rulesGrid}>
+                  <div className={styles.rulesRow}>
+                    <label className={styles.smallLabel}>Strategy</label>
+                    <select
+                      className={styles.input}
+                      value={aiStrategy}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setAiStrategy(next);
+                        if (next === 'balanced') {
+                          setMaxConsecutivePeriodsTeacher(4);
+                          setMinTeacherFreePeriodsPerDay(1);
+                          setMaxTeacherLoadPerWeek(30);
+                          setMaxTeacherPeriodsPerDay(6);
+                        } else if (next === 'teacher_friendly') {
+                          setMaxConsecutivePeriodsTeacher(3);
+                          setMinTeacherFreePeriodsPerDay(2);
+                          setMaxTeacherLoadPerWeek(28);
+                          setMaxTeacherPeriodsPerDay(5);
+                        } else if (next === 'academic_focus') {
+                          setMaxConsecutivePeriodsTeacher(4);
+                          setMinTeacherFreePeriodsPerDay(1);
+                          setMaxTeacherLoadPerWeek(32);
+                          setMaxTeacherPeriodsPerDay(6);
+                        } else if (next === 'fast') {
+                          setMaxConsecutivePeriodsTeacher(5);
+                          setMinTeacherFreePeriodsPerDay(0);
+                          setMaxTeacherLoadPerWeek(40);
+                          setMaxTeacherPeriodsPerDay(7);
+                        }
+                      }}
+                    >
+                      <option value="balanced">Balanced</option>
+                      <option value="teacher_friendly">Teacher Friendly</option>
+                      <option value="academic_focus">Academic Focus</option>
+                      <option value="fast">Fast Generate</option>
+                    </select>
+                  </div>
+
+                  <div className={styles.rulesRow}>
+                    <label className={styles.smallLabel}>Max consecutive (teacher)</label>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min={0}
+                      value={maxConsecutivePeriodsTeacher}
+                      onChange={(e) => setMaxConsecutivePeriodsTeacher(Math.max(0, Number(e.target.value)))}
+                    />
+                  </div>
+
+                  <div className={styles.rulesRow}>
+                    <label className={styles.smallLabel}>Min free periods/day (teacher)</label>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min={0}
+                      value={minTeacherFreePeriodsPerDay}
+                      onChange={(e) => setMinTeacherFreePeriodsPerDay(Math.max(0, Number(e.target.value)))}
+                    />
+                  </div>
+
+                  <div className={styles.rulesRow}>
+                    <label className={styles.smallLabel}>Max periods/day (teacher)</label>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min={0}
+                      value={maxTeacherPeriodsPerDay}
+                      onChange={(e) => setMaxTeacherPeriodsPerDay(Math.max(0, Number(e.target.value)))}
+                    />
+                  </div>
+
+                  <div className={styles.rulesRow}>
+                    <label className={styles.smallLabel}>Max periods/week (teacher)</label>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min={0}
+                      value={maxTeacherLoadPerWeek}
+                      onChange={(e) => setMaxTeacherLoadPerWeek(Math.max(0, Number(e.target.value)))}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 10 }}>
+                  <label className={styles.checkRow} style={{ fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={enforceConsecutiveLabs}
+                      onChange={(e) => setEnforceConsecutiveLabs(e.target.checked)}
+                    />
+                    Enforce consecutive lab blocks (double periods)
+                  </label>
+                  <label className={styles.checkRow} style={{ fontWeight: 600, marginTop: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={avoidFixedPeriodPatterns}
+                      onChange={(e) => setAvoidFixedPeriodPatterns(e.target.checked)}
+                    />
+                    Avoid fixed patterns (don&apos;t keep Period 2 same every day)
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.outline}`}
+                  onClick={() => setShowAdvancedRules((prev) => !prev)}
+                  style={{ marginTop: 10 }}
+                >
+                  {showAdvancedRules ? 'Hide Advanced' : 'Show Advanced'}
+                </button>
+
+                {showAdvancedRules && (
+                  <div className={styles.advancedRules}>
+                    <div className={styles.smallHint}>
+                      Preferred morning subjects (bonus in Period 1–3 during AI generate):
+                    </div>
+                    <div className={styles.subjectPickList}>
+                      {subjects.length === 0 ? (
+                        <div className={styles.emptyText}>Subjects not loaded yet.</div>
+                      ) : (
+                        subjects.map((s) => (
+                          <label key={s.id} className={styles.checkRow}>
+                            <input
+                              type="checkbox"
+                              checked={preferredMorningSubjectIds.includes(Number(s.id))}
+                              onChange={(e) => {
+                                const sid = Number(s.id);
+                                if (!Number.isFinite(sid)) return;
+                                setPreferredMorningSubjectIds((prev) =>
+                                  e.target.checked ? Array.from(new Set([...prev, sid])) : prev.filter((x) => x !== sid)
+                                );
+                              }}
+                            />
+                            {s.name}
+                          </label>
+                        ))
+                      )}
+                    </div>
+                    <div className={styles.smallHint} style={{ marginTop: 8 }}>
+                      Tip: teacher unavailability rules are supported by the engine, UI configuration comes next.
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Working days</label>
                 <div className={styles.daySelector}>
@@ -1379,7 +1866,7 @@ const TimeTable = () => {
                 <label className={styles.formLabel}>Periods & breaks</label>
                 <div className={styles.periodConfigList}>
                   {draftPeriods.map((period, idx) => (
-                    <div key={`${period.label}-${idx}`} className={styles.periodConfigRow}>
+                    <div key={idx} className={styles.periodConfigRow}>
                       <input className={styles.input} value={period.label} onChange={(e) => setDraftPeriods((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))} placeholder="Label" />
                       <input className={styles.input} value={period.time} onChange={(e) => setDraftPeriods((prev) => prev.map((x, i) => i === idx ? { ...x, time: e.target.value } : x))} placeholder="Time range (HH:MM - HH:MM)" />
                       <div className={styles.periodTimePreview}>{displayRange(period.time)}</div>
@@ -1439,7 +1926,7 @@ const TimeTable = () => {
                     ) : (
                       <CheckCircle2 size={18} color="var(--color-success)" />
                     )}
-                    <span>Teacher Conflicts</span>
+                    <span>Hard Conflicts</span>
                   </div>
                   {Object.entries(conflictMap).map(([day, dayConflicts]) => 
                     Object.entries(dayConflicts).map(([idx, msg]) => (

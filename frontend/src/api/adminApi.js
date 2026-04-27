@@ -21,6 +21,7 @@ const adminApi = {
   // Academics - Subjects & Syllabus
   getSubjects: (params) => instance.get('/academics/subjects/', { params }),
   createSubject: (data) => instance.post('/academics/subjects/', data),
+  updateSubject: (id, data) => instance.patch(`/academics/subjects/${id}/`, data),
   deleteSubject: (id) => instance.delete(`/academics/subjects/${id}/`),
   getSyllabusUnits: (params) => instance.get('/academics/syllabus/units/', { params }),
   createSyllabusUnit: (data) => instance.post('/academics/syllabus/units/', data),
@@ -113,12 +114,29 @@ const adminApi = {
   updateQuestionPaper: (id, data) => instance.patch(`/exams/question-papers/${id}/`, data),
   deleteQuestionPaper: (id) => instance.delete(`/exams/question-papers/${id}/`),
   getExamAnalytics: (params) => instance.get('/exams/analytics/', { params }),
-  generateAiReportCardsForSection: (data) => instance.post('/ai-brain/report-card/generate-class/', data),
-  generateAiReportCardForStudent: (data) => instance.post('/ai-brain/report-card/generate/', data),
+  getPerformanceSummary: (params) => instance.get('/exams/performance-summary/', { params }),
+  // Timetable
   generateAiTimetable: (data) => instance.post('/ai-brain/timetable/generate/', data),
   validateAiTimetable: (data) => instance.post('/ai-brain/timetable/validate/', data),
   applyAiTimetableDraft: (draftId, data) => instance.post(`/ai-brain/timetable/drafts/${draftId}/apply/`, data),
+  rollbackAiTimetableDraft: (draftId) => instance.post(`/ai-brain/timetable/drafts/${draftId}/rollback/`),
 
+  // Report Cards
+  generateAiReportCardsForSection: (data) => instance.post('/ai-brain/report-card/generate-class/', data),
+  generateAiReportCardForStudent: (data) => instance.post('/ai-brain/report-card/generate/', data),
+
+  // At-Risk
+  detectAtRiskStudents: (data) => instance.post('/ai-brain/students/at-risk/', data),
+  runSchoolAtRiskSweep: (data) => instance.post('/ai-brain/students/at-risk/sweep/', data),
+  getAtRiskRecords: (params) => instance.get('/ai-brain/at-risk/records/', { params }),
+  resolveAtRiskRecord: (recordId) => instance.post(`/ai-brain/at-risk/records/${recordId}/resolve/`),
+
+  // Audit & Task Logs
+  getAiBrainAuditLog: (params) => instance.get('/ai-brain/audit-log/', { params }),
+  getAiTaskLogs: (params) => instance.get('/ai-brain/tasks/', { params }),
+  getAiTaskStatus: (taskId) => instance.get(`/ai-brain/tasks/${taskId}/status/`),
+  triggerAiTask: (data) => instance.post('/ai-brain/tasks/trigger/', data),
+  runAiTask: (data) => instance.post('/ai-brain/run/', data),
   // Notice Board / Events (Notifications)
   getNotifications: (params) => instance.get('/notifications/', { params }),
   createNotification: (data) => instance.post('/notifications/', data),

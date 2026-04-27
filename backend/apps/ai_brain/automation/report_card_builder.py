@@ -121,7 +121,41 @@ class ReportCardBuilder:
                 teacher_remarks=report_data["teacher_remarks_draft"],
             )
 
-        response = {"success": True, "report_data": report_data}
+        subjects_count = len(subject_breakdown)
+        absent_count = sum(1 for row in subject_breakdown if row.get("is_absent"))
+        attendance_total = int(attendance_summary.get("total") or 0)
+        confidence = 92
+        if attendance_total <= 0:
+            confidence -= 15
+        if subjects_count <= 0:
+            confidence -= 30
+        confidence -= min(20, absent_count * 5)
+        confidence = max(40, min(98, int(round(confidence))))
+
+        explanations = [
+            f"Grade is computed from overall percentage ({round(percentage, 2)}%).",
+            f"Attendance considered: {attendance_summary['percentage']}% across {attendance_total} recorded days.",
+        ]
+        if weak_subjects:
+            explanations.append(f"Weak subjects identified by deviation from section mean: {', '.join(weak_subjects)}.")
+        if strong_subjects:
+            explanations.append(f"Strong subjects identified by deviation from section mean: {', '.join(strong_subjects)}.")
+        if trend_payload.get("trend") in {"improving", "declining", "stable"}:
+            explanations.append(
+                f"Trend: {trend_payload.get('trend')} (current {trend_payload.get('current_pct')}% vs previous {trend_payload.get('past_pct')}%)."
+            )
+
+        response = {
+            "success": True,
+            "report_data": report_data,
+            "scores": {
+                "performance_score": float(report_data["percentage"]),
+                "attendance_score": float(report_data["attendance_percentage"]),
+                "report_quality": float(max(0.0, 100.0 - (absent_count * 6))),
+            },
+            "confidence": confidence,
+            "explanations": explanations,
+        }
         if save_meta:
             response["save_meta"] = save_meta
         return response
@@ -258,14 +292,27 @@ class ReportCardBuilder:
             else:
                 skipped.append({"student_id": student.id, "reason": result.get("error", "unknown_error")})
 
+        success = len(generated) > 0 and len(skipped) < len(students)
+        percentages = [float(r.get("percentage") or 0) for r in generated]
+        avg_pct = (sum(percentages) / len(percentages)) if percentages else 0.0
+
         return {
-            "success": len(generated) > 0 and len(skipped) < len(students),
+            "success": success,
             "section_id": section_id,
             "exam_id": exam_id,
             "generated_count": len(generated),
             "skipped_count": len(skipped),
             "generated": generated,
             "skipped": skipped,
+            "scores": {
+                "section_average_performance": float(round(avg_pct, 2)),
+                "coverage_score": float(round((len(generated) / max(1, len(students))) * 100.0, 2)),
+            },
+            "confidence": 90 if success else 70 if generated else 40,
+            "explanations": [
+                "Section report cards are built from student-level marks and attendance summaries.",
+                f"Generated {len(generated)} of {len(students)} students for this exam.",
+            ],
         }
 
     def _compute_rank(self, section_results: List[ExamResult], student_id: int) -> int:

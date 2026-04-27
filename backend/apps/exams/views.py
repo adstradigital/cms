@@ -504,6 +504,79 @@ def calculate_exam_stats_view(request, exam_pk):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# ─── Performance Summary ─────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def performance_summary_view(request):
+    """Student × subject matrix for a given exam + optional section filter."""
+    exam_id = request.query_params.get("exam")
+    section_id = request.query_params.get("section")
+    if not exam_id:
+        return Response({"error": "exam is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    schedules = ExamSchedule.objects.filter(exam_id=exam_id).select_related("subject")
+    subjects_map = {
+        s.subject.id: {
+            "id": s.subject.id,
+            "name": s.subject.name,
+            "max_marks": (s.max_theory_marks or 0) + (s.max_internal_marks or 0),
+        }
+        for s in schedules
+    }
+
+    results_qs = ExamResult.objects.filter(
+        exam_schedule__exam_id=exam_id
+    ).select_related("student", "student__user", "exam_schedule", "exam_schedule__subject")
+    if section_id:
+        results_qs = results_qs.filter(student__section_id=section_id)
+
+    student_map = {}
+    for r in results_qs:
+        sid = r.student.id
+        if sid not in student_map:
+            student_map[sid] = {
+                "student_id": sid,
+                "name": f"{r.student.user.first_name} {r.student.user.last_name}".strip(),
+                "admission_number": r.student.admission_number,
+                "subjects": {},
+            }
+        sub_id = r.exam_schedule.subject.id
+        max_m = (r.exam_schedule.max_theory_marks or 0) + (r.exam_schedule.max_internal_marks or 0)
+        obtained = float(r.marks_obtained or 0) if not r.is_absent else None
+        pct = round((obtained / max_m * 100), 1) if (max_m > 0 and obtained is not None) else None
+        student_map[sid]["subjects"][str(sub_id)] = {
+            "id": sub_id,
+            "name": r.exam_schedule.subject.name,
+            "marks": obtained,
+            "max_marks": max_m,
+            "percentage": pct,
+            "is_absent": r.is_absent,
+        }
+
+    rc_map = {
+        rc.student_id: rc
+        for rc in ReportCard.objects.filter(
+            exam_id=exam_id, student_id__in=list(student_map.keys())
+        )
+    }
+
+    result_list = []
+    for sid, data in student_map.items():
+        rc = rc_map.get(sid)
+        data["overall_percentage"] = float(rc.percentage) if rc and rc.percentage is not None else None
+        data["grade"] = rc.grade if rc else ""
+        data["rank"] = rc.rank if rc else None
+        result_list.append(data)
+
+    result_list.sort(key=lambda x: (x["rank"] is None, x["rank"] or 0))
+
+    return Response(
+        {"students": result_list, "subjects": list(subjects_map.values())},
+        status=status.HTTP_200_OK,
+    )
+
+
 # ─── Analytics ────────────────────────────────────────────────────────────────
 
 @api_view(["GET"])

@@ -35,7 +35,7 @@ class TimetableGenerator:
     def _single_pass_generate(self):
         with transaction.atomic():
             # 1. Fetch data
-            allocations = SubjectAllocation.objects.select_related('subject').prefetch_related('teachers').filter(
+            allocations = SubjectAllocation.objects.select_related('subject', 'teacher').filter(
                 section=self.section,
                 academic_year=self.academic_year
             )
@@ -45,9 +45,11 @@ class TimetableGenerator:
 
             subject_needs = []
             for alloc in allocations:
+                if getattr(alloc.subject, "is_active", True) is False:
+                    continue
                 subject_needs.extend([{
                     'subject': alloc.subject,
-                    'teacher': alloc.teachers.first(),
+                    'teacher': alloc.teacher,
                     'id': f"{alloc.id}-{i}"
                 } for i in range(alloc.subject.weekly_periods)])
             

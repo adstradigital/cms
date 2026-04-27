@@ -4,6 +4,7 @@ import schoolApi from '@/api/schoolApi';
 
 const SchoolSettings = ({ styles }) => {
   const [loading, setLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(true);
   const [activeSchool, setActiveSchool] = useState(null);
   const [notice, setNotice] = useState(null);
 
@@ -13,9 +14,14 @@ const SchoolSettings = ({ styles }) => {
         const res = await schoolApi.getSchools();
         if (res.data && res.data.length > 0) {
           setActiveSchool(res.data[0]);
+        } else {
+          setNotice({ type: 'error', message: 'No school record found. Please seed the database.' });
         }
       } catch (error) {
-        console.error(error);
+        console.error('SchoolSettings fetch error:', error?.response?.status, error?.message);
+        setNotice({ type: 'error', message: 'Could not load school data. Check that the backend is running.' });
+      } finally {
+        setFetchLoading(false);
       }
     };
     fetchSchool();
@@ -35,7 +41,14 @@ const SchoolSettings = ({ styles }) => {
     }
   };
 
-  if (!activeSchool) return <div>Loading...</div>;
+  if (fetchLoading) return <div className={styles.section}>Loading school data…</div>;
+  if (!activeSchool) return (
+    <div className={styles.section}>
+      {notice && (
+        <div className={`${styles.notice} ${styles.noticeError}`}>{notice.message}</div>
+      )}
+    </div>
+  );
 
   return (
     <div>

@@ -87,6 +87,8 @@
   grid-template-columns: 1fr 340px;
   gap: 20px;
 }
+.leftCol { display: flex; flex-direction: column; min-width: 0; }
+.rightCol { display: flex; flex-direction: column; min-width: 0; }
 
 /* Statistics Grid */
 .statsGrid {
@@ -293,4 +295,86 @@
 .actionBtn:hover {
     background-color: var(--theme-bg);
     transform: translateX(4px);
+}
+
+/* Avatar circle (initials-based) */
+.avatarCircle {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* meta block */
+.meta { display: flex; flex-direction: column; gap: 2px; }
+
+/* Grade value in stat card */
+.gradeVal { color: var(--color-warning, #f59e0b); }
+
+/* No data placeholder */
+.noData {
+  font-size: 0.825rem;
+  color: var(--theme-text-muted);
+  padding: 12px 0;
+  text-align: center;
+}
+
+/* Subject detail table */
+.subjectDetailTable {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: 14px;
+  padding: 16px;
+  overflow: hidden;
+}
+.subjectDetailTable h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--theme-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.subjectDetailTable table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.825rem;
+}
+.subjectDetailTable th {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--theme-text-muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  border-bottom: 1px solid var(--theme-border);
+}
+.subjectDetailTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--theme-border);
+  color: var(--theme-text);
+}
+.subjectDetailTable tr:last-child td { border-bottom: none; }
+.riskText { color: var(--color-danger); font-weight: 700; }
+
+/* Status tags */
+.tagGood { padding: 2px 8px; background-color: #3b82f6; color: #fff; border-radius: 4px; font-weight: 800; font-size: 0.65rem; }
+.tagAverage { padding: 2px 8px; background-color: #f59e0b; color: #fff; border-radius: 4px; font-weight: 800; font-size: 0.65rem; }
+.tagAtRisk { padding: 2px 8px; background-color: #ef4444; color: #fff; border-radius: 4px; font-weight: 800; font-size: 0.65rem; }
+
+/* Card icon link */
+.cardIcon { color: #94a3b8; cursor: pointer; }
+.cardIcon:hover { color: #fff; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; }
+  .insightsList { grid-template-columns: 1fr; }
 }

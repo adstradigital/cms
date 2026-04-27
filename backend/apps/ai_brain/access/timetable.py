@@ -47,7 +47,7 @@ def get_teacher_existing_commitments(
         timetable__academic_year=academic_year,
         timetable__day_of_week__in=working_days,
         teacher_id__in=teacher_ids,
-        period_type="class",
+        period_type__in=["class", "custom"],
     )
     if exclude_section_id:
         queryset = queryset.exclude(timetable__section_id=exclude_section_id)

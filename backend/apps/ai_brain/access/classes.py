@@ -26,18 +26,27 @@ def get_school_active_academic_year(school_id: int) -> Optional[AcademicYear]:
 
 def get_subject_allocations(section: Section, academic_year: AcademicYear):
     return (
-        SubjectAllocation.objects.filter(section=section, academic_year=academic_year)
+        SubjectAllocation.objects.filter(
+            section=section,
+            academic_year=academic_year,
+            subject__is_active=True,
+        )
         .select_related("subject", "teacher")
     )
 
 
 def get_class_subjects(school_class_id: int):
-    return Subject.objects.filter(school_class_id=school_class_id)
+    return Subject.objects.filter(school_class_id=school_class_id, is_active=True)
 
 
 def ensure_subject_allocations(section: Section, academic_year: AcademicYear) -> Dict:
-    existing = SubjectAllocation.objects.filter(section=section, academic_year=academic_year)
-    subjects = Subject.objects.filter(school_class=section.school_class)
+    try:
+        from apps.academics.compulsory import ensure_physical_education_subject_for_class
+        ensure_physical_education_subject_for_class(school_class=section.school_class)
+    except Exception:
+        pass
+
+    subjects = Subject.objects.filter(school_class=section.school_class, is_active=True)
     if not subjects.exists():
         return {
             "success": False,

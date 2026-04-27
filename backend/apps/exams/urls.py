@@ -25,6 +25,7 @@ urlpatterns = [
     path("question-papers/<int:pk>/", views.question_paper_detail_view, name="question_paper_detail"),
     
     path("analytics/", views.exam_analytics_view, name="exam_analytics"),
+    path("performance-summary/", views.performance_summary_view, name="performance_summary"),
     path("schedules/", views.exam_schedule_global_list_view, name="exam_schedule_global_list"),
     path("schedules/<int:pk>/", views.exam_schedule_detail_view, name="exam_schedule_detail"),
 

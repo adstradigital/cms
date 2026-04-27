@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Dict, List
+from datetime import datetime
+from typing import Dict, List, Optional
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.academics.models import Period, Subject, Timetable
 from apps.attendance.models import AttendanceWarning
 from apps.accounts.models import AcademicYear, User
 from apps.exams.models import ReportCard
-from .models import AIBrainAuditLog, AIBrainDraft
+from .models import AIBrainAuditLog, AIBrainDraft, AtRiskRecord
 
 
 def save_timetable_draft(
@@ -21,13 +23,9 @@ def save_timetable_draft(
 ) -> Dict:
     skipped_days = []
     from datetime import time, datetime, timedelta
-    
-    # Helper to calculate basic times (Standard 45m slots, 8:30 start)
-    # In a real app, this should come from AcademicYear settings
+
     def get_times(p_num):
         start = datetime.combine(datetime.today(), time(8, 30))
-        # Add 45 mins per period, plus maybe 45 for lunch
-        # (Simple logic: linear slots)
         p_start = start + timedelta(minutes=(p_num - 1) * 45)
         p_end = p_start + timedelta(minutes=45)
         return p_start.time(), p_end.time()
@@ -49,12 +47,23 @@ def save_timetable_draft(
                 period_number = slot["period_number"]
                 slot_type = slot.get("type", "free")
                 s_time, e_time = get_times(period_number)
-                
+
                 if slot_type == "break":
                     Period.objects.create(
                         timetable=timetable,
                         period_number=period_number,
                         period_type="break",
+                        start_time=s_time,
+                        end_time=e_time,
+                    )
+                    continue
+                if slot_type in {"event", "custom"}:
+                    Period.objects.create(
+                        timetable=timetable,
+                        period_number=period_number,
+                        period_type="custom",
+                        custom_title=slot.get("custom_title") or slot.get("customTitle") or slot.get("title") or "Special Event",
+                        teacher_id=slot.get("teacher_id"),
                         start_time=s_time,
                         end_time=e_time,
                     )
@@ -80,6 +89,27 @@ def save_timetable_draft(
         "periods_per_day": periods_per_day,
         "break_periods": break_periods,
     }
+
+
+def _snapshot_existing_timetable(section, academic_year) -> List[Dict]:
+    """Snapshot current timetable periods for rollback."""
+    rows = []
+    timetables = Timetable.objects.filter(
+        section=section, academic_year=academic_year
+    ).prefetch_related("periods")
+    for tt in timetables:
+        periods = []
+        for p in tt.periods.all():
+            periods.append({
+                "period_number": p.period_number,
+                "type": p.period_type,
+                "subject_id": p.subject_id,
+                "teacher_id": p.teacher_id,
+                "start_time": str(p.start_time),
+                "end_time": str(p.end_time),
+            })
+        rows.append({"day_of_week": tt.day_of_week, "is_published": tt.is_published, "periods": periods})
+    return rows
 
 
 def create_ai_brain_draft(
@@ -126,6 +156,11 @@ def apply_timetable_preview(
     if not draft.section or not academic_year:
         return {"success": False, "error": "Draft is missing section or academic year context."}
 
+    # Snapshot existing timetable before overwriting (enables rollback)
+    snapshot = _snapshot_existing_timetable(draft.section, academic_year)
+    draft.rollback_payload = {"snapshot": snapshot, "academic_year_id": academic_year.id}
+    draft.save(update_fields=["rollback_payload"])
+
     save_meta = save_timetable_draft(
         section=draft.section,
         academic_year=academic_year,
@@ -148,10 +183,137 @@ def apply_timetable_preview(
         actor=actor,
         details={
             "manual_override": bool(payload),
-            "saved_days": save_meta.get("saved_days", 0),
+            "saved_days": save_meta.get("saved_count", 0),
         },
     )
     return save_meta
+
+
+def rollback_timetable_draft(*, draft: AIBrainDraft, actor: User) -> Dict:
+    """Restore the timetable to the state before the draft was applied."""
+    rollback = draft.rollback_payload
+    if not rollback or not rollback.get("snapshot"):
+        return {"success": False, "error": "No rollback snapshot available for this draft."}
+    if not draft.is_applied:
+        return {"success": False, "error": "Draft has not been applied yet."}
+
+    academic_year_id = rollback.get("academic_year_id")
+    academic_year = AcademicYear.objects.filter(id=academic_year_id).first() if academic_year_id else None
+    if not draft.section or not academic_year:
+        return {"success": False, "error": "Cannot resolve section or academic year for rollback."}
+
+    snapshot_rows = rollback["snapshot"]
+    with transaction.atomic():
+        for row in snapshot_rows:
+            day = row["day_of_week"]
+            timetable, _ = Timetable.objects.get_or_create(
+                section=draft.section, academic_year=academic_year, day_of_week=day
+            )
+            timetable.periods.all().delete()
+            from datetime import time
+            for p in row["periods"]:
+                Period.objects.create(
+                    timetable=timetable,
+                    period_number=p["period_number"],
+                    period_type=p["type"],
+                    subject_id=p.get("subject_id"),
+                    teacher_id=p.get("teacher_id"),
+                    start_time=p["start_time"],
+                    end_time=p["end_time"],
+                )
+
+    draft.status = "discarded"
+    draft.is_applied = False
+    draft.save(update_fields=["status", "is_applied", "updated_at"])
+
+    AIBrainAuditLog.objects.create(
+        draft=draft,
+        action="timetable_rolled_back",
+        actor=actor,
+        details={"restored_days": len(snapshot_rows)},
+    )
+    return {"success": True, "restored_days": len(snapshot_rows)}
+
+
+def save_at_risk_records(
+    *,
+    flagged_students: List[Dict],
+    section,
+    school,
+    exam=None,
+    actor: Optional[User] = None,
+) -> Dict:
+    """Persist at-risk detection results and create parent notifications."""
+    from apps.notifications.models import Notification
+
+    created = 0
+    updated = 0
+    today = timezone.now().date()
+
+    with transaction.atomic():
+        for entry in flagged_students:
+            student_id = entry["student_id"]
+            record, is_new = AtRiskRecord.objects.update_or_create(
+                student_id=student_id,
+                exam=exam,
+                defaults={
+                    "section": section,
+                    "school": school,
+                    "reasons": entry.get("reasons", []),
+                    "attendance_pct": entry.get("attendance_percentage", 0),
+                    "marks_pct": entry.get("marks_percentage"),
+                    "resolved": False,
+                },
+            )
+            if is_new:
+                created += 1
+            else:
+                updated += 1
+
+        # Single notification per section sweep so parents are alerted
+        if flagged_students and section:
+            reason_summary = f"{len(flagged_students)} student(s) flagged for attendance/performance concerns."
+            Notification.objects.create(
+                title="At-Risk Alert",
+                body=reason_summary,
+                notification_type="attendance",
+                target_audience="parents",
+                target_section=section,
+                created_by=actor,
+                is_published=True,
+            )
+            AtRiskRecord.objects.filter(
+                section=section, exam=exam, resolved=False
+            ).update(notified=True)
+
+    AIBrainAuditLog.objects.create(
+        draft=None,
+        action="at_risk_sweep",
+        actor=actor,
+        details={
+            "section_id": section.id if section else None,
+            "exam_id": exam.id if exam else None,
+            "flagged_count": len(flagged_students),
+            "created": created,
+            "updated": updated,
+        },
+    )
+    return {"success": True, "created": created, "updated": updated, "notified": bool(flagged_students)}
+
+
+def resolve_at_risk_record(*, record: AtRiskRecord, actor: User) -> Dict:
+    record.resolved = True
+    record.resolved_by = actor
+    record.resolved_at = timezone.now()
+    record.save(update_fields=["resolved", "resolved_by", "resolved_at"])
+
+    AIBrainAuditLog.objects.create(
+        draft=None,
+        action="at_risk_resolved",
+        actor=actor,
+        details={"record_id": record.id, "student_id": record.student_id},
+    )
+    return {"success": True, "record_id": record.id}
 
 
 def flag_student(

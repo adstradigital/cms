@@ -5,11 +5,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .serializers import (
-    ClassSerializer, SectionSerializer, StudentSerializer, 
+    ClassSerializer, SectionSerializer, StudentSerializer,
     StudentRegistrationSerializer, StudentDocumentSerializer,
-    AdmissionInquirySerializer
+    AdmissionInquirySerializer, AdmissionInquiryDetailSerializer, LeadActivitySerializer
 )
-from .models import Class, Section, Student, StudentDocument, AdmissionInquiry
+from .models import Class, Section, Student, StudentDocument, AdmissionInquiry, LeadActivity
 from apps.permissions.mixins import RolePermissionMixin
 
 # ─── ViewSets ─────────────────────────────────────────────────────────────────
@@ -608,17 +608,22 @@ class StudentDocumentViewSet(RolePermissionMixin, viewsets.ModelViewSet):
 
 class AdmissionInquiryViewSet(RolePermissionMixin, viewsets.ModelViewSet):
     """
-    Handles CRM functionality for prospective students.
-    Admins can Track, Filter by Status, and Edit inquiries.
+    Advanced CRM for prospective student leads.
+    Supports pipeline tracking, activity logging, analytics, and bulk actions.
     """
-    required_permission = 'students.view' # or specific admissions permission
-    serializer_class = AdmissionInquirySerializer
+    required_permission = 'students.view'
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return AdmissionInquiryDetailSerializer
+        return AdmissionInquirySerializer
 
     def get_queryset(self):
         user = self.request.user
-        qs = AdmissionInquiry.objects.select_related("class_requested").all()
+        qs = AdmissionInquiry.objects.select_related(
+            "class_requested", "assigned_to"
+        ).prefetch_related("activities").all()
 
-        # Filter by school
         if not user.is_superuser and user.school:
             qs = qs.filter(school=user.school)
 
@@ -626,9 +631,30 @@ class AdmissionInquiryViewSet(RolePermissionMixin, viewsets.ModelViewSet):
         if status_filter:
             qs = qs.filter(status=status_filter)
 
+        source_filter = self.request.query_params.get("source")
+        if source_filter:
+            qs = qs.filter(source=source_filter)
+
+        priority_filter = self.request.query_params.get("priority")
+        if priority_filter:
+            qs = qs.filter(priority=priority_filter)
+
         search_query = self.request.query_params.get("search")
         if search_query:
-            qs = qs.filter(student_name__icontains=search_query)
+            qs = qs.filter(
+                Q(student_name__icontains=search_query) |
+                Q(guardian_name__icontains=search_query) |
+                Q(contact_phone__icontains=search_query) |
+                Q(contact_email__icontains=search_query)
+            )
+
+        follow_up = self.request.query_params.get("follow_up")
+        if follow_up == "overdue":
+            from django.utils import timezone
+            qs = qs.filter(follow_up_date__lt=timezone.now().date(), status__in=["New", "Contacted", "Under Review"])
+        elif follow_up == "today":
+            from django.utils import timezone
+            qs = qs.filter(follow_up_date=timezone.now().date())
 
         return qs
 
@@ -637,31 +663,121 @@ class AdmissionInquiryViewSet(RolePermissionMixin, viewsets.ModelViewSet):
         if not school and self.request.user.is_superuser:
             from apps.accounts.models import School
             school = School.objects.first()
-        serializer.save(school=school)
+        inquiry = serializer.save(school=school)
+        LeadActivity.objects.create(
+            inquiry=inquiry,
+            activity_type="Note",
+            description="Lead created.",
+            created_by=self.request.user,
+        )
+
+    def perform_update(self, serializer):
+        old_status = serializer.instance.status
+        inquiry = serializer.save()
+        new_status = inquiry.status
+        if old_status != new_status:
+            LeadActivity.objects.create(
+                inquiry=inquiry,
+                activity_type="Status Change",
+                description=f"Status changed from '{old_status}' to '{new_status}'.",
+                created_by=self.request.user,
+            )
+
+    @action(detail=True, methods=['POST'], url_path='log-activity')
+    def log_activity(self, request, pk=None):
+        inquiry = self.get_object()
+        serializer = LeadActivitySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(inquiry=inquiry, created_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['POST'], url_path='bulk-update')
+    def bulk_update(self, request):
+        ids = request.data.get("ids", [])
+        new_status = request.data.get("status")
+        if not ids or not new_status:
+            return Response({"error": "ids and status are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        qs = AdmissionInquiry.objects.filter(id__in=ids)
+        if not user.is_superuser and user.school:
+            qs = qs.filter(school=user.school)
+
+        updated_ids = list(qs.values_list('id', flat=True))
+        qs.update(status=new_status)
+
+        activities = [
+            LeadActivity(
+                inquiry_id=inq_id,
+                activity_type="Status Change",
+                description=f"Bulk status update to '{new_status}'.",
+                created_by=user,
+            )
+            for inq_id in updated_ids
+        ]
+        LeadActivity.objects.bulk_create(activities)
+        return Response({"updated": len(updated_ids)}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['GET'], url_path='analytics')
+    def analytics(self, request):
+        user = request.user
+        qs = AdmissionInquiry.objects.all()
+        if not user.is_superuser and user.school:
+            qs = qs.filter(school=user.school)
+
+        total = qs.count()
+        by_status = {
+            item['status']: item['count']
+            for item in qs.values('status').annotate(count=Count('id'))
+        }
+        by_source = {
+            item['source']: item['count']
+            for item in qs.values('source').annotate(count=Count('id'))
+        }
+        by_priority = {
+            item['priority']: item['count']
+            for item in qs.values('priority').annotate(count=Count('id'))
+        }
+
+        enrolled = by_status.get('Enrolled', 0)
+        conversion_rate = round((enrolled / total * 100), 1) if total else 0
+
+        from django.utils import timezone
+        today = timezone.now().date()
+        overdue_followups = qs.filter(
+            follow_up_date__lt=today,
+            status__in=["New", "Contacted", "Under Review"]
+        ).count()
+        followups_today = qs.filter(follow_up_date=today).count()
+
+        return Response({
+            "total": total,
+            "by_status": by_status,
+            "by_source": by_source,
+            "by_priority": by_priority,
+            "conversion_rate": conversion_rate,
+            "overdue_followups": overdue_followups,
+            "followups_today": followups_today,
+        })
 
     @action(detail=True, methods=['POST'], url_path='convert')
     def convert_to_student(self, request, pk=None):
-        """
-        Converts an AdmissionInquiry into a formal Student.
-        Auto-generates Username, Password, and Admission Number.
-        """
+        """Converts an AdmissionInquiry into a formal Student."""
         import random
-        
+
         inquiry = self.get_object()
-        
         if inquiry.status == 'Enrolled':
             return Response({"error": "This inquiry has already been converted."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Parse Name
+
         names = inquiry.student_name.strip().split()
         first_name = names[0] if names else 'Unknown'
         last_name = ' '.join(names[1:]) if len(names) > 1 else ''
-        
-        # Generate credentials
+
         rand_id = random.randint(1000, 9999)
         username = f"{first_name.lower().replace('.', '')}{rand_id}"
         admission_number = f"ADM-{rand_id}"
-        
+
         data = {
             'first_name': first_name,
             'last_name': last_name,
@@ -674,30 +790,33 @@ class AdmissionInquiryViewSet(RolePermissionMixin, viewsets.ModelViewSet):
             'previous_school': inquiry.previous_school,
             'health_notes': inquiry.notes,
         }
-        
+
         serializer = StudentRegistrationSerializer(data=data, context={'request': request})
         if serializer.is_valid():
             try:
                 from django.db import transaction
                 with transaction.atomic():
                     student = serializer.save()
-                    # Link to school
                     student.user.school = inquiry.school
                     student.user.save()
-                    
-                    # Update inquiry status automatically
                     inquiry.status = 'Enrolled'
                     inquiry.save()
+                    LeadActivity.objects.create(
+                        inquiry=inquiry,
+                        activity_type="Status Change",
+                        description=f"Lead converted to student. Admission No: {admission_number}.",
+                        created_by=request.user,
+                    )
             except Exception as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-                
+
             return Response({
-                "success": True, 
-                "student_id": student.id, 
+                "success": True,
+                "student_id": student.id,
                 "username": username,
                 "admission_number": admission_number
             }, status=status.HTTP_200_OK)
-            
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -733,7 +852,12 @@ def class_list_view(request):
         if not school:
             return Response({"error": "Your account is not linked to a school."}, status=status.HTTP_400_BAD_REQUEST)
             
-        serializer.save(school=school)
+        school_class = serializer.save(school=school)
+        try:
+            from apps.academics.compulsory import ensure_physical_education_subject_for_class
+            ensure_physical_education_subject_for_class(school_class=school_class)
+        except Exception:
+            pass
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     except Exception as e:

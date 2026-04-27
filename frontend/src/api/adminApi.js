@@ -136,7 +136,7 @@ const adminApi = {
   getAiTaskLogs: (params) => instance.get('/ai-brain/tasks/', { params }),
   getAiTaskStatus: (taskId) => instance.get(`/ai-brain/tasks/${taskId}/status/`),
   triggerAiTask: (data) => instance.post('/ai-brain/tasks/trigger/', data),
-
+  runAiTask: (data) => instance.post('/ai-brain/run/', data),
   // Notice Board / Events (Notifications)
   getNotifications: (params) => instance.get('/notifications/', { params }),
   createNotification: (data) => instance.post('/notifications/', data),

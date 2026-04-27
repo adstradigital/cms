@@ -13,12 +13,20 @@ export function SchoolProvider({ children }) {
     fetchConfig();
   }, []);
 
+  const DEFAULT_CONFIG = {
+    name: 'School',
+    tagline: '',
+    primary_color: '#00a676',
+    secondary_color: '#3b82f6',
+  };
+
   const fetchConfig = async () => {
     try {
       const res = await schoolApi.getConfig();
       setSchoolConfig(res.data);
-    } catch {
-      console.error('Failed to load school configuration');
+    } catch (err) {
+      console.error('Failed to load school configuration:', err?.response?.status, err?.message);
+      setSchoolConfig(DEFAULT_CONFIG);
     } finally {
       setLoading(false);
     }

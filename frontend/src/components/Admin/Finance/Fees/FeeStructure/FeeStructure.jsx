@@ -88,6 +88,330 @@ function FeeHeadModal({ editing, onClose, onSaved }) {
 }
 
 // ─── Structure Entry Modal ────────────────────────────────────────────────────
+function ConfigureFeeStructureModal({
+  categories,
+  classes,
+  academicYears,
+  initialAcademicYear,
+  initialClass,
+  onClose,
+  onSaved,
+}) {
+  const { push } = useToast();
+  const [academicYear, setAcademicYear] = useState(initialAcademicYear || '');
+  const [schoolClass, setSchoolClass] = useState(initialClass || '');
+  const [query, setQuery] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+
+  const filteredCategories = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return categories;
+    return (categories || []).filter((c) => String(c?.name || '').toLowerCase().includes(q));
+  }, [categories, query]);
+
+  const setRow = (key, patch) => {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  };
+
+  const ensureRows = (existingStructures = []) => {
+    const existingByCategoryId = new Map();
+    (existingStructures || []).forEach((s) => {
+      existingByCategoryId.set(String(s.category), s);
+    });
+
+    const baseDue = (() => {
+      const first = existingStructures?.[0]?.due_date;
+      return first ? String(first) : '';
+    })();
+    const baseTerm = (() => {
+      const first = existingStructures?.[0]?.term;
+      return first ? String(first) : 'monthly';
+    })();
+
+    setRows(
+      (categories || []).map((cat) => {
+        const existing = existingByCategoryId.get(String(cat.id));
+        return {
+          key: String(cat.id),
+          structure_id: existing?.id || null,
+          enabled: Boolean(existing),
+          category: cat.id,
+          category_name: cat.name,
+          category_type: cat.fee_type,
+          amount: existing ? String(existing.amount ?? '') : '',
+          due_date: existing ? String(existing.due_date ?? '') : baseDue,
+          term: existing ? String(existing.term ?? 'monthly') : baseTerm,
+          is_mandatory: existing ? Boolean(existing.is_mandatory) : !Boolean(cat.is_optional),
+          late_fine_per_day: existing ? String(existing.late_fine_per_day ?? 0) : '0',
+        };
+      })
+    );
+  };
+
+  useEffect(() => {
+    ensureRows([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories?.length]);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!academicYear || !schoolClass) {
+        ensureRows([]);
+        return;
+      }
+      setLoading(true);
+      try {
+        const r = await adminApi.getFeeStructures({ academic_year: academicYear, class: schoolClass });
+        ensureRows(r.data || []);
+      } catch {
+        push('Failed to load existing fee setup for this class.', 'error');
+        ensureRows([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [academicYear, schoolClass]);
+
+  const visibleRows = useMemo(() => {
+    const visibleKeys = new Set(filteredCategories.map((c) => String(c.id)));
+    return rows.filter((r) => visibleKeys.has(r.key));
+  }, [rows, filteredCategories]);
+
+  const selectAllVisible = () => {
+    const visibleKeys = new Set(filteredCategories.map((c) => String(c.id)));
+    setRows((prev) => prev.map((r) => (visibleKeys.has(r.key) ? { ...r, enabled: true } : r)));
+  };
+
+  const clearVisible = () => {
+    const visibleKeys = new Set(filteredCategories.map((c) => String(c.id)));
+    setRows((prev) => prev.map((r) => (visibleKeys.has(r.key) ? { ...r, enabled: false } : r)));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!academicYear || !schoolClass) return push('Select academic year and class.', 'error');
+
+    const selected = rows.filter((r) => r.enabled);
+    if (selected.length === 0) return push('Select at least one fee head.', 'warn');
+
+    const invalid = selected.find((r) => !r.amount || Number(r.amount) <= 0 || !r.due_date);
+    if (invalid) return push('Fill amount (>0) and due date for all selected heads.', 'error');
+
+    setSaving(true);
+    setProgress({ done: 0, total: selected.length });
+    try {
+      let done = 0;
+      for (const r of selected) {
+        const payload = {
+          academic_year: academicYear,
+          school_class: schoolClass,
+          category: r.category,
+          amount: r.amount,
+          due_date: r.due_date,
+          term: r.term,
+          is_mandatory: r.is_mandatory,
+          late_fine_per_day: r.late_fine_per_day || 0,
+        };
+
+        if (r.structure_id) await adminApi.updateFeeStructure(r.structure_id, payload);
+        else {
+          const created = await adminApi.createFeeStructure(payload);
+          const createdId = created?.data?.id;
+          if (createdId) setRow(r.key, { structure_id: createdId });
+        }
+
+        done += 1;
+        setProgress({ done, total: selected.length });
+      }
+
+      push('Fee structure configured.', 'success');
+      onSaved();
+    } catch {
+      push('Failed to save fee structure setup.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal} style={{ maxWidth: 1150 }}>
+        <div className={styles.modalHeader}>
+          <h3 className={styles.modalTitle}>Configure Fee Structure</h3>
+          <button className={styles.modalClose} onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <form onSubmit={handleSave}>
+          <div className={styles.modalBody}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Academic Year *</label>
+                <select className={styles.input} value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} required>
+                  <option value="">Select Year</option>
+                  {academicYears.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}
+                </select>
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Class *</label>
+                <select className={styles.input} value={schoolClass} onChange={(e) => setSchoolClass(e.target.value)} required>
+                  <option value="">Select Class</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Search Fee Heads</label>
+                <input className={styles.input} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Type to filter..." />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button type="button" className={styles.btnSecondary} onClick={selectAllVisible} disabled={loading || saving}>
+                  <CheckCircle size={14} /> Select All
+                </button>
+                <button type="button" className={styles.btnSecondary} onClick={clearVisible} disabled={loading || saving}>
+                  <XCircle size={14} /> Clear
+                </button>
+              </div>
+              {saving && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--finance-text-muted)', fontSize: 13, fontWeight: 700 }}>
+                  <Loader2 size={16} className={styles.spin} />
+                  Saving {progress.done}/{progress.total}
+                </div>
+              )}
+            </div>
+
+            {loading ? (
+              <div className={styles.loading} style={{ padding: 30 }}>
+                <Loader2 size={18} className={styles.spin} /> Loading existing setup...
+              </div>
+            ) : (
+              <div className={styles.tableResponsive} style={{ marginTop: 14 }}>
+                <table className={styles.table} style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 40, padding: '8px 8px' }}>Use</th>
+                      <th style={{ padding: '8px 8px' }}>Fee Head</th>
+                      <th style={{ width: 70, padding: '8px 8px' }}>Type</th>
+                      <th className={styles.textRight} style={{ width: 85, padding: '8px 8px' }}>Amount (₹)</th>
+                      <th style={{ width: 110, padding: '8px 8px' }}>Due Date</th>
+                      <th style={{ width: 95, padding: '8px 8px' }}>Frequency</th>
+                      <th style={{ width: 80, padding: '8px 8px' }}>Mandatory</th>
+                      <th className={styles.textRight} style={{ width: 80, padding: '8px 8px' }}>Fine/Day</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRows.length === 0 ? (
+                      <tr><td colSpan={8} className={styles.emptyState} style={{ padding: 30 }}>No fee heads match your search.</td></tr>
+                    ) : (
+                      visibleRows.map((r) => (
+                        <tr key={r.key}>
+                          <td style={{ padding: '8px 8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={r.enabled}
+                              onChange={(e) => setRow(r.key, { enabled: e.target.checked })}
+                              style={{ width: 15, height: 15 }}
+                            />
+                          </td>
+                          <td className={styles.textBold} style={{ padding: '8px 8px', fontSize: 13 }}>
+                            {r.category_name}
+                            {r.structure_id && (
+                              <span className={styles.badge} style={{ marginLeft: 6, padding: '2px 4px', fontSize: 9, background: '#ecfeff', color: '#0e7490' }}>
+                                Existing
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 8px' }}><span className={styles.badge} style={{ fontSize: 10, padding: '2px 6px' }}>{r.category_type}</span></td>
+                          <td className={styles.textRight} style={{ padding: '8px 8px' }}>
+                            <input
+                              className={styles.input}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={r.amount}
+                              disabled={!r.enabled}
+                              onChange={(e) => setRow(r.key, { amount: e.target.value })}
+                              style={{ width: 85, marginLeft: 'auto', padding: '5px 8px', fontSize: 13 }}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td style={{ padding: '8px 8px' }}>
+                            <input
+                              className={styles.input}
+                              type="date"
+                              value={r.due_date}
+                              disabled={!r.enabled}
+                              onChange={(e) => setRow(r.key, { due_date: e.target.value })}
+                              style={{ padding: '5px 8px', fontSize: 13, width: '100%' }}
+                            />
+                          </td>
+                          <td style={{ padding: '8px 8px' }}>
+                            <select
+                              className={styles.input}
+                              value={r.term}
+                              disabled={!r.enabled}
+                              onChange={(e) => setRow(r.key, { term: e.target.value })}
+                              style={{ padding: '5px 8px', fontSize: 13, width: '100%' }}
+                            >
+                              {TERMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ padding: '8px 8px' }}>
+                            <select
+                              className={styles.input}
+                              value={r.is_mandatory ? 'yes' : 'no'}
+                              disabled={!r.enabled}
+                              onChange={(e) => setRow(r.key, { is_mandatory: e.target.value === 'yes' })}
+                              style={{ padding: '5px 8px', fontSize: 13, width: '100%' }}
+                            >
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </td>
+                          <td className={styles.textRight} style={{ padding: '8px 8px' }}>
+                            <input
+                              className={styles.input}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={r.late_fine_per_day}
+                              disabled={!r.enabled}
+                              onChange={(e) => setRow(r.key, { late_fine_per_day: e.target.value })}
+                              style={{ width: 80, marginLeft: 'auto', padding: '5px 8px', fontSize: 13 }}
+                            />
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', color: 'var(--finance-text-muted)', fontSize: 13 }}>
+              <AlertTriangle size={16} />
+              This modal creates/updates selected fee heads for the chosen class and year. It does not auto-delete unchecked existing entries.
+            </div>
+          </div>
+
+          <div className={styles.modalFooter}>
+            <button type="button" className={styles.btnSecondary} onClick={onClose} disabled={saving}>Close</button>
+            <button type="submit" className={styles.btnPrimary} disabled={saving || loading}>
+              {saving ? <Loader2 size={16} className={styles.spin} /> : null} Save Setup
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function StructureModal({ editing, categories, classes, academicYears, onClose, onSaved }) {
   const [form, setForm] = useState(editing || { academic_year: '', school_class: '', category: '', amount: '', due_date: '', term: 'monthly', is_mandatory: true, late_fine_per_day: 0 });
   const [instalments, setInstalments] = useState([]);
@@ -304,6 +628,7 @@ export default function FeeStructure() {
   const [headModal, setHeadModal] = useState(null);
   const [structModal, setStructModal] = useState(null);
   const [copyModal, setCopyModal] = useState(false);
+  const [configModal, setConfigModal] = useState(false);
 
   const { push } = useToast();
 
@@ -398,6 +723,7 @@ export default function FeeStructure() {
           <div className={styles.cardHeader} style={{ padding: 24 }}>
             <div><h3 className={styles.cardTitle}>Class Fee Structures</h3><p className={styles.cardSubtitle}>Assign fee heads to classes and set amounts</p></div>
             <div style={{ display: 'flex', gap: 12 }}>
+              <button className={styles.btnSecondary} onClick={() => setConfigModal(true)}><DollarSign size={14} /> Configure</button>
               <button className={styles.btnSecondary} onClick={() => setCopyModal(true)}><Copy size={14} /> Copy Setup</button>
               <button className={styles.btnPrimary} onClick={() => setStructModal({})}><Plus size={14} /> Assign Fee</button>
             </div>
@@ -433,6 +759,46 @@ export default function FeeStructure() {
             </table>
           </div>
         </div>
+      )}
+
+      {configModal && (
+        <ConfigureFeeStructureModal
+          categories={categories}
+          classes={classes}
+          academicYears={academicYears}
+          initialAcademicYear={filterYear}
+          initialClass={filterClass}
+          onClose={() => setConfigModal(false)}
+          onSaved={() => { setConfigModal(false); fetchStructures(); }}
+        />
+      )}
+
+      {headModal && (
+        <FeeHeadModal
+          editing={headModal?.id ? headModal : null}
+          onClose={() => setHeadModal(null)}
+          onSaved={() => { setHeadModal(null); fetchAll(); }}
+        />
+      )}
+
+      {structModal && (
+        <StructureModal
+          editing={structModal?.id ? structModal : null}
+          categories={categories}
+          classes={classes}
+          academicYears={academicYears}
+          onClose={() => setStructModal(null)}
+          onSaved={() => { setStructModal(null); fetchStructures(); }}
+        />
+      )}
+
+      {copyModal && (
+        <CopyStructureModal
+          classes={classes}
+          academicYears={academicYears}
+          onClose={() => setCopyModal(false)}
+          onSaved={() => { setCopyModal(false); fetchStructures(); }}
+        />
       )}
     </div>
   );

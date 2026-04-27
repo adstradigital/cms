@@ -71,6 +71,8 @@ class Subject(models.Model):
     weekly_periods = models.PositiveSmallIntegerField(default=5, help_text="Number of periods per week for this subject.")
     color_code = models.CharField(max_length=20, default="#3b82f6")
     term_type = models.CharField(max_length=20, choices=TERM_CHOICES, default="annual")
+    is_active = models.BooleanField(default=True)
+    is_compulsory = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

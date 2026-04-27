@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Callable, Any
 
 from apps.accounts.models import AcademicYear
 from apps.students.models import Section
 
+from .analytics.scoring import (
+    confidence_from_success,
+    score_timetable_generation,
+    score_timetable_validation,
+)
+from .analytics.teacher_load import TeacherLoadAnalyzer
 from .access.classes import (
     ensure_class_teacher_first_period_support,
     ensure_subject_allocations,
@@ -16,8 +22,10 @@ from .automation.at_risk_detector import AtRiskDetector
 from .automation.report_card_builder import ReportCardBuilder
 from .automation.timetable_generator import TimetableConstraintValidator, TimetableDraftGenerator
 from .data_context import get_database_inventory
+from .llm import merge_constraint_preferences
 from .models import AIBrainDraft
 from .permissions import has_ai_brain_access
+from .result import AIBrainResult
 
 
 class AIBrainEngine:
@@ -28,6 +36,49 @@ class AIBrainEngine:
     def __init__(self):
         self.report_card_builder = ReportCardBuilder()
         self.at_risk_detector = AtRiskDetector()
+        self.teacher_load_analyzer = TeacherLoadAnalyzer()
+
+        self._task_handlers: Dict[str, Callable[[Dict[str, Any], Any], Dict]] = {
+            "inventory": self._task_inventory,
+            "timetable.validate": self._task_timetable_validate,
+            "timetable.generate": self._task_timetable_generate,
+            "timetable.apply": self._task_timetable_apply,
+            "report.student": self._task_report_student,
+            "report.section": self._task_report_section,
+            "risk.section": self._task_risk_section,
+            "teacher.load": self._task_teacher_load,
+        }
+
+        self._task_aliases = {
+            "timetable": "timetable.generate",
+            "risk": "risk.section",
+            "report": "report.student",
+            "report_card": "report.student",
+            "teacher": "teacher.load",
+        }
+
+    def run(self, *, task: str, payload: Optional[Dict] = None, actor=None) -> Dict:
+        """
+        Unified entrypoint for the AI Brain (System AI).
+
+        Example:
+            AIBrainEngine().run(task="timetable", payload={...}, actor=request.user)
+        """
+        payload = payload or {}
+        if not task:
+            return AIBrainResult(success=False, task="", error="task is required.").as_dict()
+
+        resolved = self._task_aliases.get(task, task)
+        handler = self._task_handlers.get(resolved)
+        if not handler:
+            return AIBrainResult(
+                success=False,
+                task=resolved,
+                error=f"Unknown task '{resolved}'.",
+                meta={"available_tasks": sorted(self._task_handlers.keys())},
+            ).as_dict()
+
+        return handler(payload, actor)
 
     def resolve_context(self, section_id: int, academic_year_id: Optional[int] = None):
         section = get_section(section_id)
@@ -50,11 +101,24 @@ class AIBrainEngine:
         working_days,
     ) -> Dict:
         validator = TimetableConstraintValidator(section=section, academic_year=academic_year)
-        return validator.validate_existing(
+        result = validator.validate_existing(
             periods_per_day=periods_per_day,
             break_periods=break_periods,
             working_days=working_days,
         )
+        # Backwards compatible: existing validator returns `valid`, but the system AI uses `success`.
+        result.setdefault("success", bool(result.get("valid")))
+        issues = result.get("issues") or []
+        result.setdefault("scores", score_timetable_validation(issues))
+        result.setdefault("confidence", 94)
+        result.setdefault(
+            "explanations",
+            [
+                "Validation checks timetable constraints (break slots, missing subject/teacher, teacher clashes).",
+                f"Detected {len(issues)} issue(s).",
+            ],
+        )
+        return result
 
     def run_timetable_generation(
         self,
@@ -100,6 +164,17 @@ class AIBrainEngine:
             output_payload=result,
         )
         result["draft_id"] = draft.id
+
+        is_partial = bool(result.get("is_partial"))
+        result.setdefault("scores", score_timetable_generation(result))
+        result.setdefault("confidence", confidence_from_success(bool(result.get("success")), partial=is_partial))
+        result.setdefault(
+            "explanations",
+            [
+                "Timetable is generated using deterministic constraints + heuristic scoring (no external LLM).",
+                "Each class slot contains `reasons` and a human-readable `explanation` to justify placement.",
+            ],
+        )
 
         if persist:
             save_meta = save_timetable_draft(
@@ -179,3 +254,222 @@ class AIBrainEngine:
         if academic_year_id:
             return AcademicYear.objects.filter(id=academic_year_id).first()
         return get_school_active_academic_year(section.school_class.school_id)
+
+    # -------------------------
+    # Task handlers (System AI)
+    # -------------------------
+
+    def _task_inventory(self, payload: Dict[str, Any], actor) -> Dict:
+        allowed, reason = has_ai_brain_access(actor, section=None)
+        if not allowed:
+            return AIBrainResult(success=False, task="inventory", error=reason).as_dict()
+        data = self.get_data_inventory(
+            school_id=int(payload["school_id"]) if payload.get("school_id") else None,
+            academic_year_id=int(payload["academic_year_id"]) if payload.get("academic_year_id") else None,
+            include_models=bool(payload.get("include_models", True)),
+            include_entity_counts=bool(payload.get("include_entity_counts", True)),
+        )
+        return AIBrainResult(
+            success=True,
+            task="inventory",
+            data=data,
+            scores={"inventory_freshness": 90.0},
+            confidence=92,
+            explanations=["Inventory summarizes available database entities for AI Brain modules."],
+        ).as_dict()
+
+    def _task_timetable_validate(self, payload: Dict[str, Any], actor) -> Dict:
+        section_id = payload.get("section_id")
+        if not section_id:
+            return AIBrainResult(success=False, task="timetable.validate", error="section_id is required.").as_dict()
+        section, academic_year, error = self.resolve_context(
+            section_id=int(section_id),
+            academic_year_id=int(payload["academic_year_id"]) if payload.get("academic_year_id") else None,
+        )
+        if error:
+            return AIBrainResult(success=False, task="timetable.validate", error=error.get("error")).as_dict()
+        allowed, reason = has_ai_brain_access(actor, section=section)
+        if not allowed:
+            return AIBrainResult(success=False, task="timetable.validate", error=reason).as_dict()
+
+        result = self.run_timetable_validation(
+            section=section,
+            academic_year=academic_year,
+            periods_per_day=int(payload.get("periods_per_day") or 8),
+            break_periods=payload.get("break_periods") or [4],
+            working_days=payload.get("working_days") or [1, 2, 3, 4, 5, 6],
+        )
+        return AIBrainResult(
+            success=bool(result.get("success", True)),
+            task="timetable.validate",
+            data=result,
+            scores=result.get("scores") or {},
+            confidence=result.get("confidence"),
+            explanations=result.get("explanations") or [],
+        ).as_dict()
+
+    def _task_timetable_generate(self, payload: Dict[str, Any], actor) -> Dict:
+        section_id = payload.get("section_id")
+        if not section_id:
+            return AIBrainResult(success=False, task="timetable.generate", error="section_id is required.").as_dict()
+        section, academic_year, error = self.resolve_context(
+            section_id=int(section_id),
+            academic_year_id=int(payload["academic_year_id"]) if payload.get("academic_year_id") else None,
+        )
+        if error:
+            return AIBrainResult(success=False, task="timetable.generate", error=error.get("error")).as_dict()
+        allowed, reason = has_ai_brain_access(actor, section=section)
+        if not allowed:
+            return AIBrainResult(success=False, task="timetable.generate", error=reason).as_dict()
+
+        config = payload.get("config") or payload
+        if isinstance(config, dict) and "preferences" in config:
+            config = {**config, "preferences": merge_constraint_preferences(config.get("preferences") or {})}
+        result = self.run_timetable_generation(
+            section=section,
+            academic_year=academic_year,
+            config=config,
+            requested_by=actor,
+            persist=bool(payload.get("persist", False)),
+        )
+        return AIBrainResult(
+            success=bool(result.get("success")),
+            task="timetable.generate",
+            data=result,
+            scores=result.get("scores") or {},
+            confidence=result.get("confidence"),
+            explanations=result.get("explanations") or [],
+            meta={"draft_id": result.get("draft_id")},
+        ).as_dict()
+
+    def _task_timetable_apply(self, payload: Dict[str, Any], actor) -> Dict:
+        draft_id = payload.get("draft_id")
+        if not draft_id:
+            return AIBrainResult(success=False, task="timetable.apply", error="draft_id is required.").as_dict()
+        result = self.apply_timetable_draft(
+            draft_id=int(draft_id),
+            actor=actor,
+            manual_override_payload=payload.get("manual_override_payload") or {},
+        )
+        return AIBrainResult(
+            success=bool(result.get("success")),
+            task="timetable.apply",
+            data=result,
+            confidence=92 if result.get("success") else 60,
+            explanations=["Draft apply is human-in-the-loop; manual overrides are recorded for auditability."],
+        ).as_dict()
+
+    def _task_report_student(self, payload: Dict[str, Any], actor) -> Dict:
+        student_id = payload.get("student_id")
+        exam_id = payload.get("exam_id")
+        if not student_id or not exam_id:
+            return AIBrainResult(
+                success=False,
+                task="report.student",
+                error="student_id and exam_id are required.",
+            ).as_dict()
+
+        # Security: Resolve student to check section-based access
+        from apps.students.models import Student
+
+        try:
+            student = Student.objects.get(id=int(student_id))
+            section = student.section
+        except Student.DoesNotExist:
+            return AIBrainResult(success=False, task="report.student", error="Student not found.").as_dict()
+
+        allowed, reason = has_ai_brain_access(actor, section=section)
+        if not allowed:
+            return AIBrainResult(success=False, task="report.student", error=reason).as_dict()
+
+        result = self.run_report_card_builder(
+            student_id=int(student_id),
+            exam_id=int(exam_id),
+            persist=bool(payload.get("persist", False)),
+        )
+        return AIBrainResult(
+            success=bool(result.get("success")),
+            task="report.student",
+            data=result,
+            scores=result.get("scores") or {},
+            confidence=result.get("confidence"),
+            explanations=result.get("explanations") or [],
+        ).as_dict()
+
+    def _task_report_section(self, payload: Dict[str, Any], actor) -> Dict:
+        section_id = payload.get("section_id")
+        exam_id = payload.get("exam_id")
+        if not section_id or not exam_id:
+            return AIBrainResult(success=False, task="report.section", error="section_id and exam_id are required.").as_dict()
+
+        section, _, error = self.resolve_context(section_id=int(section_id), academic_year_id=None)
+        if error:
+            return AIBrainResult(success=False, task="report.section", error=error.get("error")).as_dict()
+        allowed, reason = has_ai_brain_access(actor, section=section)
+        if not allowed:
+            return AIBrainResult(success=False, task="report.section", error=reason).as_dict()
+
+        result = self.run_report_card_builder_for_section(
+            section_id=int(section_id),
+            exam_id=int(exam_id),
+            persist=bool(payload.get("persist", True)),
+        )
+        return AIBrainResult(
+            success=bool(result.get("success")),
+            task="report.section",
+            data=result,
+            scores=result.get("scores") or {},
+            confidence=result.get("confidence"),
+            explanations=result.get("explanations") or [],
+        ).as_dict()
+
+    def _task_risk_section(self, payload: Dict[str, Any], actor) -> Dict:
+        section_id = payload.get("section_id")
+        exam_id = payload.get("exam_id")
+        if not section_id or not exam_id:
+            return AIBrainResult(success=False, task="risk.section", error="section_id and exam_id are required.").as_dict()
+
+        section, _, error = self.resolve_context(section_id=int(section_id), academic_year_id=None)
+        if error:
+            return AIBrainResult(success=False, task="risk.section", error=error.get("error")).as_dict()
+        allowed, reason = has_ai_brain_access(actor, section=section)
+        if not allowed:
+            return AIBrainResult(success=False, task="risk.section", error=reason).as_dict()
+
+        result = self.run_at_risk_detector(
+            section_id=int(section_id),
+            exam_id=int(exam_id),
+            min_attendance_pct=float(payload.get("min_attendance_pct", 75.0)),
+            min_marks_pct=float(payload.get("min_marks_pct", 40.0)),
+        )
+        return AIBrainResult(
+            success=bool(result.get("success")),
+            task="risk.section",
+            data=result,
+            scores=result.get("scores") or {},
+            confidence=result.get("confidence"),
+            explanations=result.get("explanations") or [],
+        ).as_dict()
+
+    def _task_teacher_load(self, payload: Dict[str, Any], actor) -> Dict:
+        allowed, reason = has_ai_brain_access(actor, section=None)
+        if not allowed:
+            return AIBrainResult(success=False, task="teacher.load", error=reason).as_dict()
+
+        academic_year_id = payload.get("academic_year_id")
+        if not academic_year_id:
+            return AIBrainResult(success=False, task="teacher.load", error="academic_year_id is required.").as_dict()
+
+        result = self.teacher_load_analyzer.analyze(
+            academic_year_id=int(academic_year_id),
+            working_days=payload.get("working_days"),
+            school_id=int(payload["school_id"]) if payload.get("school_id") else None,
+        )
+        return AIBrainResult(
+            success=True,
+            task="teacher.load",
+            data=result,
+            scores=result.get("scores") or {},
+            confidence=result.get("confidence"),
+            explanations=result.get("explanations") or [],
+        ).as_dict()

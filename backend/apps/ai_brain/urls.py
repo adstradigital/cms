@@ -4,6 +4,7 @@ from . import views
 
 
 urlpatterns = [
+    path("run/", views.run_ai_task_view, name="ai-brain-run"),
     path("inventory/", views.data_inventory_view, name="ai-brain-inventory"),
     path("timetable/validate/", views.validate_timetable_view, name="ai-brain-timetable-validate"),
     path("timetable/generate/", views.generate_timetable_view, name="ai-brain-timetable-generate"),

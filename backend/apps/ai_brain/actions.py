@@ -59,6 +59,17 @@ def save_timetable_draft(
                         end_time=e_time,
                     )
                     continue
+                if slot_type in {"event", "custom"}:
+                    Period.objects.create(
+                        timetable=timetable,
+                        period_number=period_number,
+                        period_type="custom",
+                        custom_title=slot.get("custom_title") or slot.get("customTitle") or slot.get("title") or "Special Event",
+                        teacher_id=slot.get("teacher_id"),
+                        start_time=s_time,
+                        end_time=e_time,
+                    )
+                    continue
                 if slot_type != "class":
                     continue
 

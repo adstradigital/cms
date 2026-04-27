@@ -16,6 +16,30 @@ engine = AIBrainEngine()
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+def run_ai_task_view(request):
+    task = request.data.get("task")
+    payload = request.data.get("payload") or {}
+    # Allow clients to send task params at top-level as well.
+    if isinstance(payload, dict) and request.data.get("payload") is None:
+        payload = {k: v for k, v in request.data.items() if k not in {"task"}}
+
+    result = engine.run(task=task, payload=payload, actor=request.user)
+
+    if result.get("success"):
+        return Response(result, status=status.HTTP_200_OK)
+
+    error = (result or {}).get("error", "")
+    if "permission" in error.lower() or "access" in error.lower():
+        return Response(result, status=status.HTTP_403_FORBIDDEN)
+    if "not found" in error.lower():
+        return Response(result, status=status.HTTP_404_NOT_FOUND)
+    if "required" in error.lower() or "unknown task" in error.lower():
+        return Response(result, status=status.HTTP_400_BAD_REQUEST)
+    return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def validate_timetable_view(request):
     section_id = request.data.get("section_id")
     if not section_id:

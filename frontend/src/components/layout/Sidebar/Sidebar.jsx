@@ -41,6 +41,7 @@ const menuSections = {
       title: 'MAIN',
       items: [
         { label: 'Dashboard', href: '/admins', icon: LayoutDashboard },
+        { label: 'AI Brain', href: '/admins/ai-brain', icon: BrainCircuit },
         { label: 'Teachers', href: '/admins/teachers', icon: Users },
         { label: 'Students', href: '/admins/students', icon: GraduationCap },
         { label: 'Classes', href: '/admins/classes', icon: School },

@@ -762,6 +762,31 @@ const SubjectCenter = ({ section = null }) => {
                 <h3 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--color-primary)' }}>{subjectForAllocations.name} Master Control</h3>
                 <p style={{ margin: 0, fontSize: 13, color: 'var(--theme-text-muted)' }}>Manage the qualified teacher pool and section assignments</p>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {subjectForAllocations.is_compulsory && (
+                  <span style={{ fontSize: 10, fontWeight: 800, background: '#0ea5e9', color: 'white', borderRadius: 20, padding: '4px 10px' }}>
+                    Compulsory
+                  </span>
+                )}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 800, color: '#0f172a' }}>
+                  <input
+                    type="checkbox"
+                    checked={subjectForAllocations.is_active !== false}
+                    onChange={async (e) => {
+                      const next = e.target.checked;
+                      try {
+                        const res = await adminApi.updateSubject(subjectForAllocations.id, { is_active: next });
+                        const updated = res.data;
+                        setSubjects((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+                        setSubjectForAllocations(updated);
+                      } catch (err) {
+                        alert(err?.response?.data?.error || 'Failed to update subject status.');
+                      }
+                    }}
+                  />
+                  Active
+                </label>
+              </div>
               <button className={styles.iconBtn} onClick={() => setIsViewingAllocations(false)}><X size={24} /></button>
             </div>
 

@@ -200,8 +200,15 @@ def auto_allocate_subjects(section, academic_year):
     from apps.staff.models import Staff
     from django.db import transaction
 
+    # Ensure compulsory PT/PE subject exists
+    try:
+        from .compulsory import ensure_physical_education_subject_for_class
+        ensure_physical_education_subject_for_class(school_class=section.school_class)
+    except Exception:
+        pass
+
     # Get subjects for this class
-    subjects = Subject.objects.filter(school_class=section.school_class)
+    subjects = Subject.objects.filter(school_class=section.school_class, is_active=True)
     if not subjects.exists():
         return False, "No subjects found for this class. Please define subjects first."
 
@@ -328,16 +335,23 @@ def timetable_draft_view(request):
                         
                         period_type = 'class'
                         if p_data.get('isBreak'): period_type = 'break'
-                        if p_data.get('isEvent'): period_type = 'class' # or special
+                        if p_data.get('isEvent'): period_type = 'custom'
                         
                         # Find subject and teacher if provided
                         subject = None
-                        if p_data.get('subject'):
+                        custom_title = None
+                        if p_data.get('isEvent'):
+                            custom_title = p_data.get('customTitle') or p_data.get('subject') or 'Special Event'
+                        elif p_data.get('subject'):
                             subject = Subject.objects.filter(name=p_data['subject']).first()
                         
                         teacher = None
                         if p_data.get('teacher'):
-                            teacher = User.objects.filter(first_name=p_data['teacher'].split(' ')[0]).first()
+                            parts = [x for x in str(p_data['teacher']).split(' ') if x]
+                            if len(parts) >= 2:
+                                teacher = User.objects.filter(first_name=parts[0], last_name=parts[-1]).first()
+                            if not teacher and parts:
+                                teacher = User.objects.filter(first_name=parts[0]).first()
 
                         Period.objects.create(
                             timetable=tt,
@@ -345,6 +359,7 @@ def timetable_draft_view(request):
                             period_type=period_type,
                             subject=subject,
                             teacher=teacher,
+                            custom_title=custom_title,
                             start_time=data.get('periods')[idx]['time'].split(' - ')[0],
                             end_time=data.get('periods')[idx]['time'].split(' - ')[1]
                         )
@@ -954,6 +969,7 @@ def timetable_settings_view(request):
             "time_format": request.data.get("time_format", "24h"),
             "time_zone": request.data.get("time_zone", "UTC"),
             "locale": request.data.get("locale", "en-US"),
+            "preferences": request.data.get("preferences", {}) or {},
         }
         ay.save()
         return Response({"message": "Settings updated."}, status=200)
@@ -971,7 +987,8 @@ def timetable_settings_view(request):
         "time_format": config.get("time_format", "24h"),
         "time_zone": config.get("time_zone", "UTC"),
         "locale": config.get("locale", "en-US"),
-        "working_days": working_day_names
+        "working_days": working_day_names,
+        "preferences": config.get("preferences", {}) or {},
     }, status=status.HTTP_200_OK)
 
 @api_view(["GET", "PATCH", "DELETE"])

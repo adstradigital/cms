@@ -733,7 +733,12 @@ def class_list_view(request):
         if not school:
             return Response({"error": "Your account is not linked to a school."}, status=status.HTTP_400_BAD_REQUEST)
             
-        serializer.save(school=school)
+        school_class = serializer.save(school=school)
+        try:
+            from apps.academics.compulsory import ensure_physical_education_subject_for_class
+            ensure_physical_education_subject_for_class(school_class=school_class)
+        except Exception:
+            pass
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     except Exception as e:

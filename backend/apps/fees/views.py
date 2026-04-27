@@ -372,6 +372,29 @@ def student_fee_statement_view(request, student_id):
         total_paid = sum(p.amount_paid for p in payments if p.status == "paid")
         total_due = total_fee - total_paid
 
+        # Build per-structure dues breakdown
+        paid_by_structure = {}
+        for p in payments:
+            if p.status == "paid":
+                paid_by_structure.setdefault(p.fee_structure_id, Decimal("0"))
+                paid_by_structure[p.fee_structure_id] += p.amount_paid
+
+        fee_dues = []
+        for s in structures:
+            struct_paid = paid_by_structure.get(s.id, Decimal("0"))
+            balance = s.amount - struct_paid
+            fee_dues.append({
+                "fee_structure": s.id,
+                "category_name": s.category.name,
+                "category_type": s.category.fee_type,
+                "total_amount": float(s.amount),
+                "amount_paid": float(struct_paid),
+                "balance_due": float(max(Decimal("0"), balance)),
+                "due_date": str(s.due_date),
+                "term": s.term,
+                "is_mandatory": s.is_mandatory,
+            })
+
         return Response({
             "student_id": student.id,
             "student_name": student.user.get_full_name(),
@@ -380,6 +403,7 @@ def student_fee_statement_view(request, student_id):
             "total_fee": total_fee,
             "total_paid": total_paid,
             "total_due": max(Decimal("0"), total_due),
+            "fee_dues": fee_dues,
             "payments": FeePaymentSerializer(payments, many=True).data,
         }, status=status.HTTP_200_OK)
     except Exception as e:

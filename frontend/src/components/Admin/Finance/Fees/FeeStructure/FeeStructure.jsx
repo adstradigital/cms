@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Tag, X, Loader2, DollarSign, CheckCircle, XCircle, Copy, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Tag, X, Loader2, DollarSign, CheckCircle, XCircle, Copy, AlertTriangle, Eye } from 'lucide-react';
 import adminApi from '@/api/adminApi';
-import { useToast } from '@/components/common/useToast';
+import { useToast, ToastStack } from '@/components/common/useToast';
 import styles from '../../shared/FinanceLayout.module.css';
 
 const FEE_TYPES = [
@@ -25,10 +25,9 @@ const TERMS = [
 const BLANK_HEAD = { name: '', description: '', fee_type: 'academic', is_optional: false, is_refundable: false };
 
 // ─── Fee Head Modal ───────────────────────────────────────────────────────────
-function FeeHeadModal({ editing, onClose, onSaved }) {
+function FeeHeadModal({ editing, onClose, onSaved, push }) {
   const [form, setForm] = useState(editing || BLANK_HEAD);
   const [saving, setSaving] = useState(false);
-  const { push } = useToast();
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const handleSubmit = async (e) => {
@@ -96,8 +95,8 @@ function ConfigureFeeStructureModal({
   initialClass,
   onClose,
   onSaved,
+  push,
 }) {
-  const { push } = useToast();
   const [academicYear, setAcademicYear] = useState(initialAcademicYear || '');
   const [schoolClass, setSchoolClass] = useState(initialClass || '');
   const [query, setQuery] = useState('');
@@ -412,13 +411,12 @@ function ConfigureFeeStructureModal({
   );
 }
 
-function StructureModal({ editing, categories, classes, academicYears, onClose, onSaved }) {
+function StructureModal({ editing, categories, classes, academicYears, onClose, onSaved, push }) {
   const [form, setForm] = useState(editing || { academic_year: '', school_class: '', category: '', amount: '', due_date: '', term: 'monthly', is_mandatory: true, late_fine_per_day: 0 });
   const [instalments, setInstalments] = useState([]);
   const [addingInstalment, setAddingInstalment] = useState(false);
   const [newIns, setNewIns] = useState({ instalment_number: '', amount: '', due_date: '' });
   const [saving, setSaving] = useState(false);
-  const { push } = useToast();
 
   useEffect(() => {
     if (editing?.id) { adminApi.getFeeInstalments({ fee_structure: editing.id }).then(r => setInstalments(r.data || [])).catch(() => {}); }
@@ -551,10 +549,9 @@ function StructureModal({ editing, categories, classes, academicYears, onClose, 
 }
 
 // ─── Copy Structure Modal ─────────────────────────────────────────────────────
-function CopyStructureModal({ classes, academicYears, onClose, onSaved }) {
+function CopyStructureModal({ classes, academicYears, onClose, onSaved, push }) {
   const [form, setForm] = useState({ from_class: '', to_class: '', academic_year: '', increase_percent: 0 });
   const [saving, setSaving] = useState(false);
-  const { push } = useToast();
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const handleCopy = async (e) => {
@@ -613,6 +610,58 @@ function CopyStructureModal({ classes, academicYears, onClose, onSaved }) {
   );
 }
 
+// ─── View Group Modal ─────────────────────────────────────────────────────────
+function ViewGroupModal({ group, onClose, terms }) {
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal} style={{ maxWidth: 800 }}>
+        <div className={styles.modalHeader}>
+          <h3 className={styles.modalTitle}>Fee Structure for {group.class_name}</h3>
+          <button className={styles.modalClose} onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className={styles.modalBody}>
+          <div className={styles.tableResponsive}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Fee Head</th>
+                  <th>Type</th>
+                  <th className={styles.textRight}>Amount</th>
+                  <th>Due Date</th>
+                  <th>Frequency</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.components.map(s => (
+                  <tr key={s.id}>
+                    <td>{s.category_name}</td>
+                    <td><span className={styles.badge}>{s.category_type}</span></td>
+                    <td className={`${styles.fontMono} ${styles.textRight}`}>₹{Number(s.amount).toLocaleString('en-IN')}</td>
+                    <td style={{ color: 'var(--finance-text-muted)' }}>{s.due_date}</td>
+                    <td style={{ color: 'var(--finance-text-muted)' }}>{terms.find(t => t.value === s.term)?.label || s.term}</td>
+                    <td>{s.is_mandatory ? <span className={styles.badgePaid} style={{ padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 800 }}>Mandatory</span> : <span className={styles.badgeDanger} style={{ padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 800 }}>Optional</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={2} className={styles.textRight} style={{ fontWeight: 800, padding: '16px 8px' }}>Total Amount</td>
+                  <td className={`${styles.fontMono} ${styles.textRight}`} style={{ fontWeight: 800, padding: '16px 8px', color: '#0f172a' }}>₹{group.total_amount.toLocaleString('en-IN')}</td>
+                  <td colSpan={3}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        <div className={styles.modalFooter}>
+          <button type="button" className={styles.btnSecondary} onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function FeeStructure() {
   const [categories, setCategories] = useState([]);
@@ -629,8 +678,9 @@ export default function FeeStructure() {
   const [structModal, setStructModal] = useState(null);
   const [copyModal, setCopyModal] = useState(false);
   const [configModal, setConfigModal] = useState(false);
+  const [viewGroupModal, setViewGroupModal] = useState(null);
 
-  const { push } = useToast();
+  const { push, toasts, dismiss } = useToast();
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -667,6 +717,26 @@ export default function FeeStructure() {
     const grp = {}; categories.forEach(c => { if (!grp[c.fee_type]) grp[c.fee_type] = []; grp[c.fee_type].push(c); });
     return grp;
   }, [categories]);
+
+  const groupedStructures = useMemo(() => {
+    const groups = {};
+    structures.forEach(s => {
+      const key = `${s.academic_year || 'any'}-${s.school_class || s.class_name}`;
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          class_name: s.class_name,
+          school_class: s.school_class,
+          academic_year: s.academic_year,
+          total_amount: 0,
+          components: []
+        };
+      }
+      groups[key].components.push(s);
+      groups[key].total_amount += Number(s.amount) || 0;
+    });
+    return Object.values(groups);
+  }, [structures]);
 
   if (loading) return <div className={styles.loading}><Loader2 size={18} className={styles.spin} /> Loading setup data...</div>;
 
@@ -735,22 +805,17 @@ export default function FeeStructure() {
           
           <div className={styles.tableResponsive} style={{ borderTop: 'none', borderRadius: 0, margin: 0 }}>
             <table className={styles.table}>
-              <thead><tr><th>Class</th><th>Fee Head</th><th>Type</th><th className={styles.textRight}>Amount</th><th>Due Date</th><th>Frequency</th><th>Status</th><th className={styles.textRight}>Fine/Day</th><th className={styles.textRight}>Actions</th></tr></thead>
+              <thead><tr><th>Class</th><th>Fee Components</th><th className={styles.textRight}>Total Amount</th><th className={styles.textRight}>Actions</th></tr></thead>
               <tbody>
-                {structures.length === 0 ? <tr><td colSpan={9} className={styles.emptyState}>No class structures assigned.</td></tr> : structures.map(s => (
-                  <tr key={s.id}>
-                    <td className={styles.textBold}>{s.class_name}</td>
-                    <td>{s.category_name}</td>
-                    <td><span className={styles.badge}>{s.category_type}</span></td>
-                    <td className={`${styles.fontMono} ${styles.textRight}`} style={{ fontWeight: 700 }}>₹{Number(s.amount).toLocaleString('en-IN')}</td>
-                    <td style={{ color: 'var(--finance-text-muted)' }}>{s.due_date}</td>
-                    <td style={{ color: 'var(--finance-text-muted)' }}>{TERMS.find(t => t.value === s.term)?.label}</td>
-                    <td>{s.is_mandatory ? <span className={styles.badgePaid} style={{ padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 800 }}>Mandatory</span> : <span className={styles.badgeDanger} style={{ padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 800 }}>Optional</span>}</td>
-                    <td className={styles.textRight} style={{ color: 'var(--finance-text-muted)' }}>₹{s.late_fine_per_day}</td>
+                {groupedStructures.length === 0 ? <tr><td colSpan={4} className={styles.emptyState}>No class structures assigned.</td></tr> : groupedStructures.map(g => (
+                  <tr key={g.key}>
+                    <td className={styles.textBold} style={{ fontSize: 14 }}>{g.class_name}</td>
+                    <td style={{ color: 'var(--finance-text-muted)' }}>{g.components.length} fee heads</td>
+                    <td className={`${styles.fontMono} ${styles.textRight}`} style={{ fontWeight: 800, color: '#0f172a' }}>₹{g.total_amount.toLocaleString('en-IN')}</td>
                     <td>
                       <div className={styles.actions}>
-                        <button className={styles.iconBtn} onClick={() => setStructModal(s)}><Pencil size={14} /></button>
-                        <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} onClick={() => deleteStructure(s.id)}><Trash2 size={14} /></button>
+                        <button className={styles.btnSecondary} style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => setViewGroupModal(g)}><Eye size={14} /> View Structure</button>
+                        <button className={styles.iconBtn} onClick={() => setConfigModal({ class: g.school_class, year: g.academic_year })} title="Edit Structure"><Pencil size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -766,10 +831,11 @@ export default function FeeStructure() {
           categories={categories}
           classes={classes}
           academicYears={academicYears}
-          initialAcademicYear={filterYear}
-          initialClass={filterClass}
+          initialAcademicYear={typeof configModal === 'object' ? configModal.year : filterYear}
+          initialClass={typeof configModal === 'object' ? configModal.class : filterClass}
           onClose={() => setConfigModal(false)}
           onSaved={() => { setConfigModal(false); fetchStructures(); }}
+          push={push}
         />
       )}
 
@@ -778,6 +844,7 @@ export default function FeeStructure() {
           editing={headModal?.id ? headModal : null}
           onClose={() => setHeadModal(null)}
           onSaved={() => { setHeadModal(null); fetchAll(); }}
+          push={push}
         />
       )}
 
@@ -789,6 +856,7 @@ export default function FeeStructure() {
           academicYears={academicYears}
           onClose={() => setStructModal(null)}
           onSaved={() => { setStructModal(null); fetchStructures(); }}
+          push={push}
         />
       )}
 
@@ -798,8 +866,19 @@ export default function FeeStructure() {
           academicYears={academicYears}
           onClose={() => setCopyModal(false)}
           onSaved={() => { setCopyModal(false); fetchStructures(); }}
+          push={push}
         />
       )}
+
+      {viewGroupModal && (
+        <ViewGroupModal
+          group={viewGroupModal}
+          onClose={() => setViewGroupModal(null)}
+          terms={TERMS}
+        />
+      )}
+
+      <ToastStack toasts={toasts} dismiss={dismiss} />
     </div>
   );
 }

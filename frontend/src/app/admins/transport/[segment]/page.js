@@ -5,6 +5,7 @@ const VALID_SEGMENTS = new Set([
   'buses',
   'routes',
   'tracking',
+  'attendance',
   'students',
   'fees',
   'complaints',

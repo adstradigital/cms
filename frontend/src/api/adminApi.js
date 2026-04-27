@@ -17,7 +17,7 @@ const adminApi = {
   bulkMarkAttendance: (data) => instance.post('/attendance/attendance/bulk-mark/', data),
   getAttendanceOverview: (params) => instance.get('/attendance/admin/overview/', { params }),
   getStudentAttendanceDetail: (studentId, params) => instance.get(`/attendance/admin/student/${studentId}/`, { params }),
-  sendAttendanceWarning: (data) => instance.post('/attendance/admin/warning/', data),
+  sendAttendanceWarning: (data) => instance.post('/attendance/admin/warnings/', data),
   // Academics - Subjects & Syllabus
   getSubjects: (params) => instance.get('/academics/subjects/', { params }),
   createSubject: (data) => instance.post('/academics/subjects/', data),

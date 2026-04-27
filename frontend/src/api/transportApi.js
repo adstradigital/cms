@@ -27,6 +27,13 @@ const transportApi = {
   updateStudentTransport: (id, data) => instance.patch(`/transport/students/${id}/`, data),
   removeStudentTransport: (id) => instance.delete(`/transport/students/${id}/`),
 
+  // Student boarding/exiting logs
+  getStudentLogs: (params) => instance.get('/transport/student-logs/', { params }),
+  upsertStudentLog: (data) => instance.post('/transport/student-logs/', data),
+  bulkUpsertStudentLogs: (data) => instance.post('/transport/student-logs/bulk/', data),
+  updateStudentLog: (id, data) => instance.patch(`/transport/student-logs/${id}/`, data),
+  deleteStudentLog: (id) => instance.delete(`/transport/student-logs/${id}/`),
+
   // Live location logs
   getLocationLogs: (params) => instance.get('/transport/locations/', { params }),
   createLocationLog: (data) => instance.post('/transport/locations/', data),

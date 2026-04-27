@@ -370,8 +370,6 @@ const SECTIONS = {
   canteen: [
     { label: "Overview", href: "/admins/canteen/dashboard" },
     { label: "Menu Management", href: "/admins/canteen/menu" },
-    { label: "Orders", href: "/admins/canteen/orders" },
-    { label: "Payments", href: "/admins/canteen/payments" },
     { label: "Inventory", href: "/admins/canteen/inventory" },
     { label: "Suppliers", href: "/admins/canteen/suppliers" },
     { label: "Reports", href: "/admins/canteen/reports" },

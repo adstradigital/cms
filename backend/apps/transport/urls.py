@@ -22,6 +22,11 @@ urlpatterns = [
     path("students/", views.student_transport_list_view, name="student-transport-list"),
     path("students/<int:pk>/", views.student_transport_detail_view, name="student-transport-detail"),
 
+    # Student boarding/exiting logs
+    path("student-logs/", views.student_transport_log_list_view, name="student-transport-log-list"),
+    path("student-logs/bulk/", views.student_transport_log_bulk_upsert_view, name="student-transport-log-bulk"),
+    path("student-logs/<int:pk>/", views.student_transport_log_detail_view, name="student-transport-log-detail"),
+
     # Transport fee management and payment
     path("fees/", views.transport_fee_list_view, name="transport-fee-list"),
     path("fees/<int:pk>/", views.transport_fee_detail_view, name="transport-fee-detail"),

@@ -110,8 +110,13 @@ const canteenApi = {
   createStaffProfile: (data) => instance.post('/canteen/staff-profiles/', data),
   getStaffAttendance: (params) => instance.get('/canteen/staff-attendance/', { params }),
   createStaffAttendance: (data) => instance.post('/canteen/staff-attendance/', data),
-  getStaffTasks: (params) => instance.get('/canteen/staff-tasks/', { params }),
-  createStaffTask: (data) => instance.post('/canteen/staff-tasks/', data),
+  updateStaffAttendance: (id, data) => instance.patch(`/canteen/staff-attendance/${id}/`, data),
+  getStaffAnnouncements: (params) => instance.get('/canteen/staff-announcements/', { params }),
+  createStaffAnnouncement: (data) => instance.post('/canteen/staff-announcements/', data),
+  updateStaffAnnouncement: (id, data) => instance.patch(`/canteen/staff-announcements/${id}/`, data),
+  deleteStaffAnnouncement: (id) => instance.delete(`/canteen/staff-announcements/${id}/`),
+  getStaffLeaves: (params) => instance.get('/canteen/staff-leaves/', { params }),
+  deleteStaffAttendance: (id) => instance.delete(`/canteen/staff-attendance/${id}/`),
 };
 
 export default canteenApi;

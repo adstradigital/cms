@@ -629,6 +629,7 @@ class CanteenStaffAnnouncement(models.Model):
     category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default="announcement")
     title = models.CharField(max_length=200)
     message = models.TextField()
+    date = models.DateField(null=True, blank=True)
     target_staff = models.ForeignKey(CanteenStaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name="announcements")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_canteen_staff_announcements")
     created_at = models.DateTimeField(auto_now_add=True)

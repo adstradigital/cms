@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Count, Sum, Q, F
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_time
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +15,7 @@ from .models import (
     RouteStop,
     SchoolBus,
     StudentTransport,
+    StudentTransportLog,
     TransportComplaint,
     TransportFee,
     TransportFeePayment,
@@ -24,6 +26,7 @@ from .serializers import (
     RouteStopSerializer,
     SchoolBusSerializer,
     StudentTransportSerializer,
+    StudentTransportLogSerializer,
     TransportComplaintSerializer,
     TransportFeePaySerializer,
     TransportFeeSerializer,
@@ -370,6 +373,266 @@ def student_transport_detail_view(request, pk):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(StudentTransportSerializer(allocation).data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def student_transport_log_list_view(request):
+    try:
+        if request.method == "GET":
+            date = request.query_params.get("date")
+            route_id = request.query_params.get("route")
+            student_id = request.query_params.get("student")
+
+            qs = StudentTransportLog.objects.select_related(
+                "student",
+                "student__user",
+                "route",
+                "bus",
+                "stop",
+                "recorded_by",
+            ).all()
+
+            if date:
+                qs = qs.filter(date=date)
+            if route_id:
+                qs = qs.filter(route_id=route_id)
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+
+            return Response(StudentTransportLogSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+        serializer = StudentTransportLogSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        student = serializer.validated_data["student"]
+        date = serializer.validated_data["date"]
+        boarding_time = serializer.validated_data.get("boarding_time")
+        exiting_time = serializer.validated_data.get("exiting_time")
+
+        allocation = StudentTransport.objects.select_related(
+            "stop",
+            "stop__route",
+            "stop__route__bus",
+        ).filter(student=student, is_active=True).first()
+
+        route = allocation.stop.route if allocation else None
+        bus = route.bus if route else None
+        stop = allocation.stop if allocation else None
+
+        log, created = StudentTransportLog.objects.update_or_create(
+            student=student,
+            date=date,
+            defaults={
+                "route": route,
+                "bus": bus,
+                "stop": stop,
+                "boarding_time": boarding_time,
+                "exiting_time": exiting_time,
+                "source": "manual",
+                "recorded_by": request.user,
+            },
+        )
+
+        payload = StudentTransportLogSerializer(log).data
+        return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def student_transport_log_detail_view(request, pk):
+    try:
+        try:
+            log = StudentTransportLog.objects.select_related(
+                "student",
+                "student__user",
+                "route",
+                "bus",
+                "stop",
+                "recorded_by",
+            ).get(pk=pk)
+        except StudentTransportLog.DoesNotExist:
+            return Response({"error": "Log not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "DELETE":
+            log.delete()
+            return Response({"message": "Log deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+        data = request.data or {}
+
+        if "boarding_time" in data:
+            raw = data.get("boarding_time")
+            log.boarding_time = None if raw in (None, "") else parse_time(str(raw))
+            if raw not in (None, "") and log.boarding_time is None:
+                return Response({"error": "Invalid boarding_time."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if "exiting_time" in data:
+            raw = data.get("exiting_time")
+            log.exiting_time = None if raw in (None, "") else parse_time(str(raw))
+            if raw not in (None, "") and log.exiting_time is None:
+                return Response({"error": "Invalid exiting_time."}, status=status.HTTP_400_BAD_REQUEST)
+
+        allocation = StudentTransport.objects.select_related(
+            "stop",
+            "stop__route",
+            "stop__route__bus",
+        ).filter(student=log.student, is_active=True).first()
+
+        route = allocation.stop.route if allocation else None
+        bus = route.bus if route else None
+        stop = allocation.stop if allocation else None
+
+        log.route = route
+        log.bus = bus
+        log.stop = stop
+        log.recorded_by = request.user
+        log.source = "manual"
+        log.save()
+
+        return Response(StudentTransportLogSerializer(log).data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def student_transport_log_bulk_upsert_view(request):
+    """
+    Bulk upsert student boarding/exiting times for a date (optionally scoped to a route).
+    Body:
+      { "date": "YYYY-MM-DD", "route": <id?>, "items": [{"student": <id>, "boarding_time": "HH:MM", "exiting_time": "HH:MM"}] }
+    """
+    try:
+        date = parse_date(str(request.data.get("date") or ""))
+        if not date:
+            return Response({"error": "date is required (YYYY-MM-DD)."}, status=status.HTTP_400_BAD_REQUEST)
+
+        route_id = request.data.get("route")
+        items = request.data.get("items", [])
+        if not isinstance(items, list):
+            return Response({"error": "items must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        normalized = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            student_id = item.get("student")
+            if not student_id:
+                continue
+            normalized[int(student_id)] = {
+                "boarding_time": item.get("boarding_time"),
+                "exiting_time": item.get("exiting_time"),
+            }
+
+        student_ids = list(normalized.keys())
+        if not student_ids:
+            return Response({"results": [], "created": 0, "updated": 0}, status=status.HTTP_200_OK)
+
+        allocation_qs = StudentTransport.objects.select_related(
+            "stop",
+            "stop__route",
+            "stop__route__bus",
+        ).filter(student_id__in=student_ids, is_active=True)
+        if route_id:
+            allocation_qs = allocation_qs.filter(stop__route_id=route_id)
+        allocations = list(allocation_qs)
+        alloc_by_student = {a.student_id: a for a in allocations}
+
+        existing_logs = list(StudentTransportLog.objects.filter(date=date, student_id__in=student_ids))
+        existing_by_student = {log.student_id: log for log in existing_logs}
+
+        now = timezone.now()
+        to_create = []
+        to_update = []
+        created_count = 0
+        updated_count = 0
+
+        for student_id, values in normalized.items():
+            allocation = alloc_by_student.get(student_id)
+            route = allocation.stop.route if allocation else None
+            bus = route.bus if route else None
+            stop = allocation.stop if allocation else None
+
+            raw_board = values.get("boarding_time")
+            raw_exit = values.get("exiting_time")
+
+            boarding_time = None if raw_board in (None, "") else parse_time(str(raw_board))
+            if raw_board not in (None, "") and boarding_time is None:
+                return Response({"error": f"Invalid boarding_time for student {student_id}."}, status=status.HTTP_400_BAD_REQUEST)
+
+            exiting_time = None if raw_exit in (None, "") else parse_time(str(raw_exit))
+            if raw_exit not in (None, "") and exiting_time is None:
+                return Response({"error": f"Invalid exiting_time for student {student_id}."}, status=status.HTTP_400_BAD_REQUEST)
+
+            log = existing_by_student.get(student_id)
+            if log:
+                log.route = route
+                log.bus = bus
+                log.stop = stop
+                log.boarding_time = boarding_time
+                log.exiting_time = exiting_time
+                log.source = "manual"
+                log.recorded_by = request.user
+                log.updated_at = now
+                to_update.append(log)
+            else:
+                if boarding_time is None and exiting_time is None:
+                    continue
+                to_create.append(
+                    StudentTransportLog(
+                        student_id=student_id,
+                        date=date,
+                        route=route,
+                        bus=bus,
+                        stop=stop,
+                        boarding_time=boarding_time,
+                        exiting_time=exiting_time,
+                        source="manual",
+                        recorded_by=request.user,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+
+        with transaction.atomic():
+            if to_create:
+                StudentTransportLog.objects.bulk_create(to_create)
+                created_count = len(to_create)
+
+            if to_update:
+                StudentTransportLog.objects.bulk_update(
+                    to_update,
+                    ["route", "bus", "stop", "boarding_time", "exiting_time", "source", "recorded_by", "updated_at"],
+                )
+                updated_count = len(to_update)
+
+        result_qs = StudentTransportLog.objects.select_related(
+            "student",
+            "student__user",
+            "route",
+            "bus",
+            "stop",
+            "recorded_by",
+        ).filter(date=date, student_id__in=student_ids)
+        if route_id:
+            result_qs = result_qs.filter(route_id=route_id)
+
+        return Response(
+            {
+                "results": StudentTransportLogSerializer(result_qs, many=True).data,
+                "created": created_count,
+                "updated": updated_count,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

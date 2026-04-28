@@ -254,6 +254,8 @@ const adminApi = {
   updateExpenseEntry: (id, data) => instance.patch(`/expenses/entries/${id}/`, data),
   deleteExpenseEntry: (id) => instance.delete(`/expenses/entries/${id}/`),
   approveExpense: (id, data) => instance.post(`/expenses/entries/${id}/approve/`, data),
+  getExpenseBalanceSheet: (params) => instance.get('/expenses/balance-sheet/', { params }),
+  getTransactionHistory: (params) => instance.get('/expenses/transactions/', { params }),
 
   // ─── Payroll ──────────────────────────────────────────────────────────────
   getPayrollAnalytics: () => instance.get('/payroll/analytics/'),

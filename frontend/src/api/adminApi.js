@@ -177,6 +177,7 @@ const adminApi = {
   getFeePayments: (params) => instance.get('/fees/payments/', { params }),
   createFeePayment: (data) => instance.post('/fees/payments/', data),
   updateFeePayment: (id, data) => instance.patch(`/fees/payments/${id}/`, data),
+  sendFeeReceiptEmail: (id, data) => instance.post(`/fees/payments/${id}/email-receipt/`, data),
 
   // Reports & Tracking
   getFeeSectionOverview: (params) => instance.get('/fees/section-overview/', { params }),

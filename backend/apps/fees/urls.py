@@ -24,6 +24,7 @@ urlpatterns = [
     # Fee Payments
     path("payments/", views.fee_payment_list_view, name="fee-payment-list"),
     path("payments/<int:pk>/", views.fee_payment_detail_view, name="fee-payment-detail"),
+    path("payments/<int:pk>/email-receipt/", views.send_receipt_email_view, name="fee-payment-email-receipt"),
 
     # Reporting / Tracking
     path("students/<int:student_id>/statement/", views.student_fee_statement_view, name="student-fee-statement"),

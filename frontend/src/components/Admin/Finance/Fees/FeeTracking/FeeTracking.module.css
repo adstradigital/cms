@@ -1,0 +1,256 @@
+/* ─── Summary Cards ─────────────────────────────────────────────────────── */
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.summaryCard { padding: 20px; }
+.summaryLabel {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--finance-text-muted);
+  margin-bottom: 6px;
+}
+.summaryValue { font-size: 26px; font-weight: 900; }
+
+/* ─── Student Cell in Table ─────────────────────────────────────────────── */
+.studentCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.avatarSm {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #091426;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+.clickableRow { cursor: pointer; }
+.clickableRow:hover td { background-color: #f0f4f9 !important; }
+.chevronBtn { opacity: 0; transition: opacity 0.15s; }
+.clickableRow:hover .chevronBtn { opacity: 1; }
+
+/* ─── Slide-over Overlay + Panel ────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 20, 38, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 9999;
+}
+.panel {
+  background: #fff;
+  width: 100%;
+  max-width: 720px;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 48px rgba(9, 20, 38, 0.22);
+  animation: slideIn 0.24s ease;
+}
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+/* ─── Panel Header ──────────────────────────────────────────────────────── */
+.panelHeader {
+  padding: 20px 24px;
+  border-bottom: 1px solid #dfe3e8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fafbfc;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.studentInfo { display: flex; align-items: center; gap: 14px; }
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #091426;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.studentName {
+  font-size: 18px;
+  font-weight: 700;
+  color: #171c20;
+  font-family: 'Manrope', 'Inter', system-ui, sans-serif;
+}
+.studentMeta { font-size: 13px; color: #45474c; margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+.metaDot { color: #c5c6cd; }
+.closeBtn {
+  background: none;
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  color: #45474c;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.closeBtn:hover { background: #f0f4f9; color: #171c20; }
+
+/* ─── Panel Body ────────────────────────────────────────────────────────── */
+.panelBody { padding: 24px; flex: 1; }
+
+/* ─── Stat Grid ─────────────────────────────────────────────────────────── */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.statCard {
+  border: 1px solid #dfe3e8;
+  border-left: 3px solid #dfe3e8;
+  border-radius: 8px;
+  padding: 16px 18px;
+  background: #fafbfc;
+}
+.statGreen  { border-left-color: #16a34a; }
+.statRed    { border-left-color: #dc2626; }
+.statBlue   { border-left-color: #0891b2; }
+.statOrange { border-left-color: #d97706; }
+.statPurple { border-left-color: #7c3aed; }
+
+.statLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #45474c;
+  margin-bottom: 6px;
+}
+.statValue { font-size: 20px; font-weight: 900; font-family: monospace; color: #171c20; }
+.statSub   { font-size: 12px; color: #8590a6; margin-top: 3px; }
+.green  { color: #16a34a; }
+.red    { color: #dc2626; }
+.blue   { color: #0891b2; }
+.orange { color: #d97706; }
+.purple { color: #7c3aed; }
+
+/* ─── Progress Bar ──────────────────────────────────────────────────────── */
+.progressSection { margin-bottom: 24px; }
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #45474c;
+  margin-bottom: 8px;
+}
+.progressPct { font-weight: 800; color: #171c20; font-size: 14px; }
+.progressTrack {
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progressFill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Tab Bar (inside panel) ────────────────────────────────────────────── */
+.tabBar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #dfe3e8;
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+.tabBtn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #45474c;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  white-space: nowrap;
+  margin-bottom: -1px;
+  font-family: inherit;
+}
+.tabBtn:hover { color: #091426; }
+.tabActive { color: #091426; border-bottom-color: #091426; }
+
+/* ─── Charts ────────────────────────────────────────────────────────────── */
+.chartsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.chartCard {
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  padding: 20px 16px 12px;
+}
+.chartTitle {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #45474c;
+  margin-bottom: 14px;
+}
+.chartFullWidth { grid-column: 1 / -1; }
+
+/* ─── Receipt Card ──────────────────────────────────────────────────────── */
+.receiptCard {
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  background: #fafbfc;
+}
+.receiptLeft { flex: 1; min-width: 0; }
+.receiptNumber { font-weight: 800; font-family: monospace; font-size: 14px; color: #171c20; }
+.receiptMeta { font-size: 12px; color: #45474c; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px; }
+.receiptMetaItem { display: flex; align-items: center; gap: 4px; }
+.receiptRight { text-align: right; flex-shrink: 0; }
+.receiptAmount { font-size: 18px; font-weight: 900; font-family: monospace; }
+.receiptFine { font-size: 12px; color: #d97706; margin-top: 2px; }
+
+/* ─── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .statGrid { grid-template-columns: 1fr 1fr; }
+  .chartsGrid { grid-template-columns: 1fr; }
+  .panel { max-width: 100%; }
+}

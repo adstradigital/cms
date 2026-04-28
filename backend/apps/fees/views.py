@@ -5,6 +5,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from django.conf import settings
+from django.core.mail import send_mail
 from django.db.models import Sum, Max
 from apps.students.models import Student
 from .models import FeeCategory, FeeStructure, FeeInstalment, FeePayment, Concession, StudentConcession, Donation, AnnualBudget, BudgetItem
@@ -500,6 +502,88 @@ def fee_section_overview_view(request):
             "total_fee": total_fee,
             "students": out,
         }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Email Receipt ────────────────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def send_receipt_email_view(request, pk):
+    """Email a payment receipt to the student/parent."""
+    try:
+        try:
+            payment = FeePayment.objects.select_related(
+                "student", "student__user", "student__user__school",
+                "fee_structure", "fee_structure__category",
+                "collected_by",
+            ).get(pk=pk)
+        except FeePayment.DoesNotExist:
+            return Response({"error": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        email_to = request.data.get("email") or payment.student.user.email
+        if not email_to:
+            return Response({"error": "No email address available for this student."}, status=status.HTTP_400_BAD_REQUEST)
+
+        school = payment.student.user.school
+        school_name = school.name if school else "Campus Management System"
+        school_address = school.address if school else ""
+        school_phone = school.phone if school else ""
+
+        subject = f"Fee Payment Receipt – {payment.receipt_number}"
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f5f7fa;margin:0;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+    <div style="background:#091426;color:#fff;padding:28px 32px;text-align:center;">
+      <div style="font-size:22px;font-weight:900;letter-spacing:0.5px;">{school_name}</div>
+      <div style="font-size:13px;opacity:0.7;margin-top:4px;">Fee Payment Receipt</div>
+    </div>
+    <div style="padding:28px 32px;">
+      <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:16px 20px;border-radius:4px;margin-bottom:24px;">
+        <div style="font-size:12px;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Payment Confirmed</div>
+        <div style="font-size:28px;font-weight:900;color:#15803d;margin-top:4px;">₹{payment.amount_paid:,.2f}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-weight:600;">Receipt No.</td><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;font-weight:700;font-family:monospace;">{payment.receipt_number}</td></tr>
+        <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-weight:600;">Student Name</td><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;font-weight:600;">{payment.student.user.get_full_name()}</td></tr>
+        <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-weight:600;">Admission No.</td><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">{payment.student.admission_number}</td></tr>
+        <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-weight:600;">Fee Head</td><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">{payment.fee_structure.category.name}</td></tr>
+        <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-weight:600;">Payment Method</td><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">{payment.payment_method.upper()}</td></tr>
+        {f'<tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;color:#64748b;font-weight:600;">Transaction ID</td><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;font-family:monospace;">{payment.transaction_id}</td></tr>' if payment.transaction_id else ''}
+        <tr><td style="padding:10px 0;color:#64748b;font-weight:600;">Date of Payment</td><td style="padding:10px 0;">{payment.payment_date}</td></tr>
+      </table>
+      <div style="margin-top:28px;padding-top:20px;border-top:1px dashed #e2e8f0;text-align:center;color:#94a3b8;font-size:12px;">
+        This is a computer-generated receipt and does not require a physical signature.<br>
+        {school_address}{' · ' if school_address and school_phone else ''}{school_phone}
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+
+        plain_body = (
+            f"Receipt No: {payment.receipt_number}\n"
+            f"Student: {payment.student.user.get_full_name()} ({payment.student.admission_number})\n"
+            f"Fee Head: {payment.fee_structure.category.name}\n"
+            f"Amount Paid: ₹{payment.amount_paid}\n"
+            f"Payment Method: {payment.payment_method.upper()}\n"
+            f"Date: {payment.payment_date}\n\n"
+            f"This is a computer-generated receipt.\n{school_name}"
+        )
+
+        send_mail(
+            subject=subject,
+            message=plain_body,
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@school.com"),
+            recipient_list=[email_to],
+            html_message=html_body,
+            fail_silently=False,
+        )
+        return Response({"message": f"Receipt sent to {email_to}."}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -35,7 +35,7 @@ class DeductionType(models.Model):
         ("fixed", "Fixed Amount"),
         ("percent", "Percentage of Basic"),
     ]
-    name = models.CharField(max_length=100)  # PF, ESI, TDS, Professional Tax…
+    name = models.CharField(max_length=100)
     calculation_type = models.CharField(max_length=10, choices=CALC_CHOICES, default="fixed")
     value = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     is_mandatory = models.BooleanField(default=False)
@@ -56,7 +56,7 @@ class PayrollRun(models.Model):
         ("processed", "Processed"),
         ("paid", "Paid"),
     ]
-    month = models.PositiveSmallIntegerField()   # 1–12
+    month = models.PositiveSmallIntegerField()
     year = models.PositiveSmallIntegerField()
     academic_year = models.ForeignKey(AcademicYear, on_delete=models.SET_NULL, null=True, related_name="payroll_runs")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="draft")
@@ -81,12 +81,14 @@ class PayrollEntry(models.Model):
     staff = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name="payroll_entries")
     salary_structure = models.ForeignKey(SalaryStructure, on_delete=models.SET_NULL, null=True, related_name="entries")
 
-    # Earnings (computed from structure at run time)
+    # Earnings
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     hra = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     da = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     ta = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     other_allowances = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    incentive_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    increment_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     gross_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # Deductions
@@ -100,9 +102,16 @@ class PayrollEntry(models.Model):
     net_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     working_days = models.PositiveSmallIntegerField(default=26)
     paid_days = models.PositiveSmallIntegerField(default=26)
+    attendance_pct = models.DecimalField(max_digits=5, decimal_places=2, default=100)
     is_paid = models.BooleanField(default=False)
     payment_date = models.DateField(null=True, blank=True)
     payment_method = models.CharField(max_length=20, blank=True)
+
+    # AI-generated narrative explanations
+    ai_deduction_reason = models.TextField(blank=True)
+    ai_increment_reason = models.TextField(blank=True)
+    ai_incentive_reason = models.TextField(blank=True)
+    ai_overall_summary = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.staff} — {self.payroll_run}"
@@ -110,3 +119,36 @@ class PayrollEntry(models.Model):
     class Meta:
         db_table = "payroll_entries"
         unique_together = [("payroll_run", "staff")]
+
+
+# ─── Increment / Bonus History ────────────────────────────────────────────────
+
+class IncrementHistory(models.Model):
+    INCREMENT_TYPES = [
+        ("merit", "Merit / Performance"),
+        ("promotion", "Promotion"),
+        ("annual", "Annual Revision"),
+        ("adjustment", "Salary Adjustment"),
+    ]
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name="increment_history")
+    salary_structure = models.ForeignKey(
+        SalaryStructure, on_delete=models.SET_NULL, null=True, blank=True, related_name="increment_history"
+    )
+    increment_type = models.CharField(max_length=20, choices=INCREMENT_TYPES, default="annual")
+    old_basic = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    new_basic = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    increment_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    reason = models.TextField(blank=True)
+    ai_reason = models.TextField(blank=True)
+    approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_increments"
+    )
+    effective_from = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.staff} — +₹{self.increment_amount} ({self.increment_type})"
+
+    class Meta:
+        db_table = "increment_history"
+        ordering = ["-effective_from"]

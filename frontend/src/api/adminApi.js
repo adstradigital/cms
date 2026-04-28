@@ -256,6 +256,7 @@ const adminApi = {
   approveExpense: (id, data) => instance.post(`/expenses/entries/${id}/approve/`, data),
 
   // ─── Payroll ──────────────────────────────────────────────────────────────
+  getPayrollAnalytics: () => instance.get('/payroll/analytics/'),
   getSalaryStructures: (params) => instance.get('/payroll/salary-structures/', { params }),
   createSalaryStructure: (data) => instance.post('/payroll/salary-structures/', data),
   updateSalaryStructure: (id, data) => instance.patch(`/payroll/salary-structures/${id}/`, data),
@@ -267,9 +268,15 @@ const adminApi = {
   getPayrollRuns: (params) => instance.get('/payroll/runs/', { params }),
   createPayrollRun: (data) => instance.post('/payroll/runs/', data),
   getPayrollRun: (id) => instance.get(`/payroll/runs/${id}/`),
-  processPayrollRun: (id) => instance.post(`/payroll/runs/${id}/process/`),
+  processPayrollRun: (id, data) => instance.post(`/payroll/runs/${id}/process/`, data || {}),
+  generatePayrollInsights: (id) => instance.post(`/payroll/runs/${id}/insights/`),
   updatePayrollEntry: (id, data) => instance.patch(`/payroll/entries/${id}/`, data),
   getPayrollEntry: (id) => instance.get(`/payroll/entries/${id}/`),
+  getIncrements: (params) => instance.get('/payroll/increments/', { params }),
+  createIncrement: (data) => instance.post('/payroll/increments/', data),
+  updateIncrement: (id, data) => instance.patch(`/payroll/increments/${id}/`, data),
+  deleteIncrement: (id) => instance.delete(`/payroll/increments/${id}/`),
+  generateIncrementAiReason: (data) => instance.post('/payroll/increments/generate-reason/', data),
 
   // ─── Budget ───────────────────────────────────────────────────────────────
   getDonations: (params) => instance.get('/fees/donations/', { params }),

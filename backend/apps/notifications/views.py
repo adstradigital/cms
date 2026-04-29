@@ -1,7 +1,8 @@
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 
 from .models import Notification
@@ -10,6 +11,7 @@ from .serializers import NotificationSerializer
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def notification_list_view(request):
     try:
         if request.method == "GET":
@@ -29,13 +31,19 @@ def notification_list_view(request):
                 qs = qs.filter(target_class_id=class_id)
             if published in ["true", "false"]:
                 qs = qs.filter(is_published=(published == "true"))
-            return Response(NotificationSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+            return Response(
+                NotificationSerializer(qs, many=True, context={"request": request}).data,
+                status=status.HTTP_200_OK,
+            )
 
-        serializer = NotificationSerializer(data=request.data)
+        serializer = NotificationSerializer(data=request.data, context={"request": request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         notification = serializer.save(created_by=request.user)
-        return Response(NotificationSerializer(notification).data, status=status.HTTP_201_CREATED)
+        return Response(
+            NotificationSerializer(notification, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -43,6 +51,7 @@ def notification_list_view(request):
 
 @api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def notification_detail_view(request, pk):
     try:
         try:
@@ -51,10 +60,15 @@ def notification_detail_view(request, pk):
             return Response({"error": "Notification not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if request.method == "GET":
-            return Response(NotificationSerializer(notification).data, status=status.HTTP_200_OK)
+            return Response(
+                NotificationSerializer(notification, context={"request": request}).data,
+                status=status.HTTP_200_OK,
+            )
 
         if request.method == "PATCH":
-            serializer = NotificationSerializer(notification, data=request.data, partial=True)
+            serializer = NotificationSerializer(
+                notification, data=request.data, partial=True, context={"request": request}
+            )
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()

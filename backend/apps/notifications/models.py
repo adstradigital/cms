@@ -17,9 +17,11 @@ class Notification(models.Model):
         ("fee", "Fee"),
         ("attendance", "Attendance"),
         ("general", "General"),
+        ("announcement", "Announcement"),
+        ("message", "Message"),
     ]
     title = models.CharField(max_length=255)
-    body = models.TextField()
+    body = models.TextField(blank=True, default="")
     notification_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="general")
     target_audience = models.CharField(max_length=20, choices=TARGET_CHOICES, default="all")
     target_class = models.ForeignKey(
@@ -40,6 +42,10 @@ class Notification(models.Model):
     is_published = models.BooleanField(default=False)
     publish_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Rich content: image attachment & structured data (tables, rank lists, etc.)
+    image = models.ImageField(upload_to="notices/", null=True, blank=True)
+    rich_content = models.JSONField(null=True, blank=True, help_text="Structured content like tables, rank lists, exam rooms")
 
     def __str__(self):
         return self.title

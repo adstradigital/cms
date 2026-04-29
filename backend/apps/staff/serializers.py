@@ -24,7 +24,7 @@ class StaffSerializer(serializers.ModelSerializer):
         model = Staff
         fields = [
             'id', 'user', 'full_name', 'email', 'phone', 'employee_id', 'designation',
-            'joining_date', 'status', 'is_teaching_staff', 'role_name',
+            'department', 'joining_date', 'status', 'is_teaching_staff', 'role_name',
             'user_role_id', 'is_active', 'experience_years', 'qualification',
             'first_name', 'last_name', 'teaching_subject_ids', 'teaching_subject_names',
             'specialization'
@@ -147,6 +147,7 @@ class TeacherDetailSerializer(serializers.ModelSerializer):
 
 class StaffAttendanceSerializer(serializers.ModelSerializer):
     staff_name = serializers.CharField(source='staff.user.get_full_name', read_only=True)
+    department = serializers.CharField(source='staff.department', read_only=True)
 
     class Meta:
         model = StaffAttendance

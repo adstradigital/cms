@@ -197,6 +197,14 @@ const adminApi = {
   getPermStaffUsers: (params) => instance.get('/permissions/staff-users/', { params }),
 
   // Phase 2: Staff HR
+  getStaffHRDashboard: (params) => instance.get('/staff/hr/dashboard/', { params }),
+  getStaffHRAttendance: (params) => instance.get('/staff/hr/attendance/', { params }),
+  bulkMarkStaffAttendance: (data) => instance.post('/staff/hr/attendance/bulk/', data),
+  updateStaffAttendanceRecord: (id, data) => instance.patch(`/staff/hr/attendance/${id}/`, data),
+  getStaffLeaveBalances: (params) => instance.get('/staff/hr/leave-balance/', { params }),
+  getStaffMonthlyReport: (params) => instance.get('/staff/hr/monthly-report/', { params }),
+  exportStaffMonthlyReport: (params) => instance.get('/staff/hr/monthly-report/export/', { params, responseType: 'blob' }),
+
   getStaffAttendance: (params) => instance.get('/staff/attendance/', { params }),
   clockInStaff: () => instance.post('/staff/attendance/', { action: 'clock_in' }),
   clockOutStaff: () => instance.post('/staff/attendance/', { action: 'clock_out' }),

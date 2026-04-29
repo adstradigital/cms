@@ -8,6 +8,7 @@ import {
   Atom,
   Home,
   Users,
+  UserRound,
   GraduationCap,
   LayoutGrid,
   Calendar,
@@ -90,6 +91,7 @@ const AdminSidebar = () => {
     if (pathname?.startsWith('/admins/students')) setExpandedMenu('Students');
     else if (pathname?.startsWith('/admins/classes')) setExpandedMenu('Classes');
     else if (pathname?.startsWith('/admins/staff')) setExpandedMenu('Staff');
+    else if (pathname?.startsWith('/admins/alumni')) setExpandedMenu('Alumni');
     else if (pathname?.startsWith('/admins/hostel')) setExpandedMenu('Hostel');
     else if (pathname?.startsWith('/admins/examinations')) setExpandedMenu('Examinations');
     else if (pathname?.startsWith('/admins/library')) setExpandedMenu('Library');
@@ -102,6 +104,7 @@ const AdminSidebar = () => {
   const isStudentsPath = pathname?.startsWith('/admins/students');
   const isClassesPath = pathname?.startsWith('/admins/classes');
   const isStaffPath = pathname?.startsWith('/admins/staff');
+  const isAlumniPath = pathname?.startsWith('/admins/alumni');
   const isHostelPath = pathname?.startsWith('/admins/hostel');
   const isExaminationsPath = pathname?.startsWith('/admins/examinations');
   const isLibraryPath = pathname?.startsWith('/admins/library');
@@ -191,6 +194,21 @@ const AdminSidebar = () => {
           items={SECTIONS.students}
           isActivePath={isStudentsPath}
           collapsedHref="/admins/students/directory"
+          isCollapsed={isCollapsed}
+          expandedMenu={expandedMenu}
+          setExpandedMenu={setExpandedMenu}
+          showFlyout={showFlyout}
+          scheduleHide={scheduleHide}
+          pathname={pathname}
+        />
+
+        <ExpandableSection
+          label="Alumni"
+          icon={<UserRound size={18} />}
+          sectionKey="Alumni"
+          items={SECTIONS.alumni}
+          isActivePath={isAlumniPath}
+          collapsedHref="/admins/alumni/overview"
           isCollapsed={isCollapsed}
           expandedMenu={expandedMenu}
           setExpandedMenu={setExpandedMenu}
@@ -379,6 +397,16 @@ const SECTIONS = {
     { label: "Attendance", href: "/admins/students/attendance" },
     { label: "At-Risk Students", href: "/admins/ai-brain/at-risk" },
     { label: "Performance", href: "/admins/students/performance" },
+  ],
+  alumni: [
+    { label: "Dashboard", href: "/admins/alumni/overview" },
+    { label: "Alumni Management", href: "/admins/alumni/management" },
+    { label: "Approvals", href: "/admins/alumni/approvals" },
+    { label: "Communication", href: "/admins/alumni/communication" },
+    { label: "Events", href: "/admins/alumni/events" },
+    { label: "Contributions", href: "/admins/alumni/contributions" },
+    { label: "Highlights", href: "/admins/alumni/highlights" },
+    { label: "Reports", href: "/admins/alumni/reports" },
   ],
   classes: [
     { label: "Class", href: "/admins/classes/management" },

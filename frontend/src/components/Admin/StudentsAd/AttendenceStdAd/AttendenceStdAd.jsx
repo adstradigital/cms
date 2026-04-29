@@ -6,13 +6,12 @@ import {
   LayoutDashboard, ClipboardList, ShieldCheck, BellRing, FileText, X, Check 
 } from 'lucide-react';
 import styles from './AttendenceStdAd.module.css';
+import LeaveRequestsAd from './LeaveRequestsAd';
 
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+import instance from '@/api/instance';
 
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem('access_token')}` };
-}
+
 
 function toLocalISODate(d) {
   const yyyy = d.getFullYear();
@@ -79,10 +78,8 @@ export default function AttendenceStdAd() {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch(`${API_BASE}/students/classes/`, { headers: authHeaders() });
-      if (!res.ok) return;
-      const data = await res.json();
-      setClasses(Array.isArray(data) ? data : []);
+      const res = await instance.get('/students/classes/');
+      setClasses(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       console.error(e);
     }
@@ -92,10 +89,8 @@ export default function AttendenceStdAd() {
     try {
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
-      const res = await fetch(`${API_BASE}/students/sections/?${params.toString()}`, { headers: authHeaders() });
-      if (!res.ok) return;
-      const data = await res.json();
-      setSections(Array.isArray(data) ? data : []);
+      const res = await instance.get(`/students/sections/?${params.toString()}`);
+      setSections(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       console.error(e);
     }
@@ -112,11 +107,8 @@ export default function AttendenceStdAd() {
       });
       if (schoolClass) params.set('class', schoolClass);
       if (section) params.set('section', section);
-      const res = await fetch(`${API_BASE}/attendance/admin/overview/?${params.toString()}`, {
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to load attendance overview');
-      const data = await res.json();
+      const res = await instance.get(`/attendance/admin/overview/?${params.toString()}`);
+      const data = res.data;
       setOverview(data);
       setSelectedStudentId((prev) => {
         const rows = data.students || [];
@@ -142,11 +134,8 @@ export default function AttendenceStdAd() {
         year: String(derivedMonthYear.year),
         threshold: String(threshold),
       });
-      const res = await fetch(`${API_BASE}/attendance/admin/student/${selectedStudentId}/?${params.toString()}`, {
-        headers: authHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to load student detail');
-      setStudentDetail(await res.json());
+      const res = await instance.get(`/attendance/admin/student/${selectedStudentId}/?${params.toString()}`);
+      setStudentDetail(res.data);
     } catch (e) {
       console.error(e);
       setStudentDetail(null);
@@ -165,20 +154,16 @@ export default function AttendenceStdAd() {
       if (schoolClass) params.set('class', schoolClass);
       if (section) params.set('section', section);
 
-      const res = await fetch(`${API_BASE}/attendance/leave-requests/?${params.toString()}`, {
-        headers: authHeaders(),
-      });
-      if (res.ok) {
-        let data = await res.json();
-        if (leaveFilters.search) {
-          const q = leaveFilters.search.toLowerCase().trim();
-          data = data.filter(l => 
-            l.student_name.toLowerCase().includes(q) || 
-            (l.admission_number && l.admission_number.toLowerCase().includes(q))
-          );
-        }
-        setGlobalLeaves(data);
+      const res = await instance.get(`/attendance/leave-requests/?${params.toString()}`);
+      let data = res.data;
+      if (leaveFilters.search) {
+        const q = leaveFilters.search.toLowerCase().trim();
+        data = data.filter(l => 
+          l.student_name.toLowerCase().includes(q) || 
+          (l.admission_number && l.admission_number.toLowerCase().includes(q))
+        );
       }
+      setGlobalLeaves(data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -193,12 +178,8 @@ export default function AttendenceStdAd() {
 
   const handleLeaveReview = async (id, status) => {
     try {
-      const res = await fetch(`${API_BASE}/attendance/leave-requests/${id}/review/`, {
-        method: 'PATCH',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
+      const res = await instance.patch(`/attendance/leave-requests/${id}/review/`, { status });
+      if (res.status === 200) {
         fetchGlobalLeaves();
         fetchOverview();
         fetchStudentDetail();
@@ -227,10 +208,8 @@ export default function AttendenceStdAd() {
 
   const fetchGlobalWarnings = async () => {
     try {
-      const res = await fetch(`${API_BASE}/attendance/warnings/`, {
-        headers: authHeaders(),
-      });
-      if (res.ok) setGlobalWarnings(await res.json());
+      const res = await instance.get('/attendance/warnings/');
+      setGlobalWarnings(res.data);
     } catch (e) { console.error(e); }
   };
 
@@ -343,7 +322,12 @@ export default function AttendenceStdAd() {
       </div>
 
       {activeTab === 'leaves' ? (
-        <LeaveRequestsAd />
+        <LeaveRequestsAd 
+          initialClass={schoolClass} 
+          initialSection={section} 
+          classes={classes} 
+          sections={sections}
+        />
       ) : (
         <>
           <div className={styles.topControls}>

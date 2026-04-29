@@ -222,12 +222,17 @@ def admin_attendance_overview_view(request):
     try:
         month = int(request.query_params.get("month", timezone.now().month))
         year = int(request.query_params.get("year", timezone.now().year))
+        class_id = request.query_params.get("class")
         section_id = request.query_params.get("section")
+        date_param = request.query_params.get("date")
         threshold = float(request.query_params.get("threshold", 75))
 
         students_qs = Student.objects.select_related(
             "user", "user__profile", "section", "section__school_class"
         ).filter(is_active=True)
+
+        if class_id:
+            students_qs = students_qs.filter(section__school_class_id=class_id)
         if section_id:
             students_qs = students_qs.filter(section_id=section_id)
 
@@ -239,10 +244,12 @@ def admin_attendance_overview_view(request):
             date__month=month,
             date__year=year,
         )
-        today = timezone.now().date()
+
+        # Use date_param if provided, else today
+        selected_date = date_param if date_param else timezone.now().date()
         today_attendance = Attendance.objects.filter(
             student_id__in=student_ids,
-            date=today,
+            date=selected_date,
         )
 
         status_map = defaultdict(lambda: {"total": 0, "present": 0, "absent": 0, "late": 0, "leave": 0})
@@ -273,6 +280,10 @@ def admin_attendance_overview_view(request):
             elif rec.status == "leave":
                 leave_today += 1
 
+        unmarked_today = max(0, len(students) - today_attendance.count())
+
+        today_status_map = {rec.student_id: rec.status for rec in today_attendance}
+
         for s in students:
             row = status_map[s.id]
             total = row["total"]
@@ -301,6 +312,7 @@ def admin_attendance_overview_view(request):
                 "leave": row["leave"],
                 "percentage": percentage,
                 "low_attendance": low_attendance,
+                "day_status": today_status_map.get(s.id, "unmarked"),
                 "pending_leave_requests": pending_leave_count_map[s.id],
                 "warnings_sent": warnings_count_map[s.id],
             })
@@ -317,6 +329,7 @@ def admin_attendance_overview_view(request):
                 "absent_today": absent_today,
                 "late_today": late_today,
                 "leave_today": leave_today,
+                "unmarked_today": unmarked_today,
                 "student_count": len(students),
                 "low_attendance_count": len([x for x in students_data if x["low_attendance"]]),
                 "pending_leave_count": sum(pending_leave_count_map.values()),

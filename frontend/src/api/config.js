@@ -39,4 +39,27 @@ export const ENDPOINTS = {
     MARK: '/attendance/mark/',
     REPORT: '/attendance/report/',
   },
+  ALUMNI: {
+    LIST: '/alumni/alumni/',
+    DETAIL: (id) => `/alumni/alumni/${id}/`,
+    DASHBOARD: '/alumni/alumni/dashboard/',
+    IMPORT: '/alumni/alumni/import/',
+    EXPORT: '/alumni/alumni/export/',
+    REPORTS: '/alumni/alumni/reports/',
+
+    EVENTS: '/alumni/events/',
+    EVENT_DETAIL: (id) => `/alumni/events/${id}/`,
+    EVENT_RSVPS: (id) => `/alumni/events/${id}/rsvps/`,
+    EVENT_RSVPS_LIST: '/alumni/event-rsvps/',
+
+    COMMUNICATIONS: '/alumni/communications/',
+    COMMUNICATION_DETAIL: (id) => `/alumni/communications/${id}/`,
+    COMMUNICATION_SEND: (id) => `/alumni/communications/${id}/send/`,
+
+    CONTRIBUTIONS: '/alumni/contributions/',
+    CONTRIBUTION_DETAIL: (id) => `/alumni/contributions/${id}/`,
+
+    ACHIEVEMENTS: '/alumni/achievements/',
+    ACHIEVEMENT_DETAIL: (id) => `/alumni/achievements/${id}/`,
+  },
 };

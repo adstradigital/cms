@@ -12,6 +12,7 @@ class Staff(models.Model):
     employee_id = models.CharField(max_length=50, unique=True)
     designation = models.CharField(max_length=100) # e.g. "Senior Teacher", "Accountant"
     joining_date = models.DateField()
+    department = models.CharField(max_length=100, blank=True, default='General')
     qualification = models.CharField(max_length=255, blank=True)
     experience_years = models.DecimalField(max_digits=4, decimal_places=1, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
@@ -80,6 +81,9 @@ class StaffAttendance(models.Model):
     out_time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='present')
     is_late = models.BooleanField(default=False)
+    late_minutes = models.PositiveIntegerField(default=0)
+    working_hours = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    overtime = models.DecimalField(max_digits=4, decimal_places=2, default=0)
     marked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="staff_attendance_marked")
     remarks = models.CharField(max_length=255, blank=True)
 
@@ -95,6 +99,7 @@ class StaffLeaveRequest(models.Model):
     TYPE_CHOICES = [
         ('sick', 'Sick Leave'),
         ('casual', 'Casual Leave'),
+        ('earned', 'Earned Leave'),
         ('emergency', 'Emergency Leave'),
     ]
     STATUS_CHOICES = [
@@ -145,6 +150,46 @@ class StaffTask(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.assigned_to}"
+
+
+class LeavePolicy(models.Model):
+    LEAVE_TYPE_CHOICES = [
+        ('casual', 'Casual Leave'),
+        ('sick', 'Sick Leave'),
+        ('earned', 'Earned Leave'),
+    ]
+    leave_type = models.CharField(max_length=20, choices=LEAVE_TYPE_CHOICES)
+    days_per_year = models.PositiveIntegerField(default=0)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='leave_policies')
+    is_carry_forward = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'leave_policies'
+        unique_together = ('leave_type', 'school')
+
+    def __str__(self):
+        return f"{self.leave_type} - {self.days_per_year} days"
+
+
+class LeaveBalance(models.Model):
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name='leave_balances')
+    leave_type = models.CharField(max_length=20, choices=LeavePolicy.LEAVE_TYPE_CHOICES)
+    year = models.PositiveIntegerField()
+    total_allowed = models.PositiveIntegerField(default=0)
+    used = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'leave_balances'
+        unique_together = ('staff', 'leave_type', 'year')
+
+    def __str__(self):
+        return f"{self.staff} - {self.leave_type} ({self.used}/{self.total_allowed})"
+
+    @property
+    def remaining(self):
+        return max(0, self.total_allowed - self.used)
 
 
 class ParentFeedback(models.Model):

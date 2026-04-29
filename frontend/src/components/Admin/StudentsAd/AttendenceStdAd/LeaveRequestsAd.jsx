@@ -4,18 +4,14 @@ import { useEffect, useState } from 'react';
 import { Check, X, FileText, Calendar, Filter, Search, User, Clock, AlertCircle } from 'lucide-react';
 import styles from './LeaveRequestsAd.module.css';
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+import instance from '@/api/instance';
 
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem('access_token')}` };
-}
-
-export default function LeaveRequestsAd() {
+export default function LeaveRequestsAd({ initialClass = '', initialSection = '', classes = [], sections = [] }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [classes, setClasses] = useState([]);
   const [filters, setFilters] = useState({
-    class: '',
+    class: initialClass,
+    section: initialSection,
     status: '',
     leave_type: '',
     from_date: '',
@@ -23,37 +19,32 @@ export default function LeaveRequestsAd() {
     search: '',
   });
 
-  const fetchClasses = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/students/classes/`, { headers: authHeaders() });
-      if (res.ok) setClasses(await res.json());
-    } catch (e) { console.error(e); }
-  };
+  // Sync with props if they change
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, class: initialClass, section: initialSection }));
+  }, [initialClass, initialSection]);
 
   const fetchRequests = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filters.class) params.set('class', filters.class);
+      if (filters.section) params.set('section', filters.section);
       if (filters.status) params.set('status', filters.status);
       if (filters.leave_type) params.set('leave_type', filters.leave_type);
       if (filters.from_date) params.set('from_date', filters.from_date);
       if (filters.to_date) params.set('to_date', filters.to_date);
 
-      const res = await fetch(`${API_BASE}/attendance/leave-requests/?${params.toString()}`, {
-        headers: authHeaders(),
-      });
-      if (res.ok) {
-        let data = await res.json();
-        if (filters.search) {
-          const q = filters.search.toLowerCase();
-          data = data.filter(r => 
-            r.student_name.toLowerCase().includes(q) || 
-            r.admission_number.toLowerCase().includes(q)
-          );
-        }
-        setRequests(data);
+      const res = await instance.get(`/attendance/leave-requests/?${params.toString()}`);
+      let data = res.data;
+      if (filters.search) {
+        const q = filters.search.toLowerCase().trim();
+        data = data.filter(r => 
+          r.student_name.toLowerCase().includes(q) || 
+          (r.admission_number && r.admission_number.toLowerCase().includes(q))
+        );
       }
+      setRequests(data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -62,25 +53,14 @@ export default function LeaveRequestsAd() {
   };
 
   useEffect(() => {
-    fetchClasses();
-  }, []);
-
-  useEffect(() => {
     fetchRequests();
-  }, [filters.class, filters.status, filters.leave_type, filters.from_date, filters.to_date, filters.search]);
+  }, [filters.class, filters.section, filters.status, filters.leave_type, filters.from_date, filters.to_date, filters.search]);
 
   const handleReview = async (id, status) => {
     try {
-      const res = await fetch(`${API_BASE}/attendance/leave-requests/${id}/review/`, {
-        method: 'PATCH',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
+      const res = await instance.patch(`/attendance/leave-requests/${id}/review/`, { status });
+      if (res.status === 200) {
         fetchRequests();
-      } else {
-        const err = await res.json();
-        alert(err.error || 'Failed to update status');
       }
     } catch (e) {
       console.error(e);
@@ -96,6 +76,19 @@ export default function LeaveRequestsAd() {
           <select value={filters.class} onChange={(e) => setFilters({ ...filters, class: e.target.value })}>
             <option value="">All Classes</option>
             {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+
+        <div className={styles.filterGroup}>
+          <label><Filter size={14} /> Section</label>
+          <select value={filters.section} onChange={(e) => setFilters({ ...filters, section: e.target.value })}>
+            <option value="">All Sections</option>
+            {sections
+              .filter(s => !filters.class || s.school_class_id == filters.class)
+              .map(sec => (
+                <option key={sec.id} value={sec.id}>{sec.class_name || 'Class'} - {sec.name}</option>
+              ))
+            }
           </select>
         </div>
 

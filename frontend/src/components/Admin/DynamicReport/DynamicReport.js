@@ -5,22 +5,39 @@ import {
   BarChart2, LineChart, PieChart, Download, FileSpreadsheet,
   Printer, Plus, X, GripVertical, Search,
   Play, Save, Trash2, Filter, SortAsc, SortDesc,
-  ChevronRight, ArrowUpDown, Zap,
+  ArrowUpDown, Zap,
   FileText, Activity, Users, BookOpen,
   DollarSign, Calendar, TrendingUp, Settings2, Table2,
-  Check, AlertCircle, Loader2, ChevronLeft,
+  Check, AlertCircle, Loader2, ChevronLeft, ChevronRight,
+  Bus, Bed, Library, CreditCard, LayoutGrid,
 } from 'lucide-react';
 import styles from './DynamicReport.module.css';
 import reportApi from '@/api/reportApi';
 
 /* ── Constants ─────────────────────────────────────── */
 const MODULE_ICONS = {
-  fees: DollarSign, students: Users, attendance: Calendar,
-  exams: BookOpen, staff: Users, payroll: TrendingUp,
+  fees:       DollarSign,
+  students:   Users,
+  attendance: Calendar,
+  exams:      BookOpen,
+  staff:      Users,
+  payroll:    TrendingUp,
+  library:    Library,
+  hostel:     Bed,
+  transport:  Bus,
+  expenses:   CreditCard,
 };
 const MODULE_COLORS = {
-  fees: '#0ea5e9', students: '#8b5cf6', attendance: '#00a676',
-  exams: '#f59e0b', staff: '#ef4444', payroll: '#6366f1',
+  fees:       '#0ea5e9',
+  students:   '#8b5cf6',
+  attendance: '#00a676',
+  exams:      '#f59e0b',
+  staff:      '#ef4444',
+  payroll:    '#6366f1',
+  library:    '#06b6d4',
+  hostel:     '#10b981',
+  transport:  '#f97316',
+  expenses:   '#ec4899',
 };
 
 const FILTER_OPERATORS = {
@@ -233,11 +250,26 @@ export default function DynamicReport() {
   const dragFieldRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const fields = moduleMeta[module]?.fields || [];
+  // "_all" pseudo-module: merge fields from all real modules for browsing
+  const allMergedFields = Object.entries(moduleMeta).flatMap(([modKey, meta]) =>
+    (meta.fields || []).map(f => ({
+      ...f,
+      key: `${modKey}__${f.key}`,
+      category: `${meta.label} · ${f.category}`,
+      _module: modKey,
+      _realKey: f.key,
+    }))
+  );
+
+  const fields = module === '_all'
+    ? allMergedFields
+    : (moduleMeta[module]?.fields || []);
+
   const numericFields = fields.filter(f => f.type === 'number');
   const availableFields = fields.filter(f =>
     !selectedFields.find(sf => sf.key === f.key) &&
-    f.label.toLowerCase().includes(searchField.toLowerCase())
+    (f.label.toLowerCase().includes(searchField.toLowerCase()) ||
+     f.category.toLowerCase().includes(searchField.toLowerCase()))
   );
 
   // ── Load meta ─────────────────────────────────────
@@ -292,6 +324,7 @@ export default function DynamicReport() {
   // ── Run report ────────────────────────────────────
   const runReport = useCallback(async (pg = 1) => {
     if (!selectedFields.length) { toast('Select at least one field', 'error'); return; }
+    if (module === '_all') { toast('Select a specific module to run the report', 'warn'); return; }
     setRunning(true);
     setPage(pg);
     try {
@@ -318,6 +351,7 @@ export default function DynamicReport() {
   // ── Export ────────────────────────────────────────
   const handleExportExcel = async () => {
     if (!selectedFields.length) { toast('Select fields first', 'error'); return; }
+    if (module === '_all') { toast('Select a specific module to export', 'warn'); return; }
     setExportingExcel(true);
     try {
       const r = await reportApi.exportExcel({
@@ -334,6 +368,7 @@ export default function DynamicReport() {
 
   const handleExportPdf = async () => {
     if (!selectedFields.length) { toast('Select fields first', 'error'); return; }
+    if (module === '_all') { toast('Select a specific module to export', 'warn'); return; }
     setExportingPdf(true);
     try {
       const r = await reportApi.exportPdf({
@@ -458,7 +493,18 @@ export default function DynamicReport() {
           </div>
         </div>
         <div className={styles.headerRight}>
-          <div className={styles.modulePills}>
+          <div className={styles.modulePillsWrap}>
+            {/* All pill — shows merged fields from every module for browsing */}
+            <button
+              className={`${styles.modulePill} ${module === '_all' ? styles.modulePillActive : ''}`}
+              style={module === '_all' ? { '--mc': '#64748b' } : {}}
+              onClick={() => setModule('_all')}
+              title="Browse all fields from every module"
+            >
+              <LayoutGrid size={11}/>
+              All Fields
+            </button>
+            <span className={styles.pillDivider}/>
             {Object.entries(moduleMeta).map(([key, meta]) => {
               const Icon = MODULE_ICONS[key] || BarChart2;
               return (

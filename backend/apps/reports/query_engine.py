@@ -144,14 +144,7 @@ def _payroll_fields():
     ]
 
 
-MODULE_META = {
-    'fees':       {'label': 'Fees',       'color': '#0ea5e9', 'fields': _fees_fields()},
-    'students':   {'label': 'Students',   'color': '#8b5cf6', 'fields': _students_fields()},
-    'attendance': {'label': 'Attendance', 'color': '#00a676', 'fields': _attendance_fields()},
-    'exams':      {'label': 'Exams',      'color': '#f59e0b', 'fields': _exams_fields()},
-    'staff':      {'label': 'Staff',      'color': '#ef4444', 'fields': _staff_fields()},
-    'payroll':    {'label': 'Payroll',    'color': '#6366f1', 'fields': _payroll_fields()},
-}
+
 
 
 # ── Filter Q-builder ──────────────────────────────────────────────────────────
@@ -277,7 +270,7 @@ _FEES_SORT_MAP = {
 def _run_fees(fields, filters, filter_logic, group_by, sort_field, sort_dir, page, page_size, school):
     from apps.fees.models import FeePayment
     qs = FeePayment.objects.select_related(
-        'student__user__userprofile',
+        'student__user__profile',
         'student__section__school_class',
         'fee_structure__category',
         'collected_by',
@@ -364,9 +357,9 @@ _STUDENTS_FILTER_PATHS = {
     'roll_number':      'roll_number',
     'class_name':       'section__school_class__name',
     'section_name':     'section__name',
-    'gender':           'user__userprofile__gender',
-    'date_of_birth':    'user__userprofile__date_of_birth',
-    'blood_group':      'user__userprofile__blood_group',
+    'gender':           'user__profile__gender',
+    'date_of_birth':    'user__profile__date_of_birth',
+    'blood_group':      'user__profile__blood_group',
     'admission_date':   'admission_date',
     'is_active':        'is_active',
     'hostel_resident':  'hostel_resident',
@@ -389,7 +382,7 @@ _STUDENTS_SORT_MAP = {
 def _run_students(fields, filters, filter_logic, group_by, sort_field, sort_dir, page, page_size, school):
     from apps.students.models import Student
     qs = Student.objects.select_related(
-        'user__userprofile',
+        'user__profile',
         'section__school_class',
     )
     if school:
@@ -406,7 +399,7 @@ def _run_students(fields, filters, filter_logic, group_by, sort_field, sort_dir,
 
     rows = []
     for r in records:
-        up = getattr(r.user, 'userprofile', None) if r.user else None
+        up = getattr(r.user, 'profile', None) if r.user else None
         row = {
             'id':               r.id,
             'student_name':     f"{r.user.first_name} {r.user.last_name}".strip() if r.user else '',
@@ -440,8 +433,8 @@ def _run_students(fields, filters, filter_logic, group_by, sort_field, sort_dir,
 
 def _students_chart(qs, group_by):
     if group_by == 'gender':
-        data = qs.values('user__userprofile__gender').annotate(value=Count('id')).order_by()
-        return [{'label': d['user__userprofile__gender'] or 'N/A', 'value': d['value']} for d in data]
+        data = qs.values('user__profile__gender').annotate(value=Count('id')).order_by()
+        return [{'label': d['user__profile__gender'] or 'N/A', 'value': d['value']} for d in data]
     if group_by == 'is_active':
         data = qs.values('is_active').annotate(value=Count('id')).order_by()
         return [{'label': 'Active' if d['is_active'] else 'Inactive', 'value': d['value']} for d in data]
@@ -641,8 +634,8 @@ _STAFF_FILTER_PATHS = {
     'qualification':    'qualification',
     'status':           'status',
     'is_teaching_staff':'is_teaching_staff',
-    'gender':           'user__userprofile__gender',
-    'blood_group':      'user__userprofile__blood_group',
+    'gender':           'user__profile__gender',
+    'blood_group':      'user__profile__blood_group',
 }
 
 _STAFF_SORT_MAP = {
@@ -657,7 +650,7 @@ _STAFF_SORT_MAP = {
 
 def _run_staff(fields, filters, filter_logic, group_by, sort_field, sort_dir, page, page_size, school):
     from apps.staff.models import Staff
-    qs = Staff.objects.select_related('user__userprofile')
+    qs = Staff.objects.select_related('user__profile')
     if school:
         qs = qs.filter(user__school=school)
 
@@ -672,7 +665,7 @@ def _run_staff(fields, filters, filter_logic, group_by, sort_field, sort_dir, pa
 
     rows = []
     for r in records:
-        up = getattr(r.user, 'userprofile', None) if r.user else None
+        up = getattr(r.user, 'profile', None) if r.user else None
         row = {
             'id':               r.id,
             'staff_name':       f"{r.user.first_name} {r.user.last_name}".strip() if r.user else '',
@@ -826,6 +819,512 @@ def _payroll_chart(qs, group_by):
              'value': _float(d['value'])} for d in data]
 
 
+# ── Module: Library ──────────────────────────────────────────────────────────
+
+def _library_fields():
+    return [
+        {'key': 'student_name',     'label': 'Student Name',      'type': 'text',    'category': 'Student'},
+        {'key': 'roll_no',          'label': 'Roll No.',          'type': 'text',    'category': 'Student'},
+        {'key': 'class_name',       'label': 'Class',             'type': 'text',    'category': 'Student'},
+        {'key': 'section_name',     'label': 'Section',           'type': 'text',    'category': 'Student'},
+        {'key': 'book_title',       'label': 'Book Title',        'type': 'text',    'category': 'Book'},
+        {'key': 'book_author',      'label': 'Author',            'type': 'text',    'category': 'Book'},
+        {'key': 'book_isbn',        'label': 'ISBN',              'type': 'text',    'category': 'Book'},
+        {'key': 'book_category',    'label': 'Book Category',     'type': 'text',    'category': 'Book'},
+        {'key': 'book_custom_id',   'label': 'Book ID',           'type': 'text',    'category': 'Book'},
+        {'key': 'issue_date',       'label': 'Issue Date',        'type': 'date',    'category': 'Issue'},
+        {'key': 'due_date',         'label': 'Due Date',          'type': 'date',    'category': 'Issue'},
+        {'key': 'return_date',      'label': 'Return Date',       'type': 'date',    'category': 'Issue'},
+        {'key': 'fine_amount',      'label': 'Fine Amount',       'type': 'number',  'category': 'Fine'},
+        {'key': 'fine_paid',        'label': 'Fine Paid',         'type': 'boolean', 'category': 'Fine'},
+        {'key': 'status',           'label': 'Status',            'type': 'choice',  'category': 'Issue',
+         'choices': ['issued', 'returned', 'overdue', 'lost']},
+        {'key': 'issued_by',        'label': 'Issued By',         'type': 'text',    'category': 'Staff'},
+    ]
+
+
+_LIBRARY_FILTER_PATHS = {
+    'student_name':  ['student__user__first_name', 'student__user__last_name'],
+    'roll_no':       'student__roll_number',
+    'class_name':    'student__section__school_class__name',
+    'section_name':  'student__section__name',
+    'book_title':    'book__title',
+    'book_author':   'book__author',
+    'book_isbn':     'book__isbn',
+    'book_category': 'book__category',
+    'book_custom_id':'book__custom_id',
+    'issue_date':    'issue_date',
+    'due_date':      'due_date',
+    'return_date':   'return_date',
+    'fine_amount':   'fine_amount',
+    'fine_paid':     'fine_paid',
+    'status':        'status',
+}
+
+_LIBRARY_SORT_MAP = {
+    'student_name': 'student__user__first_name',
+    'class_name':   'student__section__school_class__name',
+    'book_title':   'book__title',
+    'issue_date':   'issue_date',
+    'due_date':     'due_date',
+    'fine_amount':  'fine_amount',
+    'status':       'status',
+}
+
+
+def _run_library(fields, filters, filter_logic, group_by, sort_field, sort_dir, page, page_size, school):
+    from apps.library.models import BookIssue
+    qs = BookIssue.objects.select_related(
+        'book',
+        'student__user',
+        'student__section__school_class',
+        'issued_by',
+    )
+    if school:
+        qs = qs.filter(student__user__school=school)
+
+    qs = _apply_filters(qs, filters, filter_logic, _LIBRARY_FILTER_PATHS)
+
+    sort_path = _LIBRARY_SORT_MAP.get(sort_field, '-issue_date')
+    qs = qs.order_by(f'-{sort_path}' if sort_dir == 'desc' else sort_path)
+
+    total = qs.count()
+    start = (page - 1) * page_size
+    records = list(qs[start:start + page_size])
+
+    rows = []
+    for r in records:
+        row = {
+            'id':             r.id,
+            'student_name':   f"{r.student.user.first_name} {r.student.user.last_name}".strip() if r.student and r.student.user else '',
+            'roll_no':        r.student.roll_number if r.student else '',
+            'class_name':     r.student.section.school_class.name if r.student and r.student.section and r.student.section.school_class else '',
+            'section_name':   r.student.section.name if r.student and r.student.section else '',
+            'book_title':     r.book.title if r.book else '',
+            'book_author':    r.book.author if r.book else '',
+            'book_isbn':      r.book.isbn if r.book else '',
+            'book_category':  r.book.category if r.book else '',
+            'book_custom_id': r.book.custom_id if r.book else '',
+            'issue_date':     _str(r.issue_date),
+            'due_date':       _str(r.due_date),
+            'return_date':    _str(r.return_date),
+            'fine_amount':    _float(r.fine_amount),
+            'fine_paid':      r.fine_paid,
+            'status':         r.status,
+            'issued_by':      r.issued_by.get_full_name() if r.issued_by else '',
+        }
+        if fields:
+            row = {k: v for k, v in row.items() if k in fields or k == 'id'}
+        rows.append(row)
+
+    chart_data = _library_chart(qs, group_by)
+    summary = {
+        'total_records': total,
+        'overdue':       qs.filter(status='overdue').count(),
+        'total_fines':   _float(qs.aggregate(v=Sum('fine_amount'))['v']),
+    }
+    return {'total': total, 'page': page, 'page_size': page_size,
+            'total_pages': max(1, (total + page_size - 1) // page_size),
+            'rows': rows, 'chart_data': chart_data, 'summary': summary}
+
+
+def _library_chart(qs, group_by):
+    if group_by == 'status':
+        data = qs.values('status').annotate(value=Count('id')).order_by()
+        return [{'label': d['status'] or 'N/A', 'value': d['value']} for d in data]
+    if group_by == 'book_category':
+        data = qs.values('book__category').annotate(value=Count('id')).order_by('-value')[:8]
+        return [{'label': d['book__category'] or 'N/A', 'value': d['value']} for d in data]
+    # default: issues by class
+    data = (qs.values('student__section__school_class__name')
+              .annotate(value=Count('id'))
+              .order_by('student__section__school_class__name'))
+    return [{'label': d['student__section__school_class__name'] or 'N/A', 'value': d['value']} for d in data]
+
+
+# ── Module: Hostel ────────────────────────────────────────────────────────────
+
+def _hostel_fields():
+    return [
+        {'key': 'student_name',       'label': 'Student Name',       'type': 'text',    'category': 'Student'},
+        {'key': 'roll_no',            'label': 'Roll No.',           'type': 'text',    'category': 'Student'},
+        {'key': 'class_name',         'label': 'Class',              'type': 'text',    'category': 'Student'},
+        {'key': 'hostel_name',        'label': 'Hostel',             'type': 'text',    'category': 'Room'},
+        {'key': 'room_number',        'label': 'Room Number',        'type': 'text',    'category': 'Room'},
+        {'key': 'room_type',          'label': 'Room Type',          'type': 'choice',  'category': 'Room',
+         'choices': ['single', 'double', 'triple', 'dormitory']},
+        {'key': 'ac_type',            'label': 'AC Type',            'type': 'choice',  'category': 'Room',
+         'choices': ['AC', 'Non-AC']},
+        {'key': 'period_label',       'label': 'Period',             'type': 'text',    'category': 'Fee'},
+        {'key': 'room_rent',          'label': 'Room Rent',          'type': 'number',  'category': 'Fee'},
+        {'key': 'electricity_charges','label': 'Electricity',        'type': 'number',  'category': 'Fee'},
+        {'key': 'mess_fee',           'label': 'Mess Fee',           'type': 'number',  'category': 'Fee'},
+        {'key': 'amount_due',         'label': 'Amount Due',         'type': 'number',  'category': 'Fee'},
+        {'key': 'amount_paid',        'label': 'Amount Paid',        'type': 'number',  'category': 'Fee'},
+        {'key': 'due_date',           'label': 'Due Date',           'type': 'date',    'category': 'Fee'},
+        {'key': 'payment_date',       'label': 'Payment Date',       'type': 'date',    'category': 'Fee'},
+        {'key': 'payment_method',     'label': 'Payment Method',     'type': 'text',    'category': 'Fee'},
+        {'key': 'status',             'label': 'Status',             'type': 'choice',  'category': 'Fee',
+         'choices': ['pending', 'paid', 'partial', 'overdue']},
+    ]
+
+
+_HOSTEL_FILTER_PATHS = {
+    'student_name':        ['student__user__first_name', 'student__user__last_name'],
+    'roll_no':             'student__roll_number',
+    'class_name':          'student__section__school_class__name',
+    'hostel_name':         'room__hostel__name',
+    'room_number':         'room__room_number',
+    'room_type':           'room__room_type',
+    'ac_type':             'room__ac_type',
+    'period_label':        'period_label',
+    'room_rent':           'room_rent',
+    'amount_due':          'amount_due',
+    'amount_paid':         'amount_paid',
+    'due_date':            'due_date',
+    'payment_date':        'payment_date',
+    'payment_method':      'payment_method',
+    'status':              'status',
+}
+
+_HOSTEL_SORT_MAP = {
+    'student_name': 'student__user__first_name',
+    'class_name':   'student__section__school_class__name',
+    'hostel_name':  'room__hostel__name',
+    'room_number':  'room__room_number',
+    'amount_due':   'amount_due',
+    'amount_paid':  'amount_paid',
+    'due_date':     'due_date',
+    'payment_date': 'payment_date',
+    'status':       'status',
+}
+
+
+def _run_hostel(fields, filters, filter_logic, group_by, sort_field, sort_dir, page, page_size, school):
+    from apps.hostel.models import HostelFee
+    qs = HostelFee.objects.select_related(
+        'student__user',
+        'student__section__school_class',
+        'room__hostel',
+        'collected_by',
+    )
+    if school:
+        qs = qs.filter(student__user__school=school)
+
+    qs = _apply_filters(qs, filters, filter_logic, _HOSTEL_FILTER_PATHS)
+
+    sort_path = _HOSTEL_SORT_MAP.get(sort_field, '-due_date')
+    qs = qs.order_by(f'-{sort_path}' if sort_dir == 'desc' else sort_path)
+
+    total = qs.count()
+    start = (page - 1) * page_size
+    records = list(qs[start:start + page_size])
+
+    rows = []
+    for r in records:
+        row = {
+            'id':                  r.id,
+            'student_name':        f"{r.student.user.first_name} {r.student.user.last_name}".strip() if r.student and r.student.user else '',
+            'roll_no':             r.student.roll_number if r.student else '',
+            'class_name':          r.student.section.school_class.name if r.student and r.student.section and r.student.section.school_class else '',
+            'hostel_name':         r.room.hostel.name if r.room and r.room.hostel else '',
+            'room_number':         r.room.room_number if r.room else '',
+            'room_type':           r.room.room_type if r.room else '',
+            'ac_type':             r.room.ac_type if r.room else '',
+            'period_label':        r.period_label,
+            'room_rent':           _float(r.room_rent),
+            'electricity_charges': _float(r.electricity_charges),
+            'mess_fee':            _float(r.mess_fee),
+            'amount_due':          _float(r.amount_due),
+            'amount_paid':         _float(r.amount_paid),
+            'due_date':            _str(r.due_date),
+            'payment_date':        _str(r.payment_date),
+            'payment_method':      r.payment_method,
+            'status':              r.status,
+        }
+        if fields:
+            row = {k: v for k, v in row.items() if k in fields or k == 'id'}
+        rows.append(row)
+
+    chart_data = _hostel_chart(qs, group_by)
+    summary = {
+        'total_records': total,
+        'total_due':     _float(qs.aggregate(v=Sum('amount_due'))['v']),
+        'total_paid':    _float(qs.aggregate(v=Sum('amount_paid'))['v']),
+    }
+    return {'total': total, 'page': page, 'page_size': page_size,
+            'total_pages': max(1, (total + page_size - 1) // page_size),
+            'rows': rows, 'chart_data': chart_data, 'summary': summary}
+
+
+def _hostel_chart(qs, group_by):
+    if group_by == 'status':
+        data = qs.values('status').annotate(value=Count('id')).order_by()
+        return [{'label': d['status'], 'value': d['value']} for d in data]
+    if group_by == 'room_type':
+        data = qs.values('room__room_type').annotate(value=Sum('amount_due')).order_by()
+        return [{'label': d['room__room_type'] or 'N/A', 'value': _float(d['value'])} for d in data]
+    # default: by hostel
+    data = qs.values('room__hostel__name').annotate(value=Sum('amount_due')).order_by('-value')
+    return [{'label': d['room__hostel__name'] or 'N/A', 'value': _float(d['value'])} for d in data]
+
+
+# ── Module: Transport ─────────────────────────────────────────────────────────
+
+def _transport_fields():
+    return [
+        {'key': 'student_name',   'label': 'Student Name',    'type': 'text',    'category': 'Student'},
+        {'key': 'roll_no',        'label': 'Roll No.',        'type': 'text',    'category': 'Student'},
+        {'key': 'class_name',     'label': 'Class',           'type': 'text',    'category': 'Student'},
+        {'key': 'section_name',   'label': 'Section',         'type': 'text',    'category': 'Student'},
+        {'key': 'route_name',     'label': 'Route',           'type': 'text',    'category': 'Route'},
+        {'key': 'source',         'label': 'Source',          'type': 'text',    'category': 'Route'},
+        {'key': 'destination',    'label': 'Destination',     'type': 'text',    'category': 'Route'},
+        {'key': 'vehicle_number', 'label': 'Vehicle No.',     'type': 'text',    'category': 'Route'},
+        {'key': 'period_label',   'label': 'Period',          'type': 'text',    'category': 'Fee'},
+        {'key': 'amount_due',     'label': 'Amount Due',      'type': 'number',  'category': 'Fee'},
+        {'key': 'amount_paid',    'label': 'Amount Paid',     'type': 'number',  'category': 'Fee'},
+        {'key': 'due_date',       'label': 'Due Date',        'type': 'date',    'category': 'Fee'},
+        {'key': 'payment_date',   'label': 'Payment Date',    'type': 'date',    'category': 'Fee'},
+        {'key': 'payment_method', 'label': 'Payment Method',  'type': 'text',    'category': 'Fee'},
+        {'key': 'transaction_id', 'label': 'Transaction ID',  'type': 'text',    'category': 'Fee'},
+        {'key': 'status',         'label': 'Status',          'type': 'choice',  'category': 'Fee',
+         'choices': ['pending', 'paid', 'partial', 'overdue']},
+    ]
+
+
+_TRANSPORT_FILTER_PATHS = {
+    'student_name':   ['student__user__first_name', 'student__user__last_name'],
+    'roll_no':        'student__roll_number',
+    'class_name':     'student__section__school_class__name',
+    'section_name':   'student__section__name',
+    'route_name':     'route__name',
+    'source':         'route__source',
+    'destination':    'route__destination',
+    'vehicle_number': 'route__vehicle_number',
+    'period_label':   'period_label',
+    'amount_due':     'amount_due',
+    'amount_paid':    'amount_paid',
+    'due_date':       'due_date',
+    'payment_date':   'payment_date',
+    'payment_method': 'payment_method',
+    'status':         'status',
+}
+
+_TRANSPORT_SORT_MAP = {
+    'student_name':   'student__user__first_name',
+    'class_name':     'student__section__school_class__name',
+    'route_name':     'route__name',
+    'amount_due':     'amount_due',
+    'amount_paid':    'amount_paid',
+    'due_date':       'due_date',
+    'payment_date':   'payment_date',
+    'status':         'status',
+}
+
+
+def _run_transport(fields, filters, filter_logic, group_by, sort_field, sort_dir, page, page_size, school):
+    from apps.transport.models import TransportFee
+    qs = TransportFee.objects.select_related(
+        'student__user',
+        'student__section__school_class',
+        'route',
+        'collected_by',
+    )
+    if school:
+        qs = qs.filter(student__user__school=school)
+
+    qs = _apply_filters(qs, filters, filter_logic, _TRANSPORT_FILTER_PATHS)
+
+    sort_path = _TRANSPORT_SORT_MAP.get(sort_field, '-due_date')
+    qs = qs.order_by(f'-{sort_path}' if sort_dir == 'desc' else sort_path)
+
+    total = qs.count()
+    start = (page - 1) * page_size
+    records = list(qs[start:start + page_size])
+
+    rows = []
+    for r in records:
+        row = {
+            'id':             r.id,
+            'student_name':   f"{r.student.user.first_name} {r.student.user.last_name}".strip() if r.student and r.student.user else '',
+            'roll_no':        r.student.roll_number if r.student else '',
+            'class_name':     r.student.section.school_class.name if r.student and r.student.section and r.student.section.school_class else '',
+            'section_name':   r.student.section.name if r.student and r.student.section else '',
+            'route_name':     r.route.name if r.route else '',
+            'source':         r.route.source if r.route else '',
+            'destination':    r.route.destination if r.route else '',
+            'vehicle_number': r.route.vehicle_number if r.route else '',
+            'period_label':   r.period_label,
+            'amount_due':     _float(r.amount_due),
+            'amount_paid':    _float(r.amount_paid),
+            'due_date':       _str(r.due_date),
+            'payment_date':   _str(r.payment_date),
+            'payment_method': r.payment_method,
+            'transaction_id': r.transaction_id,
+            'status':         r.status,
+        }
+        if fields:
+            row = {k: v for k, v in row.items() if k in fields or k == 'id'}
+        rows.append(row)
+
+    chart_data = _transport_chart(qs, group_by)
+    summary = {
+        'total_records': total,
+        'total_due':     _float(qs.aggregate(v=Sum('amount_due'))['v']),
+        'total_paid':    _float(qs.aggregate(v=Sum('amount_paid'))['v']),
+    }
+    return {'total': total, 'page': page, 'page_size': page_size,
+            'total_pages': max(1, (total + page_size - 1) // page_size),
+            'rows': rows, 'chart_data': chart_data, 'summary': summary}
+
+
+def _transport_chart(qs, group_by):
+    if group_by == 'status':
+        data = qs.values('status').annotate(value=Count('id')).order_by()
+        return [{'label': d['status'], 'value': d['value']} for d in data]
+    if group_by == 'route_name':
+        data = qs.values('route__name').annotate(value=Sum('amount_due')).order_by('-value')[:8]
+        return [{'label': d['route__name'] or 'N/A', 'value': _float(d['value'])} for d in data]
+    # default: by class
+    data = (qs.values('student__section__school_class__name')
+              .annotate(value=Sum('amount_due'))
+              .order_by('student__section__school_class__name'))
+    return [{'label': d['student__section__school_class__name'] or 'N/A', 'value': _float(d['value'])} for d in data]
+
+
+# ── Module: Expenses ──────────────────────────────────────────────────────────
+
+def _expenses_fields():
+    return [
+        {'key': 'title',         'label': 'Title',           'type': 'text',    'category': 'Expense'},
+        {'key': 'description',   'label': 'Description',     'type': 'text',    'category': 'Expense'},
+        {'key': 'category_name', 'label': 'Category',        'type': 'text',    'category': 'Expense'},
+        {'key': 'category_type', 'label': 'Category Type',   'type': 'choice',  'category': 'Expense',
+         'choices': ['income', 'expense']},
+        {'key': 'amount',        'label': 'Amount',          'type': 'number',  'category': 'Expense'},
+        {'key': 'expense_date',  'label': 'Date',            'type': 'date',    'category': 'Expense'},
+        {'key': 'status',        'label': 'Status',          'type': 'choice',  'category': 'Expense',
+         'choices': ['pending', 'approved', 'rejected', 'paid']},
+        {'key': 'submitted_by',  'label': 'Submitted By',    'type': 'text',    'category': 'Staff'},
+        {'key': 'academic_year', 'label': 'Academic Year',   'type': 'text',    'category': 'Academic'},
+        {'key': 'created_at',    'label': 'Created Date',    'type': 'date',    'category': 'Expense'},
+    ]
+
+
+_EXPENSES_FILTER_PATHS = {
+    'title':         'title',
+    'category_name': 'category__name',
+    'category_type': 'category__category_type',
+    'amount':        'amount',
+    'expense_date':  'expense_date',
+    'status':        'status',
+    'submitted_by':  ['submitted_by__first_name', 'submitted_by__last_name'],
+    'academic_year': 'academic_year__name',
+    'created_at':    'created_at__date',
+}
+
+_EXPENSES_SORT_MAP = {
+    'title':        'title',
+    'category_name':'category__name',
+    'amount':       'amount',
+    'expense_date': 'expense_date',
+    'status':       'status',
+    'created_at':   'created_at',
+}
+
+
+def _run_expenses(fields, filters, filter_logic, group_by, sort_field, sort_dir, page, page_size, school):
+    from apps.expenses.models import ExpenseEntry
+    qs = ExpenseEntry.objects.select_related(
+        'category',
+        'submitted_by',
+        'academic_year',
+    )
+    if school:
+        qs = qs.filter(academic_year__school=school)
+
+    qs = _apply_filters(qs, filters, filter_logic, _EXPENSES_FILTER_PATHS)
+
+    sort_path = _EXPENSES_SORT_MAP.get(sort_field, '-expense_date')
+    qs = qs.order_by(f'-{sort_path}' if sort_dir == 'desc' else sort_path)
+
+    total = qs.count()
+    start = (page - 1) * page_size
+    records = list(qs[start:start + page_size])
+
+    rows = []
+    for r in records:
+        row = {
+            'id':            r.id,
+            'title':         r.title,
+            'description':   r.description,
+            'category_name': r.category.name if r.category else '',
+            'category_type': r.category.category_type if r.category else '',
+            'amount':        _float(r.amount),
+            'expense_date':  _str(r.expense_date),
+            'status':        r.status,
+            'submitted_by':  r.submitted_by.get_full_name() if r.submitted_by else '',
+            'academic_year': r.academic_year.name if r.academic_year else '',
+            'created_at':    str(r.created_at.date()) if r.created_at else '',
+        }
+        if fields:
+            row = {k: v for k, v in row.items() if k in fields or k == 'id'}
+        rows.append(row)
+
+    chart_data = _expenses_chart(qs, group_by)
+    summary = {
+        'total_records': total,
+        'total_amount':  _float(qs.aggregate(v=Sum('amount'))['v']),
+        'approved':      qs.filter(status='approved').count(),
+    }
+    return {'total': total, 'page': page, 'page_size': page_size,
+            'total_pages': max(1, (total + page_size - 1) // page_size),
+            'rows': rows, 'chart_data': chart_data, 'summary': summary}
+
+
+def _expenses_chart(qs, group_by):
+    if group_by == 'status':
+        data = qs.values('status').annotate(value=Count('id')).order_by()
+        return [{'label': d['status'], 'value': d['value']} for d in data]
+    if group_by == 'category_type':
+        data = qs.values('category__category_type').annotate(value=Sum('amount')).order_by()
+        return [{'label': d['category__category_type'] or 'N/A', 'value': _float(d['value'])} for d in data]
+    # default: by category
+    data = qs.values('category__name').annotate(value=Sum('amount')).order_by('-value')[:8]
+    return [{'label': d['category__name'] or 'N/A', 'value': _float(d['value'])} for d in data]
+
+
+def _all_fields():
+    """Combined deduplicated field list from all modules, tagged with source module."""
+    seen = {}
+    for module_key, fn in [
+        ('fees', _fees_fields), ('students', _students_fields),
+        ('attendance', _attendance_fields), ('exams', _exams_fields),
+        ('staff', _staff_fields), ('payroll', _payroll_fields),
+        ('library', _library_fields), ('hostel', _hostel_fields),
+        ('transport', _transport_fields), ('expenses', _expenses_fields),
+    ]:
+        for f in fn():
+            composite_key = f"{module_key}__{f['key']}"
+            seen[composite_key] = {**f, 'key': composite_key, 'category': f"{module_key.title()} · {f['category']}"}
+    return list(seen.values())
+
+
+MODULE_META = {
+    'fees':       {'label': 'Fees',       'color': '#0ea5e9', 'fields': _fees_fields()},
+    'students':   {'label': 'Students',   'color': '#8b5cf6', 'fields': _students_fields()},
+    'attendance': {'label': 'Attendance', 'color': '#00a676', 'fields': _attendance_fields()},
+    'exams':      {'label': 'Exams',      'color': '#f59e0b', 'fields': _exams_fields()},
+    'staff':      {'label': 'Staff',      'color': '#ef4444', 'fields': _staff_fields()},
+    'payroll':    {'label': 'Payroll',    'color': '#6366f1', 'fields': _payroll_fields()},
+    'library':    {'label': 'Library',    'color': '#06b6d4', 'fields': _library_fields()},
+    'hostel':     {'label': 'Hostel',     'color': '#10b981', 'fields': _hostel_fields()},
+    'transport':  {'label': 'Transport',  'color': '#f97316', 'fields': _transport_fields()},
+    'expenses':   {'label': 'Expenses',   'color': '#ec4899', 'fields': _expenses_fields()},
+}
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 _RUNNERS = {
@@ -835,6 +1334,10 @@ _RUNNERS = {
     'exams':      _run_exams,
     'staff':      _run_staff,
     'payroll':    _run_payroll,
+    'library':    _run_library,
+    'hostel':     _run_hostel,
+    'transport':  _run_transport,
+    'expenses':   _run_expenses,
 }
 
 

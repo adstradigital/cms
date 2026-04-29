@@ -139,8 +139,14 @@ const adminApi = {
   runAiTask: (data) => instance.post('/ai-brain/run/', data),
   // Notice Board / Events (Notifications)
   getNotifications: (params) => instance.get('/notifications/', { params }),
-  createNotification: (data) => instance.post('/notifications/', data),
-  updateNotification: (id, data) => instance.patch(`/notifications/${id}/`, data),
+  createNotification: (data) => {
+    const isFormData = data instanceof FormData;
+    return instance.post('/notifications/', data, isFormData ? { headers: { 'Content-Type': null } } : {});
+  },
+  updateNotification: (id, data) => {
+    const isFormData = data instanceof FormData;
+    return instance.patch(`/notifications/${id}/`, data, isFormData ? { headers: { 'Content-Type': null } } : {});
+  },
   deleteNotification: (id) => instance.delete(`/notifications/${id}/`),
   publishNotification: (id) => instance.post(`/notifications/${id}/publish/`),
 
@@ -262,6 +268,8 @@ const adminApi = {
   updateExpenseEntry: (id, data) => instance.patch(`/expenses/entries/${id}/`, data),
   deleteExpenseEntry: (id) => instance.delete(`/expenses/entries/${id}/`),
   approveExpense: (id, data) => instance.post(`/expenses/entries/${id}/approve/`, data),
+  getExpenseBalanceSheet: (params) => instance.get('/expenses/balance-sheet/', { params }),
+  getTransactionHistory: (params) => instance.get('/expenses/transactions/', { params }),
 
   // ─── Payroll ──────────────────────────────────────────────────────────────
   getPayrollAnalytics: () => instance.get('/payroll/analytics/'),

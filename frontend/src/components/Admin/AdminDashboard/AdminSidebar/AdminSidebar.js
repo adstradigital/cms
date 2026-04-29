@@ -25,6 +25,7 @@ import {
   Utensils,
   Library,
   DollarSign,
+  ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import styles from './AdminSidebar.module.css';
@@ -300,12 +301,20 @@ const AdminSidebar = () => {
           href="/admins/sessions"
           onClick={() => setExpandedMenu(null)}
         />
-        <NavItem 
-          icon={<BookOpen size={18} />} 
-          label="Lead Generation" 
+        <NavItem
+          icon={<BookOpen size={18} />}
+          label="Lead Generation"
           collapsed={isCollapsed}
-          active={pathname === '/admins/leads'} 
+          active={pathname === '/admins/leads'}
           href="/admins/leads"
+          onClick={() => setExpandedMenu(null)}
+        />
+        <NavItem
+          icon={<ClipboardList size={18} />}
+          label="Notice Board"
+          collapsed={isCollapsed}
+          active={pathname === '/admins/noticeboard'}
+          href="/admins/noticeboard"
           onClick={() => setExpandedMenu(null)}
         />
 

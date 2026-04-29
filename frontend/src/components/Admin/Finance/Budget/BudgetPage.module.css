@@ -1,0 +1,292 @@
+/* ─── KPI Strip ─── */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+@media (max-width: 1200px) { .kpiGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px)  { .kpiGrid { grid-template-columns: 1fr 1fr; } }
+
+.kpiCard {
+  background: #fff;
+  border: 1px solid var(--finance-border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpiAccent {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+
+.kpiIcon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+}
+
+.kpiLabel {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--finance-text-muted); margin-bottom: 4px;
+}
+
+.kpiValue {
+  font-family: monospace; font-size: 26px; font-weight: 900;
+  color: var(--finance-text); line-height: 1;
+}
+
+.kpiSub {
+  font-size: 12px; color: var(--finance-text-muted); margin-top: 6px;
+}
+
+/* ─── Budget List Cards ─── */
+.budgetCard {
+  display: flex; align-items: stretch; width: 100%;
+  border: none; border-bottom: 1px solid var(--finance-border);
+  background: transparent; cursor: pointer; text-align: left;
+  transition: background 0.15s; padding: 0;
+}
+.budgetCard:last-child { border-bottom: none; }
+.budgetCard:hover { background: #f8fafc; }
+.budgetCardActive { background: #eef2ff !important; }
+
+.budgetCardAccent {
+  width: 4px; flex-shrink: 0;
+  background: transparent; transition: background 0.15s;
+}
+.budgetCardActive .budgetCardAccent { background: var(--finance-primary); }
+
+.budgetCardContent {
+  flex: 1; padding: 16px 20px;
+  display: flex; align-items: center; gap: 12px; min-width: 0;
+}
+
+.budgetInfo { flex: 1; min-width: 0; }
+
+.budgetName {
+  font-size: 14px; font-weight: 600; color: var(--finance-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.budgetYear { font-size: 12px; color: var(--finance-text-muted); margin-top: 3px; }
+
+.budgetRight {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 5px; flex-shrink: 0;
+}
+
+.budgetAlloc {
+  font-family: monospace; font-size: 12px; font-weight: 700;
+  color: var(--finance-text-muted);
+}
+
+/* ─── Status Badges (budget-specific) ─── */
+.sDraft    { background: #f1f5f9; color: #64748b; }
+.sApproved { background: #dbeafe; color: #1d4ed8; }
+.sFinalized{ background: #d1fae5; color: #065f46; }
+
+/* ─── Detail Panel ─── */
+.detailHeader {
+  padding: 24px;
+  border-bottom: 1px solid var(--finance-border);
+  background: #fafbfc;
+}
+
+.detailTitle {
+  font-size: 18px; font-weight: 700; color: var(--finance-text);
+  margin: 0 0 4px;
+  font-family: 'Manrope', 'Inter', sans-serif;
+}
+
+.detailMeta {
+  font-size: 13px; color: var(--finance-text-muted);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.detailStats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  margin-top: 16px;
+}
+
+.detailStat {
+  background: #fff; border: 1px solid var(--finance-border);
+  border-radius: 8px; padding: 12px 14px;
+}
+
+.detailStatVal {
+  font-family: monospace; font-size: 18px; font-weight: 800;
+}
+
+.detailStatLbl {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--finance-text-muted); margin-top: 3px;
+}
+
+/* ─── Overall Utilization Bar ─── */
+.overallBar { margin-top: 16px; }
+
+.overallBarLabel {
+  display: flex; justify-content: space-between;
+  font-size: 12px; font-weight: 600;
+  color: var(--finance-text-muted); margin-bottom: 6px;
+}
+
+.overallBarTrack {
+  height: 8px; background: #e2e8f0;
+  border-radius: 99px; overflow: hidden;
+}
+
+.overallBarFill {
+  height: 100%; border-radius: 99px; transition: width 0.5s ease;
+}
+
+/* ─── Item Rows ─── */
+.itemRow {
+  display: flex; align-items: center;
+  padding: 14px 24px; gap: 12px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.15s;
+}
+.itemRow:last-child { border-bottom: none; }
+.itemRow:hover { background: #fafbfc; }
+
+.itemDot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+
+.itemInfo { flex: 1; min-width: 0; }
+
+.itemCat { font-size: 14px; font-weight: 600; color: var(--finance-text); }
+
+.itemProgressRow {
+  display: flex; align-items: center; gap: 8px; margin-top: 5px;
+}
+
+.itemBarTrack {
+  width: 120px; height: 4px;
+  background: #e2e8f0; border-radius: 99px; overflow: hidden; flex-shrink: 0;
+}
+
+.itemBarFill { height: 100%; border-radius: 99px; transition: width 0.4s; }
+
+.itemPct {
+  font-size: 11px; font-weight: 700; color: var(--finance-text-muted);
+}
+
+.itemAmounts { display: flex; gap: 20px; flex-shrink: 0; }
+
+.amountGroup { text-align: right; }
+
+.amountVal { font-family: monospace; font-size: 14px; font-weight: 700; }
+
+.amountLbl {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--finance-text-muted);
+}
+
+/* ─── Category Preset Chips ─── */
+.presetChips {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+
+.presetChip {
+  padding: 4px 10px; border-radius: 16px;
+  border: 1px solid var(--finance-border); background: #f8fafc;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--finance-text-muted); transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.presetChip:hover {
+  border-color: var(--finance-primary);
+  background: #eef2ff; color: var(--finance-primary);
+}
+
+/* ─── Empty State ─── */
+.emptyPanel {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 64px 24px; gap: 12px; text-align: center;
+}
+
+.emptyCircle {
+  width: 64px; height: 64px; border-radius: 16px;
+  background: #f1f5f9; display: flex; align-items: center; justify-content: center;
+  color: var(--finance-text-muted);
+}
+
+.emptyH { font-size: 15px; font-weight: 700; color: var(--finance-text); }
+.emptyP {
+  font-size: 13px; color: var(--finance-text-muted);
+  max-width: 260px; line-height: 1.5;
+}
+
+/* ─── Variance Tab ─── */
+.varHead {
+  display: grid;
+  grid-template-columns: 1fr 120px 120px 120px 160px;
+  gap: 8px; padding: 12px 24px;
+  background: #f6faff;
+  border-top: 1px solid var(--finance-border);
+  border-bottom: 2px solid var(--finance-border);
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--finance-text-muted);
+}
+
+.varRow {
+  display: grid;
+  grid-template-columns: 1fr 120px 120px 120px 160px;
+  align-items: center; gap: 8px;
+  padding: 14px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.15s;
+}
+.varRow:hover { background: #fafbfc; }
+.varRow:last-child { border-bottom: none; }
+
+.varSummary {
+  background: #f6faff !important;
+  border-top: 2px solid var(--finance-border) !important;
+}
+
+.varName {
+  font-size: 14px; font-weight: 600; color: var(--finance-text);
+  display: flex; align-items: center; gap: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.varAmt {
+  font-family: monospace; font-size: 13px; font-weight: 700;
+  text-align: right;
+}
+
+.varBarWrap {
+  display: flex; align-items: center; gap: 8px;
+}
+
+.varBarTrack {
+  flex: 1; height: 6px; background: #e2e8f0;
+  border-radius: 99px; overflow: hidden;
+}
+
+.varBarFill {
+  height: 100%; border-radius: 99px; transition: width 0.4s;
+}
+
+.varPct {
+  font-family: monospace; font-size: 12px; font-weight: 800;
+  min-width: 36px; text-align: right;
+}
+
+@media (max-width: 900px) {
+  .varHead, .varRow {
+    grid-template-columns: 1fr 90px 90px 90px;
+  }
+  .varHead > :last-child, .varRow > :last-child { display: none; }
+}

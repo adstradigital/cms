@@ -6,7 +6,12 @@ from apps.staff.models import Staff
 # ─── Expense Category ─────────────────────────────────────────────────────────
 
 class ExpenseCategory(models.Model):
+    TYPE_CHOICES = [
+        ("income", "Income"),
+        ("expense", "Expense"),
+    ]
     name = models.CharField(max_length=100)
+    category_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default="expense")
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 

@@ -208,7 +208,7 @@ export default function AttendenceStdAd() {
 
   const fetchGlobalWarnings = async () => {
     try {
-      const res = await instance.get('/attendance/warnings/');
+      const res = await instance.get('/attendance/admin/warnings/');
       setGlobalWarnings(res.data);
     } catch (e) { console.error(e); }
   };
@@ -267,31 +267,24 @@ export default function AttendenceStdAd() {
           ? `Attendance alert: ${studentName}${classLabel ? ` (${classLabel})` : ''} is below ${threshold}%. Please follow up.`
           : `Attendance alert: ${studentName}${classLabel ? ` (${classLabel})` : ''} is at ${percentage}%, below ${threshold}%. Please follow up.`;
       const message = warningMessage.trim() || fallback;
-      const res = await fetch(`${API_BASE}/attendance/admin/warnings/`, {
-        method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          student: selectedStudentId,
-          date,
-          month: derivedMonthYear.month,
-          year: derivedMonthYear.year,
-          threshold,
-          attendance_percentage: percentage,
-          message,
-        }),
+      
+      const res = await instance.post('/attendance/admin/warnings/', {
+        student: selectedStudentId,
+        date,
+        month: derivedMonthYear.month,
+        year: derivedMonthYear.year,
+        threshold,
+        attendance_percentage: percentage,
+        message,
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to send warning');
-      }
-      const data = await res.json().catch(() => ({}));
+
       setWarningMessage('');
       await fetchStudentDetail();
       await fetchOverview();
-      alert(data.parents_notified ? 'Warning sent to parents.' : 'Warning saved (no parent contact found).');
+      alert(res.data?.parents_notified ? 'Warning sent to parents.' : 'Warning saved (no parent contact found).');
     } catch (e) {
       console.error(e);
-      alert(`Warning failed: ${e.message}`);
+      alert(`Warning failed: ${e.response?.data?.error || e.message}`);
     } finally {
       setWarningSending(false);
     }
@@ -575,7 +568,7 @@ export default function AttendenceStdAd() {
                     }
 
                     return lowStudents.map((s) => (
-                      <div key={s.id} className={styles.warningItem}>
+                      <div key={s.student_id} className={styles.warningItem}>
                         <div className={styles.warningAvatar}>
                           {s.photo ? (
                             <img src={s.photo} alt={s.name} />

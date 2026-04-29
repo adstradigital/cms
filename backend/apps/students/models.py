@@ -2,9 +2,19 @@ from django.db import models
 from apps.accounts.models import User, School, AcademicYear
 
 class Class(models.Model):
+    TYPE_GRADE   = 'grade'
+    TYPE_STREAM  = 'stream'
+    TYPE_PROGRAM = 'program'
+    CLASS_TYPE_CHOICES = [
+        (TYPE_GRADE,   'Grade (School)'),
+        (TYPE_STREAM,  'Stream / Course (+1/+2)'),
+        (TYPE_PROGRAM, 'Program / Degree (College)'),
+    ]
+
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="classes")
-    name = models.CharField(max_length=50) # e.g. "Grade 1"
-    code = models.CharField(max_length=20, blank=True)
+    name = models.CharField(max_length=100)        # e.g. "Grade 10", "Science", "Mechanical Engineering"
+    code = models.CharField(max_length=20, blank=True)  # e.g. "G10", "SC", "ME"
+    class_type = models.CharField(max_length=20, choices=CLASS_TYPE_CHOICES, default=TYPE_GRADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -18,17 +28,34 @@ class Class(models.Model):
 
 class Section(models.Model):
     school_class = models.ForeignKey(Class, on_delete=models.CASCADE, related_name="sections")
-    name = models.CharField(max_length=50) # e.g. "A"
+    name = models.CharField(max_length=50)         # e.g. "A", "1"
+    year_level = models.CharField(
+        max_length=20, blank=True,
+        help_text="e.g. +1, +2, Year 1, Semester 2 — leave blank for school grades",
+    )
     class_teacher = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_section")
     room_number = models.CharField(max_length=50, blank=True)
     capacity = models.PositiveSmallIntegerField(default=40)
 
+    @property
+    def display_name(self):
+        c = self.school_class
+        ct = c.class_type
+        code = c.code or c.name[:2].upper()
+        if ct == Class.TYPE_STREAM:
+            lvl = self.year_level.replace('+', '') if self.year_level else ''
+            return f"{code}{lvl}{self.name}"          # e.g. SC1A
+        if ct == Class.TYPE_PROGRAM:
+            yr = self.year_level.replace('Year ', '').replace('Semester ', 'S') if self.year_level else ''
+            return f"{code}{yr}-{self.name}"          # e.g. ME1-1
+        return f"{c.name}-{self.name}"                # e.g. Grade 10-A
+
     def __str__(self):
-        return f"{self.school_class.name} — {self.name}"
+        return self.display_name
 
     class Meta:
         db_table = "sections"
-        unique_together = ("school_class", "name")
+        unique_together = ("school_class", "name", "year_level")
 
 
 class Student(models.Model):

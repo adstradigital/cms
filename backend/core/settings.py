@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     'apps.ai_brain',
     'apps.expenses',
     'apps.payroll',
+    'apps.reports',
 
     # Celery result backend
     'django_celery_results',

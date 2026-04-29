@@ -25,6 +25,7 @@ import {
   Library,
   DollarSign,
   ClipboardList,
+  BarChart,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import styles from './AdminSidebar.module.css';
@@ -328,6 +329,15 @@ const AdminSidebar = () => {
           showFlyout={showFlyout}
           scheduleHide={scheduleHide}
           pathname={pathname}
+        />
+
+        <NavItem
+          icon={<BarChart size={18} />}
+          label="Dynamic Report"
+          collapsed={isCollapsed}
+          active={pathname?.startsWith('/admins/reports/dynamic')}
+          href="/admins/reports/dynamic"
+          onClick={() => setExpandedMenu(null)}
         />
 
         {/* AI Brain section commented out — links moved to Students section

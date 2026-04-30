@@ -7,6 +7,7 @@ from .models import (
     RouteStop,
     SchoolBus,
     StudentTransport,
+    StudentTransportLog,
     TransportComplaint,
     TransportFee,
     TransportFeePayment,
@@ -73,6 +74,20 @@ class BusLocationLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = BusLocationLog
         fields = "__all__"
+
+
+class StudentTransportLogSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
+    route_name = serializers.CharField(source="route.name", read_only=True)
+    bus_number = serializers.CharField(source="bus.bus_number", read_only=True)
+    stop_name = serializers.CharField(source="stop.stop_name", read_only=True)
+    recorded_by_name = serializers.CharField(source="recorded_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = StudentTransportLog
+        fields = "__all__"
+        read_only_fields = ["route", "bus", "stop", "recorded_by", "source", "created_at", "updated_at"]
 
 
 class TransportFeePaymentSerializer(serializers.ModelSerializer):

@@ -103,6 +103,62 @@ class StudentTransport(models.Model):
         db_table = "student_transport"
 
 
+class StudentTransportLog(models.Model):
+    SOURCE_CHOICES = [
+        ("manual", "Manual Entry"),
+        ("mobile", "Mobile App"),
+        ("rfid", "RFID/Scanner"),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="transport_logs")
+    route = models.ForeignKey(
+        TransportRoute,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="student_logs",
+    )
+    bus = models.ForeignKey(
+        SchoolBus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="student_logs",
+    )
+    stop = models.ForeignKey(
+        RouteStop,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="student_logs",
+    )
+    date = models.DateField(db_index=True)
+    boarding_time = models.TimeField(null=True, blank=True)
+    exiting_time = models.TimeField(null=True, blank=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="manual")
+    recorded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transport_student_logs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.student} â€” {self.date}"
+
+    class Meta:
+        db_table = "student_transport_logs"
+        unique_together = ("student", "date")
+        ordering = ["-date", "student_id"]
+        indexes = [
+            models.Index(fields=["date", "route"], name="stud_trlog_date_route_idx"),
+            models.Index(fields=["student", "date"], name="stud_trlog_student_date_idx"),
+        ]
+
+
 class BusLocationLog(models.Model):
     SOURCE_CHOICES = [
         ("gps", "GPS Device"),

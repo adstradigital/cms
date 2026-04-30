@@ -17,7 +17,7 @@ const adminApi = {
   bulkMarkAttendance: (data) => instance.post('/attendance/attendance/bulk-mark/', data),
   getAttendanceOverview: (params) => instance.get('/attendance/admin/overview/', { params }),
   getStudentAttendanceDetail: (studentId, params) => instance.get(`/attendance/admin/student/${studentId}/`, { params }),
-  sendAttendanceWarning: (data) => instance.post('/attendance/admin/warning/', data),
+  sendAttendanceWarning: (data) => instance.post('/attendance/admin/warnings/', data),
   // Academics - Subjects & Syllabus
   getSubjects: (params) => instance.get('/academics/subjects/', { params }),
   createSubject: (data) => instance.post('/academics/subjects/', data),
@@ -139,8 +139,14 @@ const adminApi = {
   runAiTask: (data) => instance.post('/ai-brain/run/', data),
   // Notice Board / Events (Notifications)
   getNotifications: (params) => instance.get('/notifications/', { params }),
-  createNotification: (data) => instance.post('/notifications/', data),
-  updateNotification: (id, data) => instance.patch(`/notifications/${id}/`, data),
+  createNotification: (data) => {
+    const isFormData = data instanceof FormData;
+    return instance.post('/notifications/', data, isFormData ? { headers: { 'Content-Type': null } } : {});
+  },
+  updateNotification: (id, data) => {
+    const isFormData = data instanceof FormData;
+    return instance.patch(`/notifications/${id}/`, data, isFormData ? { headers: { 'Content-Type': null } } : {});
+  },
   deleteNotification: (id) => instance.delete(`/notifications/${id}/`),
   publishNotification: (id) => instance.post(`/notifications/${id}/publish/`),
 
@@ -177,6 +183,7 @@ const adminApi = {
   getFeePayments: (params) => instance.get('/fees/payments/', { params }),
   createFeePayment: (data) => instance.post('/fees/payments/', data),
   updateFeePayment: (id, data) => instance.patch(`/fees/payments/${id}/`, data),
+  sendFeeReceiptEmail: (id, data) => instance.post(`/fees/payments/${id}/email-receipt/`, data),
 
   // Reports & Tracking
   getFeeSectionOverview: (params) => instance.get('/fees/section-overview/', { params }),
@@ -196,6 +203,14 @@ const adminApi = {
   getPermStaffUsers: (params) => instance.get('/permissions/staff-users/', { params }),
 
   // Phase 2: Staff HR
+  getStaffHRDashboard: (params) => instance.get('/staff/hr/dashboard/', { params }),
+  getStaffHRAttendance: (params) => instance.get('/staff/hr/attendance/', { params }),
+  bulkMarkStaffAttendance: (data) => instance.post('/staff/hr/attendance/bulk/', data),
+  updateStaffAttendanceRecord: (id, data) => instance.patch(`/staff/hr/attendance/${id}/`, data),
+  getStaffLeaveBalances: (params) => instance.get('/staff/hr/leave-balance/', { params }),
+  getStaffMonthlyReport: (params) => instance.get('/staff/hr/monthly-report/', { params }),
+  exportStaffMonthlyReport: (params) => instance.get('/staff/hr/monthly-report/export/', { params, responseType: 'blob' }),
+
   getStaffAttendance: (params) => instance.get('/staff/attendance/', { params }),
   clockInStaff: () => instance.post('/staff/attendance/', { action: 'clock_in' }),
   clockOutStaff: () => instance.post('/staff/attendance/', { action: 'clock_out' }),
@@ -253,8 +268,11 @@ const adminApi = {
   updateExpenseEntry: (id, data) => instance.patch(`/expenses/entries/${id}/`, data),
   deleteExpenseEntry: (id) => instance.delete(`/expenses/entries/${id}/`),
   approveExpense: (id, data) => instance.post(`/expenses/entries/${id}/approve/`, data),
+  getExpenseBalanceSheet: (params) => instance.get('/expenses/balance-sheet/', { params }),
+  getTransactionHistory: (params) => instance.get('/expenses/transactions/', { params }),
 
   // ─── Payroll ──────────────────────────────────────────────────────────────
+  getPayrollAnalytics: () => instance.get('/payroll/analytics/'),
   getSalaryStructures: (params) => instance.get('/payroll/salary-structures/', { params }),
   createSalaryStructure: (data) => instance.post('/payroll/salary-structures/', data),
   updateSalaryStructure: (id, data) => instance.patch(`/payroll/salary-structures/${id}/`, data),
@@ -266,9 +284,15 @@ const adminApi = {
   getPayrollRuns: (params) => instance.get('/payroll/runs/', { params }),
   createPayrollRun: (data) => instance.post('/payroll/runs/', data),
   getPayrollRun: (id) => instance.get(`/payroll/runs/${id}/`),
-  processPayrollRun: (id) => instance.post(`/payroll/runs/${id}/process/`),
+  processPayrollRun: (id, data) => instance.post(`/payroll/runs/${id}/process/`, data || {}),
+  generatePayrollInsights: (id) => instance.post(`/payroll/runs/${id}/insights/`),
   updatePayrollEntry: (id, data) => instance.patch(`/payroll/entries/${id}/`, data),
   getPayrollEntry: (id) => instance.get(`/payroll/entries/${id}/`),
+  getIncrements: (params) => instance.get('/payroll/increments/', { params }),
+  createIncrement: (data) => instance.post('/payroll/increments/', data),
+  updateIncrement: (id, data) => instance.patch(`/payroll/increments/${id}/`, data),
+  deleteIncrement: (id) => instance.delete(`/payroll/increments/${id}/`),
+  generateIncrementAiReason: (data) => instance.post('/payroll/increments/generate-reason/', data),
 
   // ─── Budget ───────────────────────────────────────────────────────────────
   getDonations: (params) => instance.get('/fees/donations/', { params }),

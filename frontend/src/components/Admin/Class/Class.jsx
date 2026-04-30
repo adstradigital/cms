@@ -34,6 +34,95 @@ const normalizeList = (data) => {
   return [];
 };
 
+const YEAR_LEVEL_HINTS = {
+  stream:  { placeholder: 'e.g. +1 or +2', label: 'Level (+1 / +2)' },
+  program: { placeholder: 'e.g. Year 1, Year 2, Semester 1', label: 'Year / Semester' },
+};
+
+function SectionForm({ editingSection, classes, teachers, styles, onClose, onSaved }) {
+  const defaultClassId = editingSection?.school_class ?? '';
+  const defaultClass = classes.find(c => String(c.id) === String(defaultClassId));
+  const [selectedClassType, setSelectedClassType] = React.useState(defaultClass?.class_type ?? 'grade');
+
+  const hint = YEAR_LEVEL_HINTS[selectedClassType];
+
+  return (
+    <form className={styles.modalForm} onSubmit={async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData);
+      if (!hint) delete data.year_level;
+      try {
+        if (editingSection) {
+          await adminApi.updateSection(editingSection.id, data);
+        } else {
+          await adminApi.createSection(data);
+        }
+        onSaved();
+      } catch (err) {
+        const msg = err.response?.data?.error || err.response?.data?.detail || 'Operation failed';
+        alert(msg);
+      }
+    }}>
+      <div className={styles.formGroup}>
+        <label>Parent Class</label>
+        <select
+          name="school_class"
+          defaultValue={defaultClassId}
+          required
+          onChange={(e) => {
+            const c = classes.find(cl => String(cl.id) === e.target.value);
+            setSelectedClassType(c?.class_type ?? 'grade');
+          }}
+        >
+          <option value="">Select a Class</option>
+          {classes.map(c => (
+            <option key={c.id} value={c.id}>
+              {c.name}{c.code ? ` (${c.code})` : ''} — {c.class_type}
+            </option>
+          ))}
+        </select>
+      </div>
+      {hint && (
+        <div className={styles.formGroup}>
+          <label>{hint.label}</label>
+          <input name="year_level" placeholder={hint.placeholder} defaultValue={editingSection?.year_level} />
+          <p className={styles.subtitle} style={{ marginTop: 6 }}>Used to build the short display name (e.g. SC1A, ME1-1).</p>
+        </div>
+      )}
+      <div className={styles.formGroup}>
+        <label>Section Name</label>
+        <input name="name" placeholder="e.g. A, B, 1, 2" defaultValue={editingSection?.name} required />
+        <p className={styles.subtitle} style={{ marginTop: 6 }}>The division within the class/stream/program.</p>
+      </div>
+      <div className={styles.formGroup}>
+        <label>Class Teacher</label>
+        <select name="class_teacher" defaultValue={editingSection?.class_teacher}>
+          <option value="">Assign a Teacher</option>
+          {teachers
+            .filter(t => t.is_teaching_staff && t.employee_id)
+            .map(t => (
+              <option key={t.id} value={t.user}>{t.full_name} ({t.employee_id})</option>
+            ))
+          }
+        </select>
+      </div>
+      <div className={styles.formGroup}>
+        <label>Room Number</label>
+        <input name="room_number" defaultValue={editingSection?.room_number} />
+      </div>
+      <div className={styles.formGroup}>
+        <label>Capacity</label>
+        <input type="number" name="capacity" defaultValue={editingSection?.capacity || 40} />
+      </div>
+      <div className={styles.modalActions}>
+        <button type="button" className={`${styles.btn} ${styles.btnOutline}`} onClick={onClose}>Cancel</button>
+        <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>{editingSection ? 'Save Changes' : 'Create Section'}</button>
+      </div>
+    </form>
+  );
+}
+
 /* Main Component */
 const Class = () => {
   const { user } = useAuth();
@@ -735,7 +824,7 @@ const Class = () => {
               <GraduationCap size={24} />
             </div>
             <div className={styles.cardInfo}>
-              <h3>{section.class_name} — {section.name}</h3>
+              <h3>{section.display_name || `${section.class_name} — ${section.name}`}</h3>
               <span className={styles.subtitle}>Academic Section</span>
             </div>
           </div>
@@ -848,7 +937,7 @@ const Class = () => {
         </button>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h2>{selectedSection?.class_name} — Section {selectedSection?.name} Students</h2>
+            <h2>{selectedSection?.display_name || `${selectedSection?.class_name} — ${selectedSection?.name}`} Students</h2>
             <p>
               Class Teacher: <strong>{selectedSection?.class_teacher_name || 'Not assigned'}</strong> • 
               Academic Year {academicYear}
@@ -1579,60 +1668,14 @@ const Class = () => {
               <h3>{editingSection ? 'Edit Section' : 'Create New Section'}</h3>
               <button className={styles.closeBtn} onClick={() => setIsNewSectionModalOpen(false)}>X</button>
             </div>
-            <form className={styles.modalForm} onSubmit={async (e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target);
-              const data = Object.fromEntries(formData);
-              try {
-                if (editingSection) {
-                  await adminApi.updateSection(editingSection.id, data);
-                } else {
-                  await adminApi.createSection(data);
-                }
-                loadDashboard();
-                setIsNewSectionModalOpen(false);
-              } catch (err) {
-                const msg = err.response?.data?.error || err.response?.data?.detail || 'Operation failed';
-                alert(msg);
-              }
-            }}>
-              <div className={styles.formGroup}>
-                <label>Section Name</label>
-                <input name="name" placeholder="e.g. A, B, or Elite" defaultValue={editingSection?.name} required />
-                <p className={styles.subtitle} style={{ marginTop: 6 }}>A specific group of students within a Grade.</p>
-              </div>
-              <div className={styles.formGroup}>
-                <label>Parent Class</label>
-                <select name="school_class" defaultValue={editingSection?.school_class} required>
-                  <option value="">Select a Class</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className={styles.formGroup}>
-                <label>Class Teacher</label>
-                <select name="class_teacher" defaultValue={editingSection?.class_teacher}>
-                  <option value="">Assign a Teacher</option>
-                  {teachers
-                    .filter(t => t.is_teaching_staff && t.employee_id) // Hard filter for academic staff
-                    .map(t => (
-                      <option key={t.id} value={t.user}>{t.full_name} ({t.employee_id})</option>
-                    ))
-                  }
-                </select>
-              </div>
-              <div className={styles.formGroup}>
-                <label>Room Number</label>
-                <input name="room_number" defaultValue={editingSection?.room_number} />
-              </div>
-              <div className={styles.formGroup}>
-                <label>Capacity</label>
-                <input type="number" name="capacity" defaultValue={editingSection?.capacity || 40} />
-              </div>
-              <div className={styles.modalActions}>
-                <button type="button" className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsNewSectionModalOpen(false)}>Cancel</button>
-                <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>{editingSection ? 'Save Changes' : 'Create Section'}</button>
-              </div>
-            </form>
+            <SectionForm
+              editingSection={editingSection}
+              classes={classes}
+              teachers={teachers}
+              styles={styles}
+              onClose={() => setIsNewSectionModalOpen(false)}
+              onSaved={() => { loadDashboard(); setIsNewSectionModalOpen(false); }}
+            />
           </div>
         </div>
       )}
@@ -1663,13 +1706,22 @@ const Class = () => {
               }
             }}>
               <div className={styles.formGroup}>
-                <label>Class Name (Grade)</label>
-                <input name="name" placeholder="e.g. Grade 10" defaultValue={editingClass?.name} required />
-                <p className={styles.subtitle} style={{ marginTop: 6 }}>This represents the overall academic level/syllabus.</p>
+                <label>Type</label>
+                <select name="class_type" defaultValue={editingClass?.class_type || 'grade'}>
+                  <option value="grade">Grade (School) — e.g. Grade 10</option>
+                  <option value="stream">Stream / Course (+1/+2) — e.g. Science, Commerce</option>
+                  <option value="program">Program / Degree (College) — e.g. Mechanical Engineering</option>
+                </select>
+                <p className={styles.subtitle} style={{ marginTop: 6 }}>Determines how sections and display names are formatted.</p>
               </div>
               <div className={styles.formGroup}>
-                <label>Class Code</label>
-                <input name="code" placeholder="e.g. G10" defaultValue={editingClass?.code} />
+                <label>Full Name</label>
+                <input name="name" placeholder="e.g. Grade 10 / Science / Mechanical Engineering" defaultValue={editingClass?.name} required />
+              </div>
+              <div className={styles.formGroup}>
+                <label>Short Code (Abbreviation)</label>
+                <input name="code" placeholder="e.g. G10 / SC / ME" defaultValue={editingClass?.code} />
+                <p className={styles.subtitle} style={{ marginTop: 6 }}>Used to build short section names like SC1A or ME1-1.</p>
               </div>
               <div className={styles.modalActions}>
                 <button type="button" className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setIsNewClassModalOpen(false)}>Cancel</button>

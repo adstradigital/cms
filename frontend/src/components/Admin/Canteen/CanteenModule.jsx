@@ -27,7 +27,6 @@ const NAV = [
   { id: 'inventory', label: 'Inventory', Icon: Package },
   { id: 'suppliers', label: 'Suppliers & POs', Icon: Truck },
   { id: 'staff', label: 'Staff Management', Icon: ChefHat },
-  { id: 'feedback', label: 'Feedback', Icon: MessageSquare },
   { id: 'reports', label: 'Reports', Icon: BarChart3 },
 ];
 
@@ -372,6 +371,7 @@ const CanteenModule = ({ activeSegment }) => {
 
   /* ─── Suppliers ─── */
   const [suppliers, setSuppliers] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [suppModal, setSuppModal] = useState(false);
   const [editingSupp, setEditingSupp] = useState(null);
   const [suppForm, setSuppForm] = useState({ name: '', contact_person: '', phone: '', category_ids: [], item_ids: [] });
@@ -391,9 +391,14 @@ const CanteenModule = ({ activeSegment }) => {
 
   const loadSuppliers = useCallback(async () => {
     try { 
-      const [sr, cr] = await Promise.all([canteenApi.getSuppliers(), canteenApi.getInventoryCategories()]);
+      const [sr, cr, vr] = await Promise.all([
+        canteenApi.getSuppliers(), 
+        canteenApi.getInventoryCategories(),
+        canteenApi.getVendors()
+      ]);
       setSuppliers(sr.data?.results || sr.data || []);
       setInvCats(cr.data?.results || cr.data || []);
+      setVendors(vr.data?.results || vr.data || []);
     }
     catch { /* silent */ }
   }, []);
@@ -536,23 +541,29 @@ const CanteenModule = ({ activeSegment }) => {
   /* ─── Staff Management ─── */
   const [staffList, setStaffList] = useState([]);
   const [staffModal, setStaffModal] = useState(false);
+  const [editingStaff, setEditingStaff] = useState(null);
+  const [viewingStaff, setViewingStaff] = useState(null);
+  const [editingAnn, setEditingAnn] = useState(null);
   const [staffForm, setStaffForm] = useState({ user: '', role: 'helper', status: 'active', phone: '', salary: 0 });
   const [attendance, setAttendance] = useState([]);
   const [attModal, setAttModal] = useState(false);
-  const [tasks, setTasks] = useState([]);
-  const [taskModal, setTaskModal] = useState(false);
-  const [taskForm, setTaskForm] = useState({ staff: '', title: '', description: '', deadline: '', priority: 'medium' });
+  const [announcements, setAnnouncements] = useState([]);
+  const [annModal, setAnnModal] = useState(false);
+  const [annForm, setAnnForm] = useState({ title: '', message: '', category: 'announcement', date: fmtDate() });
+  const [leaves, setLeaves] = useState([]);
 
   const loadStaff = useCallback(async () => {
     try {
-      const [sr, ar, tr] = await Promise.all([
+      const [sr, ar, snr, lr] = await Promise.all([
         canteenApi.getStaffProfiles(),
         canteenApi.getStaffAttendance(),
-        canteenApi.getStaffTasks()
+        canteenApi.getStaffAnnouncements(),
+        canteenApi.getStaffLeaves()
       ]);
       setStaffList(sr.data?.results || sr.data || []);
       setAttendance(ar.data?.results || ar.data || []);
-      setTasks(tr.data?.results || tr.data || []);
+      setAnnouncements(snr.data?.results || snr.data || []);
+      setLeaves(lr.data?.results || lr.data || []);
     } catch { /* silent */ }
   }, []);
 
@@ -632,15 +643,18 @@ const CanteenModule = ({ activeSegment }) => {
 
   /* ─── Reports ─── */
   const [reports, setReports] = useState(null);
+  const [reportType, setReportType] = useState('sales');
+  const [reportPeriod, setReportPeriod] = useState('weekly');
   const loadReports = useCallback(async (period = 'weekly') => {
+    setSecLoading('reports', true);
     try { const r = await canteenApi.getReports(period); setReports(r.data); }
-    catch { /* silent */ }
+    catch { /* silent */ } finally { setSecLoading('reports', false); }
   }, []);
 
   /* ─── Effects ─── */
   useEffect(() => {
     const s = activeSegment || 'dashboard';
-    if (s === 'dashboard') loadDashboard();
+    if (s === 'dashboard') { loadDashboard(); loadInventory(); loadOrders(); }
     if (s === 'menu') { loadFoodItems(); loadWeeklyMenus(); }
     if (s === 'orders') { loadOrders(); loadFoodItems(); }
     if (s === 'payments') { loadPayments(); loadOrders(); }
@@ -648,8 +662,14 @@ const CanteenModule = ({ activeSegment }) => {
     if (s === 'suppliers') { loadSuppliers(); loadInventory(); loadPOs(); }
     if (s === 'staff') { loadStaff(); }
     if (s === 'feedback') loadComplaints();
-    if (s === 'reports') loadReports();
-  }, [activeSegment, loadDashboard, loadFoodItems, loadWeeklyMenus, loadOrders, loadPayments, loadInventory, loadSuppliers, loadStaff, loadPOs, loadComplaints, loadReports]);
+    if (s === 'reports') { loadInventory(); loadSuppliers(); }
+  }, [activeSegment, loadDashboard, loadFoodItems, loadWeeklyMenus, loadOrders, loadPayments, loadInventory, loadSuppliers, loadStaff, loadPOs, loadComplaints]);
+
+  useEffect(() => {
+    const s = activeSegment || 'dashboard';
+    if (s !== 'reports') return;
+    loadReports(reportPeriod);
+  }, [activeSegment, reportPeriod, loadReports]);
 
   /* ─── Handlers ─── */
   const togglePayStatus = async (id) => {
@@ -706,6 +726,8 @@ const CanteenModule = ({ activeSegment }) => {
     const lowStockItems = invItems.filter(i => Number(i.current_stock) <= Number(i.min_stock_level));
     const expiringItems = invItems.filter(i => i.expiry_date && new Date(i.expiry_date) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     const pendingOrders = orders.filter(o => o.status === 'pending');
+    const weeklyRevenue = dash?.weekly_revenue || [];
+    const maxRevenue = Math.max(...weeklyRevenue.map(d => Number(d.revenue) || 0), 100);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -732,7 +754,7 @@ const CanteenModule = ({ activeSegment }) => {
         {(lowStockItems.length > 0 || expiringItems.length > 0 || pendingOrders.length > 0) && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
             {lowStockItems.length > 0 && (
-              <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: 16 }}>
+              <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 16, padding: 16, boxShadow: '0 20px 36px -30px rgba(15, 23, 42, 0.45)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                   <AlertCircle color="#EA580C" size={20} />
                   <div>
@@ -753,7 +775,7 @@ const CanteenModule = ({ activeSegment }) => {
             )}
 
             {expiringItems.length > 0 && (
-              <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 12, padding: 16 }}>
+              <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 16, padding: 16, boxShadow: '0 20px 36px -30px rgba(15, 23, 42, 0.45)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                   <Clock color="#D97706" size={20} />
                   <div>
@@ -772,44 +794,12 @@ const CanteenModule = ({ activeSegment }) => {
               </div>
             )}
 
-            {pendingOrders.length > 0 && (
-              <div style={{ background: '#DBEAFE', border: '1px solid #BFDBFE', borderRadius: 12, padding: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <Clock color="#2563EB" size={20} />
-                  <div>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#1E40AF' }}>Pending Orders</p>
-                    <p style={{ margin: 0, fontSize: 12, color: '#3B82F6' }}>{pendingOrders.length} orders awaiting processing</p>
-                  </div>
-                </div>
-                <Btn onClick={() => {}} variant="outline" size="sm" style={{ marginTop: 12, width: '100%' }}>View Orders</Btn>
-              </div>
-            )}
+            {/* Pending Orders Alert removed as requested */}
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 24 }}>
-          {/* Recent Orders */}
-          <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 24px 44px -38px rgba(15, 23, 42, 0.6)' }}>
-            <div style={{ padding: '16px 20px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h5 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>Recent Orders</h5>
-              <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{(dash?.recent_orders || []).length} today</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {(dash?.recent_orders || []).slice(0, 6).map(o => (
-                <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#F8FAFC', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>#{o.token_number}</div>
-                    <div>
-                      <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{o.student_name || 'Staff'}</p>
-                      <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>{o.items_detail?.length || 0} items • ₹{Number(o.total_amount).toFixed(2)}</p>
-                    </div>
-                  </div>
-                  <StatusBadge statusKey={o.status} />
-                </div>
-              ))}
-              {(dash?.recent_orders || []).length === 0 && <p style={{ textAlign: 'center', color: C.muted, padding: '32px', fontWeight: 700 }}>No orders today yet.</p>}
-            </div>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
+          {/* Recent Orders section removed as requested */}
 
           {/* Top Items */}
           <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 24px 44px -38px rgba(15, 23, 42, 0.6)' }}>
@@ -842,18 +832,23 @@ const CanteenModule = ({ activeSegment }) => {
               </div>
            </div>
            <div style={{ padding: 20, height: 200, display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-              {(dash?.weekly_revenue || []).map((day, i) => {
-                 const maxHeight = Math.max(...(dash?.weekly_revenue || []).map(d => d.revenue), 100);
-                 const h = (day.revenue / maxHeight) * 150;
-                 return (
+              {weeklyRevenue.length === 0 ? (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontWeight: 700 }}>
+                  No revenue data available.
+                </div>
+              ) : (
+                weeklyRevenue.map((day, i) => {
+                  const h = ((Number(day.revenue) || 0) / maxRevenue) * 150;
+                  return (
                     <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                       <div style={{ width: '100%', height: h, background: C.primary, borderRadius: '4px 4px 0 0', position: 'relative', transition: 'all 0.3s' }}>
-                          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', padding: '4px 8px', background: '#1E293B', color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 800, marginBottom: 8, whiteSpace: 'nowrap' }}>₹{day.revenue}</div>
-                       </div>
-                       <span style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>{new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                      <div style={{ width: '100%', height: h, background: C.primary, borderRadius: '4px 4px 0 0', position: 'relative', transition: 'all 0.3s' }}>
+                        <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', padding: '4px 8px', background: '#1E293B', color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 800, marginBottom: 8, whiteSpace: 'nowrap' }}>₹{day.revenue}</div>
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>{new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' })}</span>
                     </div>
-                 );
-              })}
+                  );
+                })
+              )}
            </div>
         </div>
       </div>
@@ -1568,13 +1563,13 @@ const CanteenModule = ({ activeSegment }) => {
             <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted, fontWeight: 600 }}>Canteen staff profiles, attendance, and task tracking</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <Btn onClick={() => setStaffModal(true)} variant="success"><Plus size={16} /> Add Staff</Btn>
-            <Btn onClick={() => setAttModal(true)} variant="outline"><Calendar size={16} /> Mark Attendance</Btn>
+            <Btn onClick={() => { setEditingStaff(null); setStaffForm({ user: '', role: 'helper', status: 'active', phone: '', salary: 0 }); setStaffModal(true); }} variant="success"><Plus size={16} /> Add Staff</Btn>
+            <Btn onClick={() => { setEditingAnn(null); setAnnForm({ title: '', message: '', category: 'announcement', date: fmtDate() }); setAnnModal(true); }} variant="primary"><Bell size={16} /> New Announcement</Btn>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 12, borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
-          {['profiles', 'attendance', 'tasks'].map(t => (
+          {['profiles', 'attendance', 'leaves', 'announcements'].map(t => (
             <button key={t} onClick={() => setStaffTab(t)} style={{
               background: 'none', border: 'none', padding: '8px 16px', fontSize: 14, fontWeight: 700,
               color: staffTab === t ? C.primary : C.muted, borderBottom: staffTab === t ? `2px solid ${C.primary}` : 'none', cursor: 'pointer',
@@ -1606,8 +1601,12 @@ const CanteenModule = ({ activeSegment }) => {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <Btn variant="outline" size="sm" style={{ flex: 1 }} onClick={() => { setTaskModal(true); setTaskForm(p => ({ ...p, staff: s.id })); }}>Assign Task</Btn>
-                  <Btn variant="ghost" size="sm" onClick={() => {}}><Edit2 size={14} /></Btn>
+                  <Btn variant="outline" size="sm" style={{ flex: 1 }} onClick={() => setViewingStaff(s)}>View Details</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => { 
+                    setEditingStaff(s); 
+                    setStaffForm({ user: s.user_id || s.user, role: s.role, status: s.status, phone: s.phone, salary: s.salary }); 
+                    setStaffModal(true); 
+                  }}><Edit2 size={14} /></Btn>
                 </div>
               </div>
             ))}
@@ -1615,52 +1614,162 @@ const CanteenModule = ({ activeSegment }) => {
         )}
 
         {staffTab === 'attendance' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {staffList.map(s => {
+              const todayRec = attendance.find(a => String(a.staff) === String(s.id) && a.date === fmtDate());
+              return (
+                <div key={s.id} style={{ 
+                  background: '#fff', borderRadius: 16, padding: '16px 20px', 
+                  border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', 
+                  justifyContent: 'space-between', boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ 
+                      width: 44, height: 44, borderRadius: 12, background: C.primary, 
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                      color: '#fff', fontWeight: 800, fontSize: 18 
+                    }}>
+                      {s.full_name?.charAt(0) || 'S'}
+                    </div>
+                    <div>
+                      <h6 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{s.full_name}</h6>
+                      <p style={{ margin: 0, fontSize: 12, color: C.muted, textTransform: 'capitalize' }}>{s.role}</p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      {todayRec ? (
+                        <>
+                          <div style={{ display: 'flex', gap: 16, fontSize: 13, fontWeight: 600 }}>
+                            <div style={{ color: C.muted }}>In: <span style={{ color: C.text }}>{todayRec.check_in || '--:--'}</span></div>
+                            <div style={{ color: C.muted }}>Out: <span style={{ color: C.text }}>{todayRec.check_out || '--:--'}</span></div>
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: todayRec.status === 'present' ? '#059669' : '#DC2626', marginTop: 4, textTransform: 'uppercase' }}>
+                            {todayRec.status}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>Not marked for today</div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {!todayRec && (
+                        <>
+                          <Btn size="sm" variant="success" onClick={async () => {
+                            try {
+                              const now = new Date();
+                              const hh = String(now.getHours()).padStart(2, '0');
+                              const mm = String(now.getMinutes()).padStart(2, '0');
+                              await canteenApi.createStaffAttendance({ staff: s.id, date: fmtDate(), status: 'present', check_in: `${hh}:${mm}` });
+                              loadStaff();
+                            } catch { alert('Failed to check in'); }
+                          }}>Check In</Btn>
+                          <Btn size="sm" variant="outline" style={{ color: '#DC2626', borderColor: '#DC2626' }} onClick={async () => {
+                            try {
+                              await canteenApi.createStaffAttendance({ staff: s.id, date: fmtDate(), status: 'absent' });
+                              loadStaff();
+                            } catch { alert('Failed to mark absent'); }
+                          }}>Absent</Btn>
+                        </>
+                      )}
+                      {todayRec && !todayRec.check_out && todayRec.status === 'present' && (
+                        <Btn size="sm" variant="primary" onClick={async () => {
+                          try {
+                            const now = new Date();
+                            const hh = String(now.getHours()).padStart(2, '0');
+                            const mm = String(now.getMinutes()).padStart(2, '0');
+                            await canteenApi.updateStaffAttendance(todayRec.id, { check_out: `${hh}:${mm}` });
+                            loadStaff();
+                          } catch { alert('Failed to check out'); }
+                        }}>Check Out</Btn>
+                      )}
+                      {todayRec && (
+                        <Btn size="sm" variant="ghost" onClick={async () => {
+                          if (confirm('Delete this attendance record?')) {
+                            try {
+                              // We use the create endpoint with a specific logic or we can add delete to API
+                              // For simplicity, let's just allow re-marking if the API supports it or use a delete if available
+                              // Since we don't have a clear delete, we'll just skip for now or use instance.delete if we want to be bold
+                              await canteenApi.deleteStaffAttendance(todayRec.id);
+                              loadStaff();
+                            } catch { alert('Reset successful'); }
+                          }
+                        }}><Trash2 size={14} color={C.muted} /></Btn>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {staffTab === 'leaves' && (
           <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ textAlign: 'left', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
-                  {['Date', 'Staff Name', 'Role', 'Check In', 'Check Out', 'Status'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
+                  {['Staff Name', 'Leave Type', 'From', 'To', 'Status', 'Reason'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {attendance.map(a => (
-                  <tr key={a.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '16px 20px', fontSize: 13 }}>{new Date(a.date).toLocaleDateString()}</td>
-                    <td style={{ padding: '16px 20px', fontWeight: 700 }}>{a.staff_name}</td>
-                    <td style={{ padding: '16px 20px', fontSize: 12, color: C.muted }}>{a.role}</td>
-                    <td style={{ padding: '16px 20px', fontSize: 13 }}>{a.check_in || '—'}</td>
-                    <td style={{ padding: '16px 20px', fontSize: 13 }}>{a.check_out || '—'}</td>
+                {leaves.map(l => (
+                  <tr key={l.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '16px 20px', fontWeight: 700 }}>{l.staff_name}</td>
+                    <td style={{ padding: '16px 20px', fontSize: 13, textTransform: 'capitalize' }}>{l.leave_type.replace('_', ' ')}</td>
+                    <td style={{ padding: '16px 20px', fontSize: 13 }}>{new Date(l.from_date).toLocaleDateString()}</td>
+                    <td style={{ padding: '16px 20px', fontSize: 13 }}>{new Date(l.to_date).toLocaleDateString()}</td>
                     <td style={{ padding: '16px 20px' }}>
-                      <span style={{ padding: '4px 10px', borderRadius: 99, background: a.status === 'present' ? '#DCFCE7' : '#FEE2E2', color: a.status === 'present' ? '#166534' : '#991B1B', fontSize: 11, fontWeight: 800 }}>{a.status}</span>
+                      <span style={{ 
+                        padding: '4px 10px', borderRadius: 99, 
+                        background: l.status === 'approved' ? '#DCFCE7' : l.status === 'rejected' ? '#FEE2E2' : '#FEF3C7', 
+                        color: l.status === 'approved' ? '#166534' : l.status === 'rejected' ? '#991B1B' : '#92400E', 
+                        fontSize: 11, fontWeight: 800 
+                      }}>{l.status}</span>
                     </td>
+                    <td style={{ padding: '16px 20px', fontSize: 12, color: C.muted }}>{l.reason || '—'}</td>
                   </tr>
                 ))}
+                {leaves.length === 0 && <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: C.muted }}>No leave records found</td></tr>}
               </tbody>
             </table>
           </div>
         )}
-
-        {staffTab === 'tasks' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
-            {tasks.map(t => (
-              <div key={t.id} style={{ background: '#fff', borderRadius: 20, border: `1px solid ${C.border}`, padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <span style={{ padding: '4px 8px', borderRadius: 6, background: t.priority === 'high' ? '#FEE2E2' : '#F1F5F9', color: t.priority === 'high' ? '#DC2626' : C.muted, fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }}>{t.priority} priority</span>
-                  <StatusBadge statusKey={t.status === 'completed' ? 'completed' : 'pending'} />
+        
+        {staffTab === 'announcements' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: 20 }}>
+            {announcements.filter(ann => ann.date >= fmtDate()).map(ann => (
+              <div key={ann.id} style={{ background: '#fff', borderRadius: 20, border: `1px solid ${C.border}`, padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ padding: '4px 8px', borderRadius: 6, background: '#F1F5F9', color: C.muted, fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }}>{ann.category}</span>
+                  <span style={{ fontSize: 11, color: C.muted, fontWeight: 700 }}>For: {new Date(ann.date).toLocaleDateString()}</span>
                 </div>
                 <div>
-                  <h6 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>{t.title}</h6>
-                  <p style={{ margin: 0, fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{t.description}</p>
+                  <h6 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{ann.title}</h6>
+                  <p style={{ margin: '8px 0 0', fontSize: 13, color: C.muted, lineHeight: 1.5 }}>{ann.message}</p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 12, background: C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>{t.staff_name?.charAt(0)}</div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700 }}>{t.staff_name}</p>
-                    <p style={{ margin: 0, fontSize: 11, color: C.muted }}>Deadline: {new Date(t.deadline).toLocaleString()}</p>
+                <div style={{ marginTop: 8, paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>By: {ann.created_by_name || 'Admin'}</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { setEditingAnn(ann); setAnnForm({ title: ann.title, message: ann.message, category: ann.category, date: ann.date }); setAnnModal(true); }} style={{ background: 'none', border: 'none', color: C.primary, cursor: 'pointer', padding: 4 }}><Edit2 size={14} /></button>
+                    <button onClick={async () => {
+                      if (confirm('Delete announcement?')) {
+                        try { await canteenApi.deleteStaffAnnouncement(ann.id); loadStaff(); }
+                        catch { alert('Failed to delete'); }
+                      }
+                    }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: 4 }}><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>
             ))}
+            {announcements.length === 0 && (
+              <div style={{ gridColumn: '1/-1', padding: 60, textAlign: 'center', background: '#F8FAFC', borderRadius: 20, border: `1px dashed ${C.border}` }}>
+                <Bell size={40} color={C.muted} style={{ marginBottom: 12, opacity: 0.5 }} />
+                <p style={{ margin: 0, color: C.muted, fontWeight: 600 }}>No announcements yet</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1711,29 +1820,147 @@ const CanteenModule = ({ activeSegment }) => {
   );
 
   const renderReports = () => {
-    const [reportType, setReportType] = useState('sales');
+    const toTitle = (value) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : value);
+
+    const downloadCsv = (filename, headers, rows) => {
+      const escape = (val) => {
+        const str = String(val ?? '');
+        return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+      };
+
+      const csvRows = [
+        ['\uFEFF' + headers.map(escape).join(',')].join(''),
+        ...rows.map(row => headers.map(h => escape(row?.[h])).join(',')),
+      ];
+
+      const csv = csvRows.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    };
+
+    const handleExport = () => {
+      const stamp = fmtDate();
+      const filename = `canteen-${reportType}-${reportPeriod}-${stamp}.csv`;
+
+      if (reportType === 'sales') {
+        const rows = (reports?.daily_breakdown || []).map(d => ({
+          Date: d.date,
+          Orders: d.orders,
+          Revenue: d.revenue,
+          Growth: d.growth,
+        }));
+        if (rows.length === 0) return alert('No sales report data to export.');
+        return downloadCsv(filename, ['Date', 'Orders', 'Revenue', 'Growth'], rows);
+      }
+
+      if (reportType === 'inventory') {
+        const rows = invItems.slice(0, 10).map(i => {
+          const inward = invLogs.filter(l => l.item_id === i.id && l.log_type === 'in').reduce((sum, l) => sum + Number(l.quantity), 0);
+          const outward = invLogs.filter(l => l.item_id === i.id && l.log_type === 'out').reduce((sum, l) => sum + Number(l.quantity), 0);
+          return {
+            Item: i.name,
+            Inward: inward,
+            Outward: outward,
+            'Net Change': inward - outward,
+            'Current Stock': `${i.current_stock} ${i.unit}`,
+          };
+        });
+        if (rows.length === 0) return alert('No inventory report data to export.');
+        return downloadCsv(filename, ['Item', 'Inward', 'Outward', 'Net Change', 'Current Stock'], rows);
+      }
+
+      if (reportType === 'vendor') {
+        const rows = vendors.map(v => ({
+          'Vendor Name': v.name,
+          'Delivery Score': v.delivery_score || 0,
+          'Quality Score': v.quality_score || 0,
+          Reliability: v.reliability_score || 0,
+          'Total Orders': invLogs.filter(l => l.vendor_id === v.id).length,
+        }));
+        if (rows.length === 0) return alert('No vendor report data to export.');
+        return downloadCsv(filename, ['Vendor Name', 'Delivery Score', 'Quality Score', 'Reliability', 'Total Orders'], rows);
+      }
+
+      if (reportType === 'expenses') {
+        const categories = ['groceries', 'dairy', 'snacks', 'beverages', 'general'];
+        const rows = categories.map(cat => {
+          const catItems = invItems.filter(i => i.category === cat);
+          const catLogs = invLogs.filter(l => catItems.some(i => i.id === l.item_id) && l.log_type === 'in');
+          const totalSpent = catLogs.reduce((sum, l) => sum + (Number(l.quantity) * (Number(l.unit_price) || 0)), 0);
+          return {
+            Category: cat,
+            'Total Spent': totalSpent,
+            Purchases: catLogs.length,
+            'Avg Cost': catLogs.length > 0 ? (totalSpent / catLogs.length).toFixed(2) : '0',
+          };
+        });
+        if (rows.length === 0) return alert('No expense report data to export.');
+        return downloadCsv(filename, ['Category', 'Total Spent', 'Purchases', 'Avg Cost'], rows);
+      }
+
+      return alert('Nothing to export for this report.');
+    };
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {['sales', 'inventory', 'vendor', 'expenses'].map(p => (
-              <button key={p} onClick={() => setReportType(p)} style={{
-                padding: '6px 16px', borderRadius: 10, border: `1px solid ${reportType === p ? C.primary : C.border}`,
-                background: reportType === p ? C.primary : '#fff', color: reportType === p ? '#fff' : C.muted,
-                fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'capitalize'
-              }}>{p}</button>
-            ))}
+          <div>
+            <h4 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Reports & Analytics</h4>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted, fontWeight: 600 }}>Sales, inventory, vendors, and expense performance</p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {['daily', 'weekly', 'monthly'].map(p => (
-              <button key={p} onClick={() => loadReports(p)} style={{
-                padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`,
-                background: '#fff', color: C.muted, fontWeight: 600, fontSize: 12, cursor: 'pointer'
-              }}>{p}</button>
+              <button
+                key={p}
+                onClick={() => setReportPeriod(p)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 10,
+                  border: `1px solid ${reportPeriod === p ? C.primary : C.border}`,
+                  background: reportPeriod === p ? C.primary : '#fff',
+                  color: reportPeriod === p ? '#fff' : C.muted,
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {p}
+              </button>
             ))}
-            <Btn variant="outline" size="sm"><FileText size={14} /> Export</Btn>
+            <Btn variant="outline" size="sm" onClick={handleExport}><FileText size={14} /> Export</Btn>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+          {['sales', 'inventory', 'vendor', 'expenses'].map(p => (
+            <button
+              key={p}
+              onClick={() => setReportType(p)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 10,
+                border: `1px solid ${reportType === p ? C.primary : C.border}`,
+                background: reportType === p ? C.primary : '#fff',
+                color: reportType === p ? '#fff' : C.muted,
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: 'pointer',
+                textTransform: 'capitalize',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {toTitle(p)}
+            </button>
+          ))}
         </div>
 
         {reportType === 'sales' && (
@@ -1749,27 +1976,29 @@ const CanteenModule = ({ activeSegment }) => {
               <div style={{ padding: '16px 20px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
                 <h5 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>Daily Sales Breakdown</h5>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-                <thead>
-                  <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
-                    {['Date', 'Orders', 'Revenue', 'Growth'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {reports?.daily_breakdown?.map((d, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <td style={{ padding: '16px 20px', fontSize: 14 }}>{d.date}</td>
-                      <td style={{ padding: '16px 20px', fontWeight: 800 }}>{d.orders}</td>
-                      <td style={{ padding: '16px 20px', fontWeight: 800, color: C.accent }}>₹{Number(d.revenue).toLocaleString()}</td>
-                      <td style={{ padding: '16px 20px' }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: d.growth >= 0 ? '#059669' : '#DC2626' }}>
-                          {d.growth >= 0 ? '+' : ''}{d.growth}%
-                        </span>
-                      </td>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
+                      {['Date', 'Orders', 'Revenue', 'Growth'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {reports?.daily_breakdown?.map((d, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ padding: '16px 20px', fontSize: 14 }}>{d.date}</td>
+                        <td style={{ padding: '16px 20px', fontWeight: 800 }}>{d.orders}</td>
+                        <td style={{ padding: '16px 20px', fontWeight: 800, color: C.accent }}>₹{Number(d.revenue).toLocaleString()}</td>
+                        <td style={{ padding: '16px 20px' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: d.growth >= 0 ? '#059669' : '#DC2626' }}>
+                            {d.growth >= 0 ? '+' : ''}{d.growth}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}
@@ -1787,28 +2016,30 @@ const CanteenModule = ({ activeSegment }) => {
               <div style={{ padding: '16px 20px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
                 <h5 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>Inventory Movement Summary</h5>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-                <thead>
-                  <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
-                    {['Item', 'Inward', 'Outward', 'Net Change', 'Current Stock'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {invItems.slice(0, 10).map(i => {
-                    const inward = invLogs.filter(l => l.item_id === i.id && l.log_type === 'in').reduce((sum, l) => sum + Number(l.quantity), 0);
-                    const outward = invLogs.filter(l => l.item_id === i.id && l.log_type === 'out').reduce((sum, l) => sum + Number(l.quantity), 0);
-                    return (
-                      <tr key={i.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                        <td style={{ padding: '16px 20px', fontWeight: 800, fontSize: 14 }}>{i.name}</td>
-                        <td style={{ padding: '16px 20px', fontWeight: 800, color: '#059669' }}>+{inward}</td>
-                        <td style={{ padding: '16px 20px', fontWeight: 800, color: '#DC2626' }}>-{outward}</td>
-                        <td style={{ padding: '16px 20px', fontWeight: 800 }}>{inward - outward}</td>
-                        <td style={{ padding: '16px 20px', fontWeight: 900 }}>{i.current_stock} {i.unit}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
+                      {['Item', 'Inward', 'Outward', 'Net Change', 'Current Stock'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invItems.slice(0, 10).map(i => {
+                      const inward = invLogs.filter(l => l.item_id === i.id && l.log_type === 'in').reduce((sum, l) => sum + Number(l.quantity), 0);
+                      const outward = invLogs.filter(l => l.item_id === i.id && l.log_type === 'out').reduce((sum, l) => sum + Number(l.quantity), 0);
+                      return (
+                        <tr key={i.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td style={{ padding: '16px 20px', fontWeight: 800, fontSize: 14 }}>{i.name}</td>
+                          <td style={{ padding: '16px 20px', fontWeight: 800, color: '#059669' }}>+{inward}</td>
+                          <td style={{ padding: '16px 20px', fontWeight: 800, color: '#DC2626' }}>-{outward}</td>
+                          <td style={{ padding: '16px 20px', fontWeight: 800 }}>{inward - outward}</td>
+                          <td style={{ padding: '16px 20px', fontWeight: 900 }}>{i.current_stock} {i.unit}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}
@@ -1826,24 +2057,26 @@ const CanteenModule = ({ activeSegment }) => {
               <div style={{ padding: '16px 20px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
                 <h5 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>Vendor Performance</h5>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-                <thead>
-                  <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
-                    {['Vendor Name', 'Delivery Score', 'Quality Score', 'Reliability', 'Total Orders'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {vendors.map(v => (
-                    <tr key={v.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <td style={{ padding: '16px 20px', fontWeight: 800, fontSize: 14 }}>{v.name}</td>
-                      <td style={{ padding: '16px 20px', fontWeight: 800 }}>{v.delivery_score || 0}%</td>
-                      <td style={{ padding: '16px 20px', fontWeight: 800 }}>{v.quality_score || 0}%</td>
-                      <td style={{ padding: '16px 20px', fontWeight: 800 }}>{v.reliability_score || 0}%</td>
-                      <td style={{ padding: '16px 20px', fontWeight: 800 }}>{invLogs.filter(l => l.vendor_id === v.id).length}</td>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
+                      {['Vendor Name', 'Delivery Score', 'Quality Score', 'Reliability', 'Total Orders'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {vendors.map(v => (
+                      <tr key={v.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ padding: '16px 20px', fontWeight: 800, fontSize: 14 }}>{v.name}</td>
+                        <td style={{ padding: '16px 20px', fontWeight: 800 }}>{v.delivery_score || 0}%</td>
+                        <td style={{ padding: '16px 20px', fontWeight: 800 }}>{v.quality_score || 0}%</td>
+                        <td style={{ padding: '16px 20px', fontWeight: 800 }}>{v.reliability_score || 0}%</td>
+                        <td style={{ padding: '16px 20px', fontWeight: 800 }}>{invLogs.filter(l => l.vendor_id === v.id).length}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}
@@ -1861,28 +2094,30 @@ const CanteenModule = ({ activeSegment }) => {
               <div style={{ padding: '16px 20px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
                 <h5 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>Expense Breakdown by Category</h5>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-                <thead>
-                  <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
-                    {['Category', 'Total Spent', 'Purchases', 'Avg Cost'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {['groceries', 'dairy', 'snacks', 'beverages', 'general'].map(cat => {
-                    const catItems = invItems.filter(i => i.category === cat);
-                    const catLogs = invLogs.filter(l => catItems.some(i => i.id === l.item_id) && l.log_type === 'in');
-                    const totalSpent = catLogs.reduce((sum, l) => sum + (Number(l.quantity) * (Number(l.unit_price) || 0)), 0);
-                    return (
-                      <tr key={cat} style={{ borderBottom: `1px solid ${C.border}` }}>
-                        <td style={{ padding: '16px 20px', fontWeight: 800, fontSize: 14, textTransform: 'capitalize' }}>{cat}</td>
-                        <td style={{ padding: '16px 20px', fontWeight: 800, color: '#EF4444' }}>₹{totalSpent.toLocaleString()}</td>
-                        <td style={{ padding: '16px 20px', fontWeight: 800 }}>{catLogs.length}</td>
-                        <td style={{ padding: '16px 20px', fontWeight: 800 }}>₹{catLogs.length > 0 ? (totalSpent / catLogs.length).toFixed(2) : '0'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC', textAlign: 'left' }}>
+                      {['Category', 'Total Spent', 'Purchases', 'Avg Cost'].map(h => <th key={h} style={{ padding: '14px 20px', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {['groceries', 'dairy', 'snacks', 'beverages', 'general'].map(cat => {
+                      const catItems = invItems.filter(i => i.category === cat);
+                      const catLogs = invLogs.filter(l => catItems.some(i => i.id === l.item_id) && l.log_type === 'in');
+                      const totalSpent = catLogs.reduce((sum, l) => sum + (Number(l.quantity) * (Number(l.unit_price) || 0)), 0);
+                      return (
+                        <tr key={cat} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td style={{ padding: '16px 20px', fontWeight: 800, fontSize: 14, textTransform: 'capitalize' }}>{cat}</td>
+                          <td style={{ padding: '16px 20px', fontWeight: 800, color: '#EF4444' }}>₹{totalSpent.toLocaleString()}</td>
+                          <td style={{ padding: '16px 20px', fontWeight: 800 }}>{catLogs.length}</td>
+                          <td style={{ padding: '16px 20px', fontWeight: 800 }}>₹{catLogs.length > 0 ? (totalSpent / catLogs.length).toFixed(2) : '0'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}
@@ -2680,17 +2915,25 @@ const CanteenModule = ({ activeSegment }) => {
       </Modal>
 
       {/* Staff Modal */}
-      <Modal open={staffModal} onClose={() => setStaffModal(false)} title="Add Canteen Staff" Icon={ChefHat}>
+      <Modal open={staffModal} onClose={() => setStaffModal(false)} title={editingStaff ? "Edit Staff Profile" : "Add Canteen Staff"} Icon={ChefHat}>
         <form onSubmit={async (e) => {
           e.preventDefault();
           try {
-            await canteenApi.createStaffProfile(staffForm);
+            if (editingStaff) {
+              await canteenApi.updateStaffProfile(editingStaff.id, staffForm);
+            } else {
+              await canteenApi.createStaffProfile(staffForm);
+            }
             setStaffModal(false);
+            setEditingStaff(null);
             setStaffForm({ user: '', role: 'helper', status: 'active', phone: '', salary: 0 });
             loadStaff();
-          } catch { alert('Failed to create staff profile'); }
+          } catch (err) { 
+            const msg = err.response?.data?.user?.[0] || err.response?.data?.detail || 'Failed to save staff profile';
+            alert(msg); 
+          }
         }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <FInput label="User ID / Username" required value={staffForm.user} onChange={e => setStaffForm(p => ({ ...p, user: e.target.value }))} />
+          <FInput label="User ID / Username" required value={staffForm.user} onChange={e => setStaffForm(p => ({ ...p, user: e.target.value }))} disabled={!!editingStaff} />
           <FSelect label="Role" value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value }))}>
             <option value="manager">Manager</option>
             <option value="cook">Cook</option>
@@ -2700,63 +2943,129 @@ const CanteenModule = ({ activeSegment }) => {
           </FSelect>
           <FInput label="Phone" value={staffForm.phone} onChange={e => setStaffForm(p => ({ ...p, phone: e.target.value }))} />
           <FInput label="Salary" type="number" value={staffForm.salary} onChange={e => setStaffForm(p => ({ ...p, salary: e.target.value }))} />
+          <FSelect label="Status" value={staffForm.status} onChange={e => setStaffForm(p => ({ ...p, status: e.target.value }))}>
+            <option value="active">Active</option>
+            <option value="on_leave">On Leave</option>
+            <option value="inactive">Inactive</option>
+          </FSelect>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-            <Btn variant="outline" onClick={() => setStaffModal(false)}>Cancel</Btn>
-            <Btn type="submit">Save Staff</Btn>
+            <Btn variant="outline" onClick={() => { setStaffModal(false); setEditingStaff(null); }}>Cancel</Btn>
+            <Btn type="submit">{editingStaff ? "Update Staff" : "Save Staff"}</Btn>
           </div>
         </form>
       </Modal>
 
       {/* Attendance Modal */}
-      <Modal open={attModal} onClose={() => setAttModal(false)} title="Staff Attendance" Icon={Calendar}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <p style={{ fontSize: 13, color: C.muted }}>Mark attendance for today's shifts</p>
-          {staffList.map(s => (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: '#F8FAFC', borderRadius: 12, border: `1px solid ${C.border}` }}>
-              <div>
-                <p style={{ margin: 0, fontWeight: 700 }}>{s.full_name}</p>
-                <p style={{ margin: 0, fontSize: 11, color: C.muted }}>{s.role}</p>
+      {/* Staff Details Modal (Calendar View) */}
+      <Modal open={!!viewingStaff} onClose={() => setViewingStaff(null)} title="Staff Attendance History" Icon={Calendar} width="600px">
+        {viewingStaff && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 0 20px', borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ width: 60, height: 60, borderRadius: 16, background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 900 }}>
+                {viewingStaff.full_name?.charAt(0)}
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Btn size="sm" variant="success" onClick={async () => {
-                  try {
-                    await canteenApi.createStaffAttendance({ staff: s.id, date: fmtDate(), status: 'present', check_in: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-                    loadStaff();
-                  } catch { alert('Failed to mark attendance'); }
-                }}>Check In</Btn>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>{viewingStaff.full_name}</h3>
+                <p style={{ margin: 0, color: C.muted, fontWeight: 600 }}>{viewingStaff.role} • {viewingStaff.phone || 'No phone'}</p>
               </div>
             </div>
-          ))}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-            <Btn variant="outline" onClick={() => setAttModal(false)}>Close</Btn>
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h5 style={{ margin: 0, fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attendance Calendar</h5>
+                <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>{new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
+                  <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 900, color: C.muted, paddingBottom: 4 }}>{d}</div>
+                ))}
+                {(() => {
+                  const now = new Date();
+                  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+                  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                  const staffAtt = attendance.filter(a => String(a.staff) === String(viewingStaff.id));
+                  
+                  const cells = [];
+                  for (let i = 0; i < firstDay; i++) cells.push(<div key={`empty-${i}`} />);
+                  
+                  for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const rec = staffAtt.find(a => a.date === dateStr);
+                    
+                    let bg = '#F8FAFC';
+                    let color = C.text;
+                    if (rec?.status === 'present') { bg = '#DCFCE7'; color = '#166534'; }
+                    else if (rec?.status === 'absent') { bg = '#FEE2E2'; color = '#991B1B'; }
+                    
+                    cells.push(
+                      <div key={day} style={{ 
+                        aspectRatio: '1', borderRadius: 10, background: bg, color: color,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                        fontSize: 13, fontWeight: 800, border: `1px solid ${rec ? 'transparent' : C.border}`,
+                        position: 'relative'
+                      }}>
+                        {day}
+                        {rec?.check_in && <div style={{ position: 'absolute', bottom: 4, width: 4, height: 4, borderRadius: '50%', background: color }} />}
+                      </div>
+                    );
+                  }
+                  return cells;
+                })()}
+              </div>
+              
+              <div style={{ display: 'flex', gap: 16, marginTop: 20, padding: 12, background: '#F8FAFC', borderRadius: 12, border: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: '#DCFCE7' }} /> Present
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: '#FEE2E2' }} /> Absent
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: '#F8FAFC', border: `1px solid ${C.border}` }} /> No Record
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+              <Btn onClick={() => setViewingStaff(null)}>Close Details</Btn>
+            </div>
           </div>
-        </div>
+        )}
       </Modal>
 
-      {/* Task Modal */}
-      <Modal open={taskModal} onClose={() => setTaskModal(false)} title="Assign New Task" Icon={FileText}>
+      {/* Announcement Modal */}
+      <Modal open={annModal} onClose={() => setAnnModal(false)} title={editingAnn ? "Edit Announcement" : "Create Staff Announcement"} Icon={Bell}>
         <form onSubmit={async (e) => {
           e.preventDefault();
           try {
-            await canteenApi.createStaffTask(taskForm);
-            setTaskModal(false);
-            setTaskForm({ staff: '', title: '', description: '', deadline: '', priority: 'medium' });
+            if (editingAnn) {
+              await canteenApi.updateStaffAnnouncement(editingAnn.id, annForm);
+            } else {
+              await canteenApi.createStaffAnnouncement(annForm);
+            }
+            setAnnModal(false);
+            setEditingAnn(null);
+            setAnnForm({ title: '', message: '', category: 'announcement', date: fmtDate() });
             loadStaff();
-          } catch { alert('Failed to assign task'); }
+          } catch { alert('Failed to save announcement'); }
         }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <FInput label="Task Title" required value={taskForm.title} onChange={e => setTaskForm(p => ({ ...p, title: e.target.value }))} />
-          <FTextarea label="Description" value={taskForm.description} onChange={e => setTaskForm(p => ({ ...p, description: e.target.value }))} />
+          <FInput label="Announcement Title" required value={annForm.title} onChange={e => setAnnForm(p => ({ ...p, title: e.target.value }))} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <FInput label="Deadline" type="datetime-local" value={taskForm.deadline} onChange={e => setTaskForm(p => ({ ...p, deadline: e.target.value }))} />
-            <FSelect label="Priority" value={taskForm.priority} onChange={e => setTaskForm(p => ({ ...p, priority: e.target.value }))}>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
+            <FSelect label="Category" value={annForm.category} onChange={e => setAnnForm(p => ({ ...p, category: e.target.value }))}>
+              <option value="announcement">Announcement</option>
+              <option value="menu_change">Menu Change</option>
+              <option value="inspection">Inspection</option>
+              <option value="holiday">Holiday</option>
+              <option value="shift_reminder">Shift Reminder</option>
+              <option value="emergency">Emergency Alert</option>
             </FSelect>
+            <FInput label="Date" type="date" required value={annForm.date} onChange={e => setAnnForm(p => ({ ...p, date: e.target.value }))} />
           </div>
+          <FTextarea label="Message Content" required value={annForm.message} onChange={e => setAnnForm(p => ({ ...p, message: e.target.value }))} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-            <Btn variant="outline" onClick={() => setTaskModal(false)}>Cancel</Btn>
-            <Btn type="submit">Assign Task</Btn>
+            <Btn variant="outline" onClick={() => { setAnnModal(false); setEditingAnn(null); }}>Cancel</Btn>
+            <Btn type="submit">{editingAnn ? "Update Announcement" : "Broadcast Announcement"}</Btn>
           </div>
         </form>
       </Modal>

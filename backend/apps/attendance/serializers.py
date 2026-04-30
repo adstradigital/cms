@@ -23,6 +23,9 @@ class BulkAttendanceSerializer(serializers.Serializer):
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
+    class_name = serializers.CharField(source="student.section.school_class.name", read_only=True)
+    section_name = serializers.CharField(source="student.section.name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     reviewed_by_name = serializers.CharField(source="reviewed_by.get_full_name", read_only=True)
 
     class Meta:

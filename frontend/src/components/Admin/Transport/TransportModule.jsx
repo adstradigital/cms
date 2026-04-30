@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   BarChart3,
   BusFront,
+  Clock3,
   CreditCard,
   MapPinned,
   MessageSquareWarning,
@@ -22,6 +23,7 @@ import OverviewTab from './tabs/OverviewTab';
 import BusesTab from './tabs/BusesTab';
 import RoutesTab from './tabs/RoutesTab';
 import TrackingTab from './tabs/TrackingTab';
+import AttendanceTab from './tabs/AttendanceTab';
 import StudentsTab from './tabs/StudentsTab';
 import FeesTab from './tabs/FeesTab';
 import ComplaintsTab from './tabs/ComplaintsTab';
@@ -32,6 +34,7 @@ const TABS = [
   { id: 'buses', label: 'Fleet', icon: BusFront },
   { id: 'routes', label: 'Routes & Stops', icon: Route },
   { id: 'tracking', label: 'Live Tracking', icon: MapPinned },
+  { id: 'attendance', label: 'Attendance', icon: Clock3 },
   { id: 'students', label: 'Students', icon: Users },
   { id: 'fees', label: 'Fees & Payments', icon: CreditCard },
   { id: 'complaints', label: 'Complaints', icon: MessageSquareWarning },
@@ -118,6 +121,8 @@ export default function TransportModule({ segment = 'overview' }) {
         return <RoutesTab routes={routes} buses={buses} onRefresh={loadAll} />;
       case 'tracking':
         return <TrackingTab buses={buses} routes={routes} locations={locations} onRefresh={loadAll} />;
+      case 'attendance':
+        return <AttendanceTab students={students} routes={routes} onRefresh={loadAll} />;
       case 'students':
         return <StudentsTab students={students} routes={routes} buses={buses} onRefresh={loadAll} />;
       case 'fees':

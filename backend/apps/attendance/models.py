@@ -34,10 +34,18 @@ class LeaveRequest(models.Model):
         ("approved", "Approved"),
         ("rejected", "Rejected"),
     ]
+    LEAVE_TYPE_CHOICES = [
+        ("medical", "Medical"),
+        ("casual", "Casual"),
+        ("duty", "Duty"),
+        ("sports", "Sports"),
+    ]
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="leave_requests")
+    leave_type = models.CharField(max_length=20, choices=LEAVE_TYPE_CHOICES, default="casual")
     from_date = models.DateField()
     to_date = models.DateField()
     reason = models.TextField()
+    certificate = models.FileField(upload_to="leave_certificates/", null=True, blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="leave_reviews")
     reviewed_at = models.DateTimeField(null=True, blank=True)

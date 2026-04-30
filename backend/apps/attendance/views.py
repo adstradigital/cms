@@ -151,11 +151,33 @@ def leave_request_list_view(request):
         if request.method == "GET":
             student_id = request.query_params.get("student")
             leave_status = request.query_params.get("status")
-            qs = LeaveRequest.objects.select_related("student", "student__user", "reviewed_by").all()
+            class_id = request.query_params.get("class")
+            section_id = request.query_params.get("section")
+            leave_type = request.query_params.get("leave_type")
+            from_date = request.query_params.get("from_date")
+            to_date = request.query_params.get("to_date")
+            received_date = request.query_params.get("received_date")
+            qs = LeaveRequest.objects.select_related(
+                "student", "student__user", "reviewed_by",
+                "student__section", "student__section__school_class"
+            ).all()
             if student_id:
                 qs = qs.filter(student_id=student_id)
             if leave_status:
                 qs = qs.filter(status=leave_status)
+            if class_id:
+                qs = qs.filter(student__section__school_class_id=class_id)
+            if section_id:
+                qs = qs.filter(student__section_id=section_id)
+            if leave_type:
+                qs = qs.filter(leave_type=leave_type)
+            if received_date:
+                qs = qs.filter(created_at__date=received_date)
+            if from_date:
+                qs = qs.filter(from_date__gte=from_date)
+            if to_date:
+                qs = qs.filter(to_date__lte=to_date)
+            qs = qs.order_by("-created_at")
             return Response(LeaveRequestSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
         serializer = LeaveRequestSerializer(data=request.data)
@@ -200,12 +222,17 @@ def admin_attendance_overview_view(request):
     try:
         month = int(request.query_params.get("month", timezone.now().month))
         year = int(request.query_params.get("year", timezone.now().year))
+        class_id = request.query_params.get("class")
         section_id = request.query_params.get("section")
+        date_param = request.query_params.get("date")
         threshold = float(request.query_params.get("threshold", 75))
 
         students_qs = Student.objects.select_related(
             "user", "user__profile", "section", "section__school_class"
         ).filter(is_active=True)
+
+        if class_id:
+            students_qs = students_qs.filter(section__school_class_id=class_id)
         if section_id:
             students_qs = students_qs.filter(section_id=section_id)
 
@@ -217,10 +244,12 @@ def admin_attendance_overview_view(request):
             date__month=month,
             date__year=year,
         )
-        today = timezone.now().date()
+
+        # Use date_param if provided, else today
+        selected_date = date_param if date_param else timezone.now().date()
         today_attendance = Attendance.objects.filter(
             student_id__in=student_ids,
-            date=today,
+            date=selected_date,
         )
 
         status_map = defaultdict(lambda: {"total": 0, "present": 0, "absent": 0, "late": 0, "leave": 0})
@@ -251,6 +280,10 @@ def admin_attendance_overview_view(request):
             elif rec.status == "leave":
                 leave_today += 1
 
+        unmarked_today = max(0, len(students) - today_attendance.count())
+
+        today_status_map = {rec.student_id: rec.status for rec in today_attendance}
+
         for s in students:
             row = status_map[s.id]
             total = row["total"]
@@ -279,6 +312,7 @@ def admin_attendance_overview_view(request):
                 "leave": row["leave"],
                 "percentage": percentage,
                 "low_attendance": low_attendance,
+                "day_status": today_status_map.get(s.id, "unmarked"),
                 "pending_leave_requests": pending_leave_count_map[s.id],
                 "warnings_sent": warnings_count_map[s.id],
             })
@@ -295,8 +329,10 @@ def admin_attendance_overview_view(request):
                 "absent_today": absent_today,
                 "late_today": late_today,
                 "leave_today": leave_today,
+                "unmarked_today": unmarked_today,
                 "student_count": len(students),
                 "low_attendance_count": len([x for x in students_data if x["low_attendance"]]),
+                "pending_leave_count": sum(pending_leave_count_map.values()),
             },
             "students": students_data,
         }, status=status.HTTP_200_OK)
@@ -400,6 +436,17 @@ def admin_attendance_warning_view(request):
             threshold=threshold,
             attendance_percentage=attendance_percentage,
         )
-        return Response(AttendanceWarningSerializer(warning).data, status=status.HTTP_201_CREATED)
+        
+        # Check for parent contact info via the profile
+        parents_notified = False
+        profile = getattr(student.user, 'profile', None)
+        if profile and (profile.parent_phone or profile.parent_email):
+            parents_notified = True
+            
+        data = AttendanceWarningSerializer(warning).data
+        data["parents_notified"] = parents_notified
+        return Response(data, status=status.HTTP_201_CREATED)
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

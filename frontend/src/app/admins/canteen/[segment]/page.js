@@ -3,12 +3,9 @@ import CanteenModule from '@/components/Admin/Canteen/CanteenModule';
 const VALID_SEGMENTS = new Set([
   'dashboard',
   'menu',
-  'orders',
-  'payments',
   'inventory',
   'suppliers',
   'staff',
-  'feedback',
   'reports',
 ]);
 

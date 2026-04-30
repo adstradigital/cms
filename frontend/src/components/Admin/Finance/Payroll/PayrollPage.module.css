@@ -1,0 +1,404 @@
+/* ─── Stat Cards ──────────────────────────────────────────────────────────── */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+@media (max-width: 1200px) { .statGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px)  { .statGrid { grid-template-columns: 1fr; } }
+
+.statCard {
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  padding: 20px 22px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  transition: box-shadow 0.2s;
+}
+.statCard:hover { box-shadow: 0 4px 16px rgba(9, 20, 38, 0.08); }
+
+.statIconWrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.statIconPrimary { background: rgba(9, 20, 38, 0.08); color: #091426; }
+.statIconSuccess { background: #d1fae5; color: #065f46; }
+.statIconWarning { background: #fef3c7; color: #92400e; }
+.statIconInfo    { background: #ede9fe; color: #5b21b6; }
+.statIconDanger  { background: #fee2e2; color: #dc2626; }
+
+.statBody { flex: 1; min-width: 0; }
+.statValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: #171c20;
+  line-height: 1.2;
+  font-family: 'Manrope', 'Inter', sans-serif;
+}
+.statLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8590a6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+.statChange {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.statChangeUp   { color: #065f46; }
+.statChangeDown { color: #dc2626; }
+.statChangeNeutral { color: #8590a6; }
+
+/* ─── Charts Grid ─────────────────────────────────────────────────────────── */
+.chartsGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+@media (max-width: 1100px) { .chartsGrid { grid-template-columns: 1fr; } }
+
+.chartCard {
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  padding: 20px 22px;
+}
+.chartTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #171c20;
+  margin-bottom: 4px;
+}
+.chartSubtitle {
+  font-size: 12px;
+  color: #8590a6;
+  margin-bottom: 16px;
+}
+
+/* ─── AI Brain Badge ──────────────────────────────────────────────────────── */
+.aiBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+
+/* ─── AI Insight Box (in payslip) ─────────────────────────────────────────── */
+.aiInsightBox {
+  background: linear-gradient(135deg, #f0f0ff 0%, #faf5ff 100%);
+  border: 1px solid #c4b5fd;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+.aiInsightHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #5b21b6;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+.aiInsightSummary {
+  font-size: 13px;
+  color: #3b0764;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+.aiReasonRow {
+  margin-bottom: 8px;
+}
+.aiReasonLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b21b6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.aiReasonText {
+  font-size: 12.5px;
+  color: #4c1d95;
+  line-height: 1.55;
+}
+
+/* ─── Increment Type Badges ───────────────────────────────────────────────── */
+.badgeMerit     { background: #d1fae5; color: #065f46; }
+.badgePromotion { background: #dbeafe; color: #1e40af; }
+.badgeAnnual    { background: #fef3c7; color: #92400e; }
+.badgeAdjust    { background: #f3f4f6; color: #374151; }
+
+/* ─── Payslip Modal ───────────────────────────────────────────────────────── */
+.payslipModal {
+  background: #fff;
+  width: 100%;
+  max-width: 900px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.payslipList {
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: #f0f4f9;
+}
+.payslipCard {
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  overflow: hidden;
+  break-inside: avoid;
+}
+.payslipHead {
+  background: linear-gradient(135deg, #091426 0%, #1e3a5f 100%);
+  color: #fff;
+  padding: 20px 24px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.payslipSchoolName {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+.payslipPeriod {
+  font-size: 12px;
+  color: rgba(255,255,255,0.65);
+  margin-top: 3px;
+}
+.payslipNetBig {
+  text-align: right;
+}
+.payslipNetLabel {
+  font-size: 10px;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.payslipNetValue {
+  font-size: 26px;
+  font-weight: 900;
+  color: #4ade80;
+  font-family: 'JetBrains Mono', monospace;
+}
+.payslipInfo {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.payslipInfoItem {
+  padding: 14px 20px;
+  border-right: 1px solid #f1f5f9;
+}
+.payslipInfoItem:last-child { border-right: none; }
+.payslipInfoLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #8590a6;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.payslipInfoValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171c20;
+  margin-top: 2px;
+}
+.payslipBreakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.payslipCol {
+  padding: 16px 20px;
+}
+.payslipCol:first-child { border-right: 1px solid #f1f5f9; }
+.payslipColTitle {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8590a6;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #f1f5f9;
+}
+.payslipRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13.5px;
+  padding: 6px 0;
+  border-bottom: 1px dashed #f1f5f9;
+  color: #171c20;
+}
+.payslipRow:last-child { border-bottom: none; }
+.payslipRowLabel { color: #45474c; }
+.payslipRowValue { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+.payslipTotalRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 10px 0 0;
+  border-top: 2px solid #e2e8f0;
+  margin-top: 6px;
+  color: #171c20;
+}
+.payslipTotalDeduct { color: #dc2626; font-family: 'JetBrains Mono', monospace; }
+.payslipTotalEarn   { color: #065f46; font-family: 'JetBrains Mono', monospace; }
+.payslipNetRow {
+  background: #f0fdf4;
+  border-top: 2px solid #bbf7d0;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  grid-column: 1 / -1;
+}
+.payslipNetRowLabel { font-size: 15px; font-weight: 800; color: #065f46; }
+.payslipNetRowValue {
+  font-size: 22px;
+  font-weight: 900;
+  color: #065f46;
+  font-family: 'JetBrains Mono', monospace;
+}
+.payslipAttRow {
+  padding: 10px 20px;
+  background: #fafbfc;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  gap: 24px;
+  font-size: 12.5px;
+  color: #45474c;
+}
+.payslipAttItem { display: flex; gap: 6px; align-items: center; }
+.payslipAttKey  { font-weight: 700; color: #8590a6; }
+
+/* ─── Entry edit inline ────────────────────────────────────────────────────── */
+.editEntryRow {
+  background: #fffbeb;
+  border: 1px dashed #f59e0b;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.editEntryField { display: flex; flex-direction: column; gap: 4px; }
+.editEntryLabel { font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase; }
+.editEntryInput {
+  padding: 6px 10px;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 130px;
+  font-family: monospace;
+  background: #fff;
+  color: #171c20;
+}
+.editEntryInput:focus { outline: none; border-color: #d97706; }
+
+/* ─── Increment History Table extras ─────────────────────────────────────── */
+.incrementAmount {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: #065f46;
+}
+.incrementOldNew {
+  font-size: 12px;
+  color: #8590a6;
+  margin-top: 2px;
+}
+
+/* ─── Recent increments list (in overview) ─────────────────────────────────── */
+.recentList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.recentItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 10px 14px;
+  background: #fafbfc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.recentItemLeft { flex: 1; min-width: 0; }
+.recentItemName { font-size: 13.5px; font-weight: 600; color: #171c20; }
+.recentItemSub  { font-size: 12px; color: #8590a6; margin-top: 2px; }
+.recentItemAmt  { font-size: 15px; font-weight: 800; color: #065f46; font-family: monospace; }
+
+/* ─── Designation bar chart custom tooltip ─────────────────────────────────── */
+.chartTooltip {
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.chartTooltipTitle { font-weight: 700; color: #171c20; margin-bottom: 4px; }
+.chartTooltipRow   { display: flex; justify-content: space-between; gap: 16px; color: #45474c; }
+
+/* ─── Print styles ────────────────────────────────────────────────────────── */
+@media print {
+  .payslipModal {
+    position: static;
+    max-height: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .payslipList {
+    background: #fff;
+    padding: 0;
+  }
+  .payslipCard {
+    page-break-inside: avoid;
+    margin-bottom: 24px;
+    border: 1px solid #000;
+  }
+  .aiInsightBox {
+    background: #f8f0ff;
+    border: 1px solid #7c3aed;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

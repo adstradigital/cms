@@ -12,7 +12,14 @@ const TYPES = [
 ];
 
 function ConcessionModal({ editing, categories, onClose, onSaved }) {
-  const [form, setForm] = useState(editing || { name: '', concession_type: 'percentage', value: 0, applicable_category: '', is_active: true, remarks: '' });
+  const [form, setForm] = useState({
+    name: editing?.name || '',
+    concession_type: editing?.concession_type || 'percentage',
+    value: editing?.value ?? 0,
+    applicable_category: editing?.applicable_category || '',
+    is_active: editing?.is_active ?? true,
+    remarks: editing?.remarks || '',
+  });
   const [saving, setSaving] = useState(false);
   const { push } = useToast();
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));

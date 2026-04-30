@@ -43,11 +43,13 @@ urlpatterns = [
     path('api/staff/', include('apps.staff.urls')),
     path('api/elections/', include('apps.elections.urls')),
     path('api/events/', include('apps.events.urls')),
+    path('api/alumni/', include('apps.alumni.urls')),
     path('api/timetables/', include('apps.academics.urls_timetable')),
     path('api/canteen/', include('apps.canteen.urls')),
     path('api/ai-brain/', include('apps.ai_brain.urls')),
     path('api/expenses/', include('apps.expenses.urls')),
     path('api/payroll/', include('apps.payroll.urls')),
+    path('api/reports/', include('apps.reports.urls')),
 ]
 
 # Serve media files in development

@@ -77,10 +77,12 @@ INSTALLED_APPS = [
     'apps.staff',
     'apps.elections',
     'apps.events',
+    'apps.alumni',
     'apps.canteen',
     'apps.ai_brain',
     'apps.expenses',
     'apps.payroll',
+    'apps.reports',
 
     # Celery result backend
     'django_celery_results',

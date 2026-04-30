@@ -9,18 +9,24 @@ from apps.accounts.serializers import UserSerializer, UserProfileSerializer
 class ClassSerializer(serializers.ModelSerializer):
     class Meta:
         model = Class
-        fields = ["id", "school", "name", "code", "created_at"]
+        fields = ["id", "school", "name", "code", "class_type", "created_at"]
         read_only_fields = ["school"]
 
 
 class SectionSerializer(serializers.ModelSerializer):
     class_teacher_name = serializers.CharField(source="class_teacher.get_full_name", read_only=True)
     class_name = serializers.CharField(source="school_class.name", read_only=True)
+    class_type = serializers.CharField(source="school_class.class_type", read_only=True)
+    display_name = serializers.CharField(read_only=True)
     student_count = serializers.IntegerField(source="students.count", read_only=True)
 
     class Meta:
         model = Section
-        fields = ["id", "school_class", "class_name", "name", "class_teacher", "class_teacher_name", "room_number", "capacity", "student_count"]
+        fields = [
+            "id", "school_class", "class_name", "class_type", "display_name",
+            "name", "year_level", "class_teacher", "class_teacher_name",
+            "room_number", "capacity", "student_count",
+        ]
 
 
 class StudentDocumentSerializer(serializers.ModelSerializer):
@@ -53,7 +59,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def get_section_name(self, obj):
         if obj.section:
-            return f"{obj.section.school_class.name} — {obj.section.name}"
+            return obj.section.display_name
         return None
 
     def get_class_name(self, obj):

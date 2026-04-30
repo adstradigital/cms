@@ -1,13 +1,54 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Bell, MessageSquare, Settings, ChevronDown, User, LogOut, Shield, Key } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import adminApi from '@/api/adminApi';
 import styles from './AdminHeader.module.css';
 
 const AdminHeader = () => {
     const { user, logout } = useAuth();
     const router = useRouter();
     const [activeDropdown, setActiveDropdown] = useState(null);
+    const [notifications, setNotifications] = useState([]);
+    const [notifLoading, setNotifLoading] = useState(false);
+
+    const managedSectionId = useMemo(() => {
+        const sec = user?.managed_sections?.[0];
+        return sec?.id || null;
+    }, [user]);
+
+    useEffect(() => {
+        if (!managedSectionId) {
+            setNotifications([]);
+            return;
+        }
+        const shouldLoad = activeDropdown === 'notif' || notifications.length === 0;
+        if (!shouldLoad) return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                setNotifLoading(true);
+                const res = await adminApi.getNotifications({
+                    type: 'attendance',
+                    audience: 'staff',
+                    section: managedSectionId,
+                    published: 'true',
+                });
+                const data = res?.data;
+                const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+                if (!cancelled) setNotifications(list.slice(0, 6));
+            } catch {
+                if (!cancelled) setNotifications([]);
+            } finally {
+                if (!cancelled) setNotifLoading(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeDropdown, managedSectionId, notifications.length]);
 
     const toggleDropdown = (name) => {
         setActiveDropdown(activeDropdown === name ? null : name);
@@ -35,14 +76,23 @@ const AdminHeader = () => {
                 <div className={styles.actionWrapper}>
                     <button className={styles.iconButton} onClick={() => toggleDropdown('notif')}>
                         <Bell size={20} />
-                        <span className={styles.notificationBadge}></span>
+                        {notifications.length > 0 && <span className={styles.notificationBadge}></span>}
                     </button>
                     {activeDropdown === 'notif' && (
                         <div className={styles.dropdown}>
                             <div className={styles.dropdownHeader}>Notifications</div>
                             <div className={styles.dropdownContent}>
-                                <div className={styles.dropdownItem}>New mark entry recorded</div>
-                                <div className={styles.dropdownItem}>Attendance report generated</div>
+                                {notifLoading ? (
+                                    <div className={styles.dropdownItem}>Loading...</div>
+                                ) : notifications.length > 0 ? (
+                                    notifications.map((n) => (
+                                        <div key={n.id} className={styles.dropdownItem}>
+                                            {n.title}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className={styles.dropdownItem}>No notifications</div>
+                                )}
                                 <div className={styles.dropdownItemViewAll}>View all notifications</div>
                             </div>
                         </div>

@@ -1,23 +1,31 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   X, Send, Search, Paperclip, Phone, MoreHorizontal,
   Users, UserPlus, Plus, FileText, Image as ImageIcon,
   GraduationCap, Smile, ChevronDown, Hash, Lock,
-  Download, CheckCheck, Clock, ArrowLeft,
+  Download, CheckCheck, Clock, ArrowLeft, Share2, Forward,
+  Grid, BarChart2,
 } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
 import { useAuth } from '@/context/AuthContext';
+import instance from '@/api/instance';
 import styles from './ChatWindow.module.css';
 
 const ATTACH_OPTIONS = [
   { id: 'file', label: 'File', icon: FileText, accept: '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip' },
   { id: 'photo', label: 'Photo', icon: ImageIcon, accept: 'image/*' },
   { id: 'academic', label: 'Academic', icon: GraduationCap, accept: '.pdf,.doc,.docx,.xls,.xlsx' },
+  { id: 'table', label: 'Table', icon: Grid },
+  { id: 'report', label: 'Report', icon: BarChart2 },
 ];
 
+const COMMON_EMOJIS = ['😀', '😂', '😍', '🥰', '😎', '🤔', '😢', '😡', '👍', '🔥', '❤️', '✨', '🙌', '🎉', '✅', '❌'];
+
 const StaffChatOverlay = () => {
+  const router = useRouter();
   const { user } = useAuth();
   const {
     rooms, activeRoom, messages, chatUsers, onlineUserIds, unreadTotal,
@@ -30,12 +38,23 @@ const StaffChatOverlay = () => {
   const [searchValue, setSearchValue] = useState('');
   const [inputValue, setInputValue] = useState('');
   const [showAttach, setShowAttach] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [savedReports, setSavedReports] = useState([]);
+  const [tableData, setTableData] = useState([['Header 1', 'Header 2'], ['Data 1', 'Data 2']]);
+  const [composerPreview, setComposerPreview] = useState(null); // { type, data, file }
+  const [caption, setCaption] = useState('');
+  
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupMembers, setNewGroupMembers] = useState([]);
   const [contactSearch, setContactSearch] = useState('');
   const [mobileView, setMobileView] = useState('sidebar'); // sidebar | chat | info
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const fileCategory = useRef('file');
 
@@ -46,9 +65,7 @@ const StaffChatOverlay = () => {
     }
   }, [mainChatOpen]); // eslint-disable-line
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // Auto-scroll removed as per user request to prevent interference
 
   // Close on Escape
   useEffect(() => {
@@ -91,9 +108,9 @@ const StaffChatOverlay = () => {
 
   const handleSend = async () => {
     if (!inputValue.trim() || !activeRoom) return;
-    const text = inputValue;
+    await sendMessage(activeRoom.id, inputValue);
     setInputValue('');
-    await sendMessage(activeRoom.id, text);
+    setTimeout(scrollToBottom, 100);
   };
 
   const handleKeyDown = (e) => {
@@ -104,22 +121,99 @@ const StaffChatOverlay = () => {
   };
 
   const handleAttachClick = (opt) => {
+    if (opt.id === 'table') {
+      setShowTableModal(true);
+      setShowAttach(false);
+      return;
+    }
+    if (opt.id === 'report') {
+      fetchSavedReports();
+      setShowReportModal(true);
+      setShowAttach(false);
+      return;
+    }
     fileCategory.current = opt.id;
     fileInputRef.current.accept = opt.accept;
     fileInputRef.current.click();
     setShowAttach(false);
   };
 
+  const fetchSavedReports = async () => {
+    try {
+      const res = await instance.get('/reports/saved/');
+      setSavedReports(res.data);
+    } catch (e) {
+      console.error('Failed to fetch reports:', e);
+    }
+  };
+
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !activeRoom) return;
-    await uploadFile(activeRoom.id, file, fileCategory.current);
+    
+    // Preview before sending
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setComposerPreview({ type: 'image', data: ev.target.result, file });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      await uploadFile(activeRoom.id, file, fileCategory.current);
+    }
     e.target.value = '';
+  };
+
+  const addEmoji = (emoji) => {
+    setInputValue((prev) => prev + emoji);
+    setShowEmoji(false);
+  };
+
+  const handleCreateTable = () => {
+    if (!activeRoom) return;
+    setComposerPreview({ type: 'table', data: tableData });
+    setShowTableModal(false);
+  };
+
+  const handleSendComposer = async () => {
+    if (!activeRoom || !composerPreview) return;
+    const { type, data, file } = composerPreview;
+    
+    if (type === 'image') {
+      await uploadFile(activeRoom.id, file, 'photo', caption);
+    } else if (type === 'table') {
+      await sendMessage(activeRoom.id, JSON.stringify(data), 'table');
+      if (caption.trim()) {
+        await sendMessage(activeRoom.id, caption);
+      }
+    }
+    
+    setComposerPreview(null);
+    setCaption('');
+    setTableData([['Header 1', 'Header 2'], ['Data 1', 'Data 2']]);
+    setTimeout(scrollToBottom, 100);
+  };
+
+  const handleShareReport = async (report) => {
+    if (!activeRoom) return;
+    await sendMessage(activeRoom.id, JSON.stringify(report), 'report');
+    setShowReportModal(false);
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
+    setShowScrollBottom(!isAtBottom);
   };
 
   const openRoom = (room) => {
     selectRoom(room);
     setMobileView('chat');
+    setTimeout(scrollToBottom, 200);
   };
 
   const startDirect = async (u) => {
@@ -363,7 +457,7 @@ const StaffChatOverlay = () => {
               </div>
 
               {/* Messages */}
-              <div className={styles.messagesContainer}>
+              <div className={styles.messagesContainer} ref={messagesContainerRef} onScroll={handleScroll}>
                 {Object.entries(groupedMessages).map(([dateKey, msgs]) => (
                   <div key={dateKey}>
                     <div className={styles.dateDivider}>
@@ -386,44 +480,119 @@ const StaffChatOverlay = () => {
                               )}
                             </div>
                           )}
-                          <div className={`${styles.messageBubble} ${isMe ? styles.messageBubbleMe : ''}`}>
-                            {!isMe && activeRoom.room_type === 'group' && (
-                              <span className={styles.senderLabel}>{msg.sender?.full_name}</span>
-                            )}
-                            {isImage && (
-                              <img src={msg.file_url} alt="" className={styles.msgImageFull} />
-                            )}
-                            {isDoc && (
-                              <a
-                                href={msg.file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={styles.docAttachment}
-                              >
-                                <div className={styles.docIcon}>
-                                  <FileText size={18} />
-                                </div>
-                                <div className={styles.docMeta}>
-                                  <span className={styles.docName}>{msg.file_name || 'Document'}</span>
-                                  <span className={styles.docSize}>
-                                    {formatSize(msg.file_size)} · {msg.file_type?.split('/')?.pop()?.toUpperCase() || 'FILE'}
-                                  </span>
-                                </div>
-                                <Download size={16} className={styles.docDownload} />
-                              </a>
-                            )}
-                            {msg.content && (
-                              <p className={styles.msgContent}>{msg.content}</p>
-                            )}
-                            <div className={styles.msgMeta}>
-                              <span className={styles.msgTimestamp}>{formatFullTime(msg.timestamp)}</span>
-                              {isMe && (
-                                <span className={styles.readReceipt}>
-                                  <CheckCheck size={13} className={
-                                    msg.read_by_ids?.length > 1 ? styles.readReceiptSeen : ''
-                                  } />
-                                </span>
+                          <div className={`${styles.messageBubbleContainer} ${isMe ? styles.messageBubbleContainerMe : ''}`}>
+                            <div className={`
+                              ${styles.messageBubble} 
+                              ${isMe ? styles.messageBubbleMe : ''} 
+                              ${(msg.category === 'table' || msg.category === 'report') ? styles.messageBubblePlain : ''}
+                            `}>
+                              {/* Hover Actions */}
+                              <div className={styles.messageActions}>
+                                <button className={styles.actionBtn} title="Download" onClick={() => {
+                                  if (msg.file_url) window.open(msg.file_url, '_blank');
+                                }}>
+                                  <Download size={14} />
+                                </button>
+                                <button className={styles.actionBtn} title="Forward">
+                                  <Forward size={14} />
+                                </button>
+                                <button className={styles.actionBtn} title="Share">
+                                  <Share2 size={14} />
+                                </button>
+                              </div>
+
+                              {!isMe && activeRoom.room_type === 'group' && (
+                                <span className={styles.senderLabel}>{msg.sender?.full_name}</span>
                               )}
+                              {isImage && (
+                                <img
+                                  src={msg.file_url}
+                                  alt=""
+                                  className={styles.msgImageFull}
+                                  onClick={() => setLightboxImage(msg.file_url)}
+                                />
+                              )}
+                              {isDoc && (
+                                <a
+                                  href={msg.file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={styles.docAttachment}
+                                >
+                                  <div className={styles.docIcon}>
+                                    <FileText size={18} />
+                                  </div>
+                                  <div className={styles.docMeta}>
+                                    <span className={styles.docName}>{msg.file_name || 'Document'}</span>
+                                    <span className={styles.docSize}>
+                                      {formatSize(msg.file_size)} · {msg.file_type?.split('/')?.pop()?.toUpperCase() || 'FILE'}
+                                    </span>
+                                  </div>
+                                  <Download size={16} className={styles.docDownload} />
+                                </a>
+                              )}
+                              {msg.category === 'table' && (
+                                <div className={styles.tableBubble}>
+                                  <table>
+                                    <tbody>
+                                      {(() => {
+                                        try {
+                                          const data = JSON.parse(msg.content);
+                                          return data.map((row, i) => (
+                                            <tr key={i}>
+                                              {row.map((cell, j) => (
+                                                <td key={j} className={i === 0 ? styles.tableHeader : ''}>
+                                                  {cell}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ));
+                                        } catch (e) {
+                                          return <tr><td>Invalid table data</td></tr>;
+                                        }
+                                      })()}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                              {msg.category === 'report' && (
+                                <div className={styles.reportBubble}>
+                                  <div className={styles.reportIcon}>
+                                    <BarChart2 size={24} />
+                                  </div>
+                                  <div className={styles.reportInfo}>
+                                    {(() => {
+                                      try {
+                                        const report = JSON.parse(msg.content);
+                                        return (
+                                          <>
+                                            <span className={styles.reportName}>{report.name}</span>
+                                            <span className={styles.reportModule}>Module: {report.module}</span>
+                                            <button className={styles.viewReportBtn} onClick={() => {
+                                              router.push(`/admins/reports?id=${report.id}`);
+                                            }}>
+                                              View Dynamic Report
+                                            </button>
+                                          </>
+                                        );
+                                      } catch (e) {
+                                        return <span>Invalid report data</span>;
+                                      }
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
+                              {msg.content && msg.category !== 'table' && msg.category !== 'report' && (
+                                <p className={styles.msgContent}>{msg.content}</p>
+                              )}
+                              <div className={styles.msgMeta}>
+                                <span className={styles.msgTimestamp}>{formatFullTime(msg.timestamp)}</span>
+                                {isMe && (
+                                  <span className={`${styles.readReceipt} ${msg.read_by_ids?.length > 1 ? styles.readReceiptSeen : ''}`}>
+                                    <CheckCheck size={14} />
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                           {isMe && <div className={styles.msgAvatarSpacer} />}
@@ -434,6 +603,13 @@ const StaffChatOverlay = () => {
                 ))}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* Scroll to Bottom Button */}
+              {showScrollBottom && (
+                <button className={styles.scrollBottomBtn} onClick={scrollToBottom}>
+                  <ChevronDown size={20} />
+                </button>
+              )}
 
               {/* Attachment Bar */}
               <div className={styles.attachBar}>
@@ -450,10 +626,25 @@ const StaffChatOverlay = () => {
                     </button>
                   );
                 })}
-                <button className={styles.attachOption}>
-                  <Smile size={18} />
-                  <span>Emoji</span>
-                </button>
+                <div className={styles.emojiPickerWrapper}>
+                  <button className={styles.attachOption} onClick={() => setShowEmoji(!showEmoji)}>
+                    <Smile size={18} />
+                    <span>Emoji</span>
+                  </button>
+                  {showEmoji && (
+                    <div className={styles.emojiPicker}>
+                      {COMMON_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          className={styles.emojiBtn}
+                          onClick={() => addEmoji(emoji)}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Input Bar */}
@@ -650,6 +841,148 @@ const StaffChatOverlay = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Table Builder Modal */}
+      {showTableModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3>Create Custom Table</h3>
+              <button className={styles.modalClose} onClick={() => setShowTableModal(false)}><X size={18} /></button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.tableEditor}>
+                <table className={styles.editTable}>
+                  <tbody>
+                    {tableData.map((row, i) => (
+                      <tr key={i}>
+                        {row.map((cell, j) => (
+                          <td key={j}>
+                            <input
+                              type="text"
+                              value={cell}
+                              onChange={(e) => {
+                                const newData = [...tableData];
+                                newData[i][j] = e.target.value;
+                                setTableData(newData);
+                              }}
+                              className={i === 0 ? styles.tableInputHeader : styles.tableInput}
+                            />
+                          </td>
+                        ))}
+                        <td>
+                          <button onClick={() => {
+                            const newData = tableData.filter((_, idx) => idx !== i);
+                            setTableData(newData);
+                          }} className={styles.rowAction}>×</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.tableControls}>
+                <button onClick={() => setTableData([...tableData, Array(tableData[0]?.length || 2).fill('')])}>
+                  + Add Row
+                </button>
+                <button onClick={() => {
+                  const newData = tableData.map(row => [...row, '']);
+                  setTableData(newData);
+                }}>
+                  + Add Column
+                </button>
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.modalCancelBtn} onClick={() => setShowTableModal(false)}>Cancel</button>
+              <button className={styles.modalCreateBtn} onClick={handleCreateTable}>Send Table</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Selector Modal */}
+      {showReportModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3>Share Dynamic Report</h3>
+              <button className={styles.modalClose} onClick={() => setShowReportModal(false)}><X size={18} /></button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.reportList}>
+                {savedReports.length === 0 ? (
+                  <div className={styles.infoEmpty}>No saved reports found</div>
+                ) : (
+                  savedReports.map(report => (
+                    <button key={report.id} className={styles.reportSelectItem} onClick={() => handleShareReport(report)}>
+                      <BarChart2 size={16} />
+                      <div className={styles.reportSelectInfo}>
+                        <span className={styles.reportSelectName}>{report.name}</span>
+                        <span className={styles.reportSelectMeta}>{report.module} · {new Date(report.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Composer Preview (WhatsApp Style) */}
+      {composerPreview && (
+        <div className={styles.composerOverlay}>
+          <div className={styles.composerContent}>
+            <div className={styles.composerHeader}>
+              <button onClick={() => setComposerPreview(null)}><X size={20} /></button>
+              <span>{composerPreview.type === 'image' ? 'Send Image' : 'Send Table'}</span>
+            </div>
+            <div className={styles.composerBody}>
+              {composerPreview.type === 'image' ? (
+                <img src={composerPreview.data} alt="Preview" className={styles.composerImage} />
+              ) : (
+                <div className={styles.composerTableWrapper}>
+                  <table className={styles.previewTable}>
+                    <tbody>
+                      {composerPreview.data.map((row, i) => (
+                        <tr key={i}>
+                          {row.map((cell, j) => (
+                            <td key={j} className={i === 0 ? styles.tableHeader : ''}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <div className={styles.composerFooter}>
+              <div className={styles.composerInputWrapper}>
+                <input
+                  type="text"
+                  placeholder="Add a caption..."
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendComposer()}
+                />
+                <button onClick={handleSendComposer} className={styles.composerSendBtn}>
+                  <Send size={20} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxImage && (
+        <div className={styles.lightbox} onClick={() => setLightboxImage(null)}>
+          <button className={styles.lightboxClose} onClick={() => setLightboxImage(null)}>
+            <X size={24} />
+          </button>
+          <img src={lightboxImage} alt="Preview" className={styles.lightboxImage} />
         </div>
       )}
     </div>

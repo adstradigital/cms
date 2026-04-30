@@ -91,6 +91,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "user_id": event["user_id"],
         }))
 
+    async def chat_read(self, event):
+        """A user marked messages in a room as read."""
+        await self.send(text_data=json.dumps({
+            "type": "chat.read",
+            "room_id": event["room_id"],
+            "user_id": event["user_id"],
+        }))
+
     async def typing_indicator(self, event):
         """Typing indicator."""
         await self.send(text_data=json.dumps({

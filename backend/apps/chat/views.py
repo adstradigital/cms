@@ -118,9 +118,27 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         """Mark all messages in this room as read by the current user."""
         room = self.get_object()
         unread = room.messages.exclude(read_by=request.user).exclude(sender=request.user)
-        for msg in unread:
-            msg.read_by.add(request.user)
-        return Response({'marked': unread.count()})
+        count = unread.count()
+        if count > 0:
+            for msg in unread:
+                msg.read_by.add(request.user)
+            
+            # Broadcast read receipt
+            try:
+                channel_layer = get_channel_layer()
+                for member in room.members.all():
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_chat_{member.id}",
+                        {
+                            "type": "chat.read",
+                            "room_id": room.id,
+                            "user_id": request.user.id,
+                        },
+                    )
+            except Exception:
+                pass
+                
+        return Response({'marked': count})
 
     @action(detail=True, methods=['post'])
     def add_members(self, request, pk=None):

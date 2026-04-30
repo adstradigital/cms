@@ -182,28 +182,43 @@ export function ChatProvider({ children }) {
           const data = JSON.parse(event.data);
 
           if (data.type === 'user.online') {
-            // Instant UI update
             setOnlineUserIds((prev) => {
               if (!prev.includes(data.user_id)) return [...prev, data.user_id];
               return prev;
             });
           } else if (data.type === 'user.offline') {
-            // Instant UI update
             setOnlineUserIds((prev) => prev.filter((id) => id !== data.user_id));
-          } else if (data.type === 'chat.message') {
-            // A new message was broadcast
-            fetchUnreadTotal();
-            fetchRooms(); // Update room list ordering / last_message
-
+          } else if (data.type === 'chat.read') {
             const currentRoom = activeRoomRef.current;
             if (currentRoom && data.room_id === currentRoom.id) {
-              // Append to current messages if it's the active chat
+              setMessages((prev) =>
+                prev.map((m) => {
+                  if (m.sender?.id !== data.user_id && !m.read_by_ids?.includes(data.user_id)) {
+                    return { ...m, read_by_ids: [...(m.read_by_ids || []), data.user_id] };
+                  }
+                  return m;
+                })
+              );
+            }
+          } else if (data.type === 'chat.message') {
+            const currentRoom = activeRoomRef.current;
+            const isForActiveRoom = currentRoom && data.room_id === currentRoom.id;
+
+            if (isForActiveRoom) {
               setMessages((prev) => {
                 if (prev.some((m) => m.id === data.message?.id)) return prev;
                 return [...prev, data.message];
               });
-              // Mark as read
-              chatApi.markRead(currentRoom.id).catch(() => {});
+              
+              chatApi.markRead(currentRoom.id).then(() => {
+                setTimeout(() => {
+                  fetchUnreadTotal();
+                  fetchRooms();
+                }, 200);
+              }).catch(() => {});
+            } else {
+              fetchUnreadTotal();
+              fetchRooms();
             }
           }
         } catch (e) {

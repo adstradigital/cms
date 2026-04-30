@@ -47,6 +47,8 @@ class Message(models.Model):
         ('academic', 'Academic'),
         ('photo', 'Photo'),
         ('file', 'File'),
+        ('table', 'Table'),
+        ('report', 'Report'),
     ]
 
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')

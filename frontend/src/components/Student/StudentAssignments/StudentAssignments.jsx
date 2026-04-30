@@ -32,15 +32,15 @@ import SubmissionModal from './SubmissionModal';
 import FeedbackModal from './FeedbackModal';
 import SubjectResourcesModal from './SubjectResourcesModal';
 
-export default function StudentAssignments() {
+export default function StudentAssignments({ providedStudentId, providedSectionId }) {
   return (
     <Suspense fallback={<div>Loading workspace...</div>}>
-      <StudentAssignmentsContent />
+      <StudentAssignmentsContent providedStudentId={providedStudentId} providedSectionId={providedSectionId} />
     </Suspense>
   );
 }
 
-function StudentAssignmentsContent() {
+function StudentAssignmentsContent({ providedStudentId, providedSectionId }) {
   const [activeTab, setActiveTab] = useState('pending');
   const [viewMode, setViewMode] = useState('tracker'); // 'tracker', 'portal', 'materials', 'grades'
   const [tasks, setTasks] = useState([]);
@@ -50,9 +50,9 @@ function StudentAssignmentsContent() {
   const router = useRouter();
 
   // 1. Get student profile 
-  const { data: dashboardData, loading: profileLoading } = useFetch('/students/students/dashboard-data/');
-  const sectionId = dashboardData?.profile?.section_id;
-  const studentId = dashboardData?.profile?.id;
+  const { data: dashboardData, loading: profileLoading } = useFetch(providedStudentId ? null : '/students/students/dashboard-data/');
+  const sectionId = providedSectionId || dashboardData?.profile?.section_id;
+  const studentId = providedStudentId || dashboardData?.profile?.id;
 
   // 2. Fetch Homework and Assignments
   const { data: homework, loading: hwLoading, refetch: refetchHw } = useFetch(

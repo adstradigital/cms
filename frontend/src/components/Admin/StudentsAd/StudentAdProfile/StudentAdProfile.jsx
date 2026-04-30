@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Edit3, Trash2, KeyRound, ShieldCheck, ShieldOff, RefreshCw, Copy, Check, X } from 'lucide-react';
 import styles from './StudentAdProfile.module.css';
 import instance from '@/api/instance';
+import StudentFees from '@/components/Student/StudentFees/StudentFees';
+import StudentAssignments from '@/components/Student/StudentAssignments/StudentAssignments';
 
 const StudentAdProfile = ({ studentId, onBack, onEdit }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -156,6 +158,18 @@ const StudentAdProfile = ({ studentId, onBack, onEdit }) => {
             onClick={() => setActiveTab('documents')}
           >
             Documents
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'fees' ? styles.tabBtnActive : ''}`}
+            onClick={() => setActiveTab('fees')}
+          >
+            Fees
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'assignments' ? styles.tabBtnActive : ''}`}
+            onClick={() => setActiveTab('assignments')}
+          >
+            Assignments
           </button>
         </div>
       </div>
@@ -336,6 +350,18 @@ const StudentAdProfile = ({ studentId, onBack, onEdit }) => {
         {(activeTab === 'attendance' || activeTab === 'academics') && (
           <div className={styles.contentCard}>
             <p>Work in progress for {activeTab}...</p>
+          </div>
+        )}
+
+        {activeTab === 'fees' && (
+          <div className={styles.contentCard} style={{ padding: 0, overflow: 'hidden' }}>
+            <StudentFees providedStudentId={studentId} />
+          </div>
+        )}
+
+        {activeTab === 'assignments' && (
+          <div className={styles.contentCard} style={{ padding: 0, overflow: 'hidden' }}>
+            <StudentAssignments providedStudentId={studentId} providedSectionId={student.section} />
           </div>
         )}
       </div>

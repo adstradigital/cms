@@ -24,6 +24,7 @@ import ReportCards from './ReportCards/ReportCards';
 import SubjectCenter from './Subjects/SubjectCenter';
 import PerformanceTab from './Performance/PerformanceTab';
 import MarkEntryModal from './Marks/MarkEntryModal';
+import StudentAssignments from '@/components/Student/StudentAssignments/StudentAssignments';
 import adminApi from '@/api/adminApi';
 import { useAuth } from '@/context/AuthContext';
 
@@ -81,6 +82,7 @@ const Class = () => {
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [performanceDrawerStudent, setPerformanceDrawerStudent] = useState(null);
   const [profileDrawerStudent, setProfileDrawerStudent] = useState(null);
+  const [assignmentsDrawerStudent, setAssignmentsDrawerStudent] = useState(null);
   const [studentActionMenuId, setStudentActionMenuId] = useState(null);
   const [editingRollNumber, setEditingRollNumber] = useState('');
   const [isSavingRoll, setIsSavingRoll] = useState(false);
@@ -1063,6 +1065,7 @@ const Class = () => {
                       {studentActionMenuId === student.id && (
                         <div className={styles.cardMenu}>
                           <button className={styles.cardMenuItem} onClick={() => setProfileDrawerStudent(student)}>View Profile</button>
+                          <button className={styles.cardMenuItem} onClick={() => setAssignmentsDrawerStudent(student)}>View Assignments</button>
                           {canManageSection(selectedSection) && (
                             <>
                               <button className={styles.cardMenuItem} onClick={() => setIsBulkTransferModalOpen(true)}>Transfer Section</button>
@@ -1193,6 +1196,20 @@ const Class = () => {
               <div className={styles.modalActions}>
                 <button type="button" className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setProfileDrawerStudent(null)}>Close</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {assignmentsDrawerStudent && (
+        <div className={styles.modalOverlay} onClick={() => setAssignmentsDrawerStudent(null)}>
+          <div className={styles.modalContent} style={{ width: '90%', maxWidth: '1200px', height: '90vh', padding: 0, display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader} style={{ padding: '16px 24px', borderBottom: '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}>
+              <h3>Assignments: {assignmentsDrawerStudent.user?.first_name} {assignmentsDrawerStudent.user?.last_name}</h3>
+              <button className={styles.closeBtn} onClick={() => setAssignmentsDrawerStudent(null)}>X</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg)' }}>
+              <StudentAssignments providedStudentId={assignmentsDrawerStudent.id} providedSectionId={selectedSection?.id} />
             </div>
           </div>
         </div>

@@ -21,17 +21,17 @@ import styles from './StudentFees.module.css';
 import useFetch from '@/hooks/useFetch';
 import adminApi from '@/api/adminApi';
 
-export default function StudentFees() {
-  const { data: dashData, loading: dashLoading } = useFetch('/students/students/dashboard-data/');
+export default function StudentFees({ providedStudentId }) {
+  const { data: dashData, loading: dashLoading } = useFetch(providedStudentId ? null : '/students/students/dashboard-data/');
   const [statement, setStatement] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const studentId = dashData?.profile?.id;
+  const studentId = providedStudentId || dashData?.profile?.id;
 
   useEffect(() => {
     if (!studentId) {
-      if (!dashLoading) setLoading(false);
+      if (!dashLoading && !providedStudentId) setLoading(false);
       return;
     }
 

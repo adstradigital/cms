@@ -139,6 +139,12 @@ export function ChatProvider({ children }) {
     if (room) fetchMessages(room.id);
   }, [fetchMessages]);
 
+  // Keep a ref so the WS handler always sees the latest activeRoom
+  const activeRoomRef = useRef(null);
+  useEffect(() => {
+    activeRoomRef.current = activeRoom;
+  }, [activeRoom]);
+
   // ── Heartbeat & polling ──────────────────────────────────
   useEffect(() => {
     if (!user) return;
@@ -155,47 +161,92 @@ export function ChatProvider({ children }) {
       chatApi.heartbeat().catch(() => {});
     }, 60000);
 
-    // WebSocket connection
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // Fallback for development where API is on 8000
-      const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/ws/chat/?token=${token}`;
-      wsRef.current = new WebSocket(wsUrl);
+    // WebSocket connection logic with auto-reconnect
+    let reconnectTimer = null;
+    const connectWS = () => {
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
 
-      wsRef.current.onmessage = (event) => {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/ws/chat/?token=${token}`;
+      
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('[Chat WS] connected');
+      };
+
+      ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'user.online' || data.type === 'user.offline') {
-            fetchOnlineStatus(); // Refresh status
-          } else {
-            // New message received
+
+          if (data.type === 'user.online') {
+            // Instant UI update
+            setOnlineUserIds((prev) => {
+              if (!prev.includes(data.user_id)) return [...prev, data.user_id];
+              return prev;
+            });
+          } else if (data.type === 'user.offline') {
+            // Instant UI update
+            setOnlineUserIds((prev) => prev.filter((id) => id !== data.user_id));
+          } else if (data.type === 'chat.message') {
+            // A new message was broadcast
             fetchUnreadTotal();
-            fetchRooms(); // Update last message in rooms
-            if (activeRoom) {
-               // If it's for the active room, we might want to refresh messages
-               // Or simply refresh active room messages
-               chatApi.getMessages(activeRoom.id).then((res) => {
-                  setMessages(res.data?.results || res.data || []);
-               }).catch(() => {});
+            fetchRooms(); // Update room list ordering / last_message
+
+            const currentRoom = activeRoomRef.current;
+            if (currentRoom && data.room_id === currentRoom.id) {
+              // Append to current messages if it's the active chat
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === data.message?.id)) return prev;
+                return [...prev, data.message];
+              });
+              // Mark as read
+              chatApi.markRead(currentRoom.id).catch(() => {});
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          console.error('[Chat WS] parse error:', e);
+        }
       };
-    }
 
-    // Poll for updates every 15s (fallback for WS)
+      ws.onclose = () => {
+        console.log('[Chat WS] disconnected, reconnecting in 3s...');
+        reconnectTimer = setTimeout(connectWS, 3000);
+      };
+      
+      ws.onerror = (err) => {
+        console.error('[Chat WS] error:', err);
+        ws.close();
+      };
+    };
+
+    connectWS();
+
+    // Poll for updates every 5s (fallback for WS)
     pollRef.current = setInterval(() => {
       fetchOnlineStatus();
       fetchUnreadTotal();
-    }, 15000);
+      fetchRooms();
+      const currentRoom = activeRoomRef.current;
+      if (currentRoom) {
+        chatApi.getMessages(currentRoom.id).then((res) => {
+          setMessages(res.data?.results || res.data || []);
+        }).catch(() => {});
+      }
+    }, 5000);
 
     return () => {
       clearInterval(heartbeatRef.current);
       clearInterval(pollRef.current);
-      if (wsRef.current) wsRef.current.close();
+      clearTimeout(reconnectTimer);
+      if (wsRef.current) {
+        wsRef.current.onclose = null; // prevent auto-reconnect from firing during cleanup
+        wsRef.current.close();
+      }
     };
-  }, [user, activeRoom]); // added activeRoom to deps to keep WS sync updated
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleOpenMainChat = () => setMainChatOpen(true);

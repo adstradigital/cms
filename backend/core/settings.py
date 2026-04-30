@@ -133,6 +133,20 @@ CHANNEL_LAYERS = {
     },
 }
 
+# Fallback to in-memory channel layer if Redis is not available (dev only)
+if DEBUG and not os.getenv('REDIS_URL'):
+    try:
+        import redis as _redis_lib
+        _r = _redis_lib.Redis.from_url('redis://127.0.0.1:6379/1')
+        _r.ping()
+        _r.close()
+    except Exception:
+        CHANNEL_LAYERS = {
+            "default": {
+                "BACKEND": "channels.layers.InMemoryChannelLayer",
+            },
+        }
+
 
 # 5. 🛡️ AUTH & PASSWORDS
 AUTH_USER_MODEL = 'accounts.User'

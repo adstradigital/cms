@@ -8,6 +8,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth import get_user_model
 from django.db.models import Q, Max
 from django.utils import timezone
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 from .models import ChatRoom, Message, UserPresence
 from .serializers import (
@@ -80,7 +82,9 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         room.updated_at = timezone.now()
         room.save(update_fields=['updated_at'])
 
-        return Response(MessageSerializer(msg, context={'request': request}).data, status=201)
+        serialized = MessageSerializer(msg, context={'request': request}).data
+        _broadcast_message(room, serialized)
+        return Response(serialized, status=201)
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def upload(self, request, pk=None):
@@ -105,7 +109,9 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         room.updated_at = timezone.now()
         room.save(update_fields=['updated_at'])
 
-        return Response(MessageSerializer(msg, context={'request': request}).data, status=201)
+        serialized = MessageSerializer(msg, context={'request': request}).data
+        _broadcast_message(room, serialized)
+        return Response(serialized, status=201)
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):
@@ -126,6 +132,24 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         users = User.objects.filter(id__in=member_ids)
         room.members.add(*users)
         return Response(ChatRoomSerializer(room, context={'request': request}).data)
+
+
+def _broadcast_message(room, serialized_msg):
+    """Push a new message to every member of the room via their personal WS group."""
+    try:
+        channel_layer = get_channel_layer()
+        for member in room.members.all():
+            async_to_sync(channel_layer.group_send)(
+                f"user_chat_{member.id}",
+                {
+                    "type": "chat.message",
+                    "room_id": room.id,
+                    "message": serialized_msg,
+                },
+            )
+    except Exception:
+        # If channel layer isn't available (e.g. Redis down), fail silently
+        pass
 
 
 @api_view(['GET'])

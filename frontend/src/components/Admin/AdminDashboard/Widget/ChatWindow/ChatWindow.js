@@ -7,7 +7,7 @@ import {
   Users, UserPlus, Plus, FileText, Image as ImageIcon,
   GraduationCap, Smile, ChevronDown, Hash, Lock,
   Download, CheckCheck, Clock, ArrowLeft, Share2, Forward,
-  Grid, BarChart2,
+  Grid, BarChart2, Link, Mic, Square, Trash2, Copy,
 } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
 import { useAuth } from '@/context/AuthContext';
@@ -53,6 +53,15 @@ const StaffChatOverlay = () => {
   const [mobileView, setMobileView] = useState('sidebar'); // sidebar | chat | info
   const [lightboxImage, setLightboxImage] = useState(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [showFwdModal, setShowFwdModal] = useState(false);
+  const [messageToForward, setMessageToForward] = useState(null);
+  const [shareAnchor, setShareAnchor] = useState(null);
+  const [messageToShare, setMessageToShare] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -214,6 +223,131 @@ const StaffChatOverlay = () => {
     selectRoom(room);
     setMobileView('chat');
     setTimeout(scrollToBottom, 200);
+  };
+
+  const handleForward = (msg) => {
+    setMessageToForward(msg);
+    setShowFwdModal(true);
+  };
+
+  const confirmForward = async (room) => {
+    if (!messageToForward) return;
+    const msg = messageToForward;
+    
+    // Logic to forward based on category
+    if (msg.category === 'text') {
+      await sendMessage(room.id, msg.content);
+    } else if (msg.category === 'photo' || msg.category === 'file') {
+      // For images/files, we might need a dedicated forward endpoint or re-upload
+      // Simplified: share content/url
+      await sendMessage(room.id, `Forwarded: ${msg.file_url}`, 'text');
+    } else if (msg.category === 'table' || msg.category === 'report') {
+      await sendMessage(room.id, msg.content, msg.category);
+    }
+    
+    setShowFwdModal(false);
+    setMessageToForward(null);
+    if (room.id === activeRoom?.id) scrollToBottom();
+  };
+
+  const copyToClipboard = (text) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard!');
+      }).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  };
+
+  const fallbackCopy = (text) => {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      alert('Copied to clipboard!');
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+    document.body.removeChild(textArea);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+        await uploadFile(activeRoom.id, file, 'audio');
+        stream.getTracks().forEach(track => track.stop());
+        setTimeout(scrollToBottom, 200);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Mic access denied', err);
+      alert('Could not access microphone');
+    }
+  };
+
+  const stopRecording = (shouldSend = true) => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      if (!shouldSend) {
+        mediaRecorderRef.current.onstop = null; // Don't upload
+      }
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(timerRef.current);
+    }
+  };
+
+  const formatRecordTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleShare = async (msg, e) => {
+    // If it's a mobile device, native share is okay
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobile && navigator.share) {
+      try {
+        const text = msg.content || 'Check out this shared item from CMS';
+        const url = msg.file_url || window.location.href;
+        await navigator.share({ title: 'CMS Chat', text, url });
+        return;
+      } catch (err) { console.log('Native share failed', err); }
+    }
+
+    // On Desktop, use our custom menu to avoid blocking tabs
+    setMessageToShare(msg);
+    setShareAnchor(e.currentTarget.getBoundingClientRect());
+  };
+
+  const shareToWhatsApp = (msg) => {
+    const text = msg.content || 'Check out this shared item from CMS';
+    const url = msg.file_url || window.location.href;
+    const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(text + '\n' + url)}`;
+    window.open(waUrl, '_blank');
+    setShareAnchor(null);
   };
 
   const startDirect = async (u) => {
@@ -487,19 +621,35 @@ const StaffChatOverlay = () => {
                               ${(msg.category === 'table' || msg.category === 'report') ? styles.messageBubblePlain : ''}
                             `}>
                               {/* Hover Actions */}
-                              <div className={styles.messageActions}>
-                                <button className={styles.actionBtn} title="Download" onClick={() => {
-                                  if (msg.file_url) window.open(msg.file_url, '_blank');
-                                }}>
-                                  <Download size={14} />
-                                </button>
-                                <button className={styles.actionBtn} title="Forward">
-                                  <Forward size={14} />
-                                </button>
-                                <button className={styles.actionBtn} title="Share">
-                                  <Share2 size={14} />
-                                </button>
-                              </div>
+                               <div className={styles.messageActions}>
+                                 {(msg.category === 'photo' || msg.category === 'file' || msg.category === 'audio') ? (
+                                   <button className={styles.actionBtn} title="Download" onClick={() => {
+                                     const link = document.createElement('a');
+                                     link.href = msg.file_url;
+                                     link.setAttribute('download', msg.file_name || 'download');
+                                     document.body.appendChild(link);
+                                     link.click();
+                                     document.body.removeChild(link);
+                                   }}>
+                                     <Download size={14} />
+                                   </button>
+                                 ) : (
+                                   <button className={styles.actionBtn} title="Copy Text" onClick={() => copyToClipboard(msg.content)}>
+                                     <Copy size={14} />
+                                   </button>
+                                 )}
+                                 {msg.file_url && (
+                                   <button className={styles.actionBtn} title="Copy Link" onClick={() => copyToClipboard(msg.file_url)}>
+                                     <Link size={14} />
+                                   </button>
+                                 )}
+                                 <button className={styles.actionBtn} title="Forward" onClick={() => handleForward(msg)}>
+                                   <Forward size={14} />
+                                 </button>
+                                 <button className={styles.actionBtn} title="Share" onClick={(e) => handleShare(msg, e)}>
+                                   <Share2 size={14} />
+                                 </button>
+                               </div>
 
                               {!isMe && activeRoom.room_type === 'group' && (
                                 <span className={styles.senderLabel}>{msg.sender?.full_name}</span>
@@ -582,7 +732,12 @@ const StaffChatOverlay = () => {
                                   </div>
                                 </div>
                               )}
-                              {msg.content && msg.category !== 'table' && msg.category !== 'report' && (
+                              {msg.category === 'audio' && (
+                                <div className={styles.audioBubble}>
+                                  <audio src={msg.file_url} controls className={styles.audioPlayer} />
+                                </div>
+                              )}
+                              {msg.content && msg.category !== 'table' && msg.category !== 'report' && msg.category !== 'audio' && (
                                 <p className={styles.msgContent}>{msg.content}</p>
                               )}
                               <div className={styles.msgMeta}>
@@ -655,21 +810,42 @@ const StaffChatOverlay = () => {
                   hidden
                   onChange={handleFileUpload}
                 />
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className={styles.chatInput}
-                />
-                <button
-                  className={styles.chatSendBtn}
-                  onClick={handleSend}
-                  disabled={!inputValue.trim()}
-                >
-                  <Send size={18} />
-                </button>
+                
+                {isRecording ? (
+                  <div className={styles.recordingInterface}>
+                    <div className={styles.recordingPulse} />
+                    <span className={styles.recordingTime}>{formatRecordTime(recordingTime)}</span>
+                    <button className={styles.recordingCancel} onClick={() => stopRecording(false)}>
+                      <Trash2 size={18} />
+                    </button>
+                    <button className={styles.recordingStop} onClick={() => stopRecording(true)}>
+                      <Send size={18} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Type a message..."
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className={styles.chatInput}
+                    />
+                    <div className={styles.inputActions}>
+                      <button className={styles.micBtn} onClick={startRecording}>
+                        <Mic size={18} />
+                      </button>
+                      <button
+                        className={styles.chatSendBtn}
+                        onClick={handleSend}
+                        disabled={!inputValue.trim()}
+                      >
+                        <Send size={18} />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </>
           ) : (
@@ -690,8 +866,23 @@ const StaffChatOverlay = () => {
               <button className={styles.mobileBackBtn} onClick={() => setMobileView('chat')}>
                 <ArrowLeft size={18} />
               </button>
-              <span>Details</span>
+              <span>{activeRoom.room_type === 'group' ? 'Group Details' : 'Contact Info'}</span>
             </div>
+
+            {/* Profile Header for Direct Chat */}
+            {activeRoom.room_type === 'direct' && (() => {
+              const other = activeRoom.members?.find(m => m.id !== user?.id);
+              return (
+                <div className={styles.profileHeader}>
+                  <div className={styles.profileAvatar}>
+                    {other?.photo ? <img src={other.photo} alt="" /> : <div className={styles.avatarFallbackLg}>{other?.full_name?.[0]}</div>}
+                    <span className={`${styles.presenceDotLg} ${isOnline(other?.id) ? styles.presenceOnline : ''}`} />
+                  </div>
+                  <h3 className={styles.profileName}>{other?.full_name || other?.username}</h3>
+                  <span className={styles.profileRole}>{other?.role_name || 'Staff Member'}</span>
+                </div>
+              );
+            })()}
 
             {/* Shared Files */}
             <div className={styles.infoSection}>
@@ -728,29 +919,35 @@ const StaffChatOverlay = () => {
               </div>
             </div>
 
-            {/* Members */}
-            <div className={styles.infoSection}>
-              <div className={styles.infoSectionHeader}>
-                <span>MEMBERS</span>
-              </div>
-              <div className={styles.membersList}>
-                {(activeRoom.members || []).filter(m => m.id !== user?.id).map((member) => (
-                  <div key={member.id} className={styles.memberItem}>
-                    <div className={styles.memberAvatar}>
-                      {member.photo ? (
-                        <img src={member.photo} alt="" />
-                      ) : (
-                        <div className={styles.avatarFallbackSm}>
-                          {(member.full_name || member.username)?.[0]?.toUpperCase() || '?'}
-                        </div>
-                      )}
-                      <span className={`${styles.presenceDotSm} ${isOnline(member.id) ? styles.presenceOnline : ''}`} />
+            {/* Members (Groups Only) */}
+            {activeRoom.room_type === 'group' && (
+              <div className={styles.infoSection}>
+                <div className={styles.infoSectionHeader}>
+                  <span>MEMBERS</span>
+                  <span className={styles.memberCount}>{activeRoom.members?.length || 0}</span>
+                </div>
+                <div className={styles.membersList}>
+                  {(activeRoom.members || []).map((member) => (
+                    <div key={member.id} className={styles.memberItem}>
+                      <div className={styles.memberAvatar}>
+                        {member.photo ? (
+                          <img src={member.photo} alt="" />
+                        ) : (
+                          <div className={styles.avatarFallbackSm}>
+                            {(member.full_name || member.username)?.[0]?.toUpperCase() || '?'}
+                          </div>
+                        )}
+                        <span className={`${styles.presenceDotSm} ${isOnline(member.id) ? styles.presenceOnline : ''}`} />
+                      </div>
+                      <div className={styles.memberInfo}>
+                        <span className={styles.memberName}>{member.full_name || member.username}</span>
+                        <span className={styles.memberRoleLabel}>{member.role_name}</span>
+                      </div>
                     </div>
-                    <span className={styles.memberName}>{member.full_name || member.username}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Quick Share */}
             <div className={styles.infoSection}>
@@ -925,6 +1122,70 @@ const StaffChatOverlay = () => {
                     </button>
                   ))
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Share Menu */}
+      {shareAnchor && messageToShare && (
+        <>
+          <div className={styles.menuBackdrop} onClick={() => setShareAnchor(null)} />
+          <div 
+            className={styles.shareMenu}
+            style={{ 
+              top: shareAnchor.bottom + 5,
+              left: shareAnchor.left - 120
+            }}
+          >
+            <button onClick={() => { copyToClipboard(messageToShare.file_url || messageToShare.content); setShareAnchor(null); }}>
+              <Link size={14} /> Copy Link
+            </button>
+            <button onClick={() => shareToWhatsApp(messageToShare)}>
+              <Smile size={14} /> Share to WhatsApp
+            </button>
+            <button onClick={() => { handleForward(messageToShare); setShareAnchor(null); }}>
+              <Forward size={14} /> Forward in CMS
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Forward Modal */}
+      {showFwdModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3>Forward Message</h3>
+              <button className={styles.modalClose} onClick={() => setShowFwdModal(false)}><X size={18} /></button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.modalSearch}>
+                <Search size={14} />
+                <input
+                  type="text"
+                  placeholder="Search chats..."
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  className={styles.modalSearchInput}
+                />
+              </div>
+              <div className={styles.modalMemberList}>
+                {rooms
+                  .filter(r => r.display_name?.toLowerCase().includes(contactSearch.toLowerCase()))
+                  .map(room => (
+                    <div key={room.id} className={styles.modalMemberItem} onClick={() => confirmForward(room)} style={{ cursor: 'pointer' }}>
+                      <div className={styles.memberAvatar}>
+                        {room.display_photo ? <img src={room.display_photo} alt="" /> : <div className={styles.avatarFallbackSm}>{room.display_name?.[0]}</div>}
+                      </div>
+                      <div className={styles.memberInfo}>
+                        <span className={styles.memberName}>{room.display_name}</span>
+                        <span className={styles.memberRoleLabel}>{room.room_type}</span>
+                      </div>
+                      <button className={styles.modalCreateBtn} style={{ padding: '4px 12px', fontSize: '0.75rem', marginLeft: 'auto' }}>Send</button>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>

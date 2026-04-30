@@ -1,6 +1,7 @@
 import { AuthProvider } from '@/context/AuthContext';
 import { SchoolProvider } from '@/context/SchoolContext';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { ChatProvider } from '@/context/ChatContext';
 import '@/styles/global.css';
 
 export const metadata = {
@@ -14,9 +15,11 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
+            <ChatProvider>
             <SchoolProvider>
               {children}
             </SchoolProvider>
+            </ChatProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

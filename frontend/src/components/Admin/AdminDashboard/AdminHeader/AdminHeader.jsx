@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { Search, Bell, MessageSquare, Settings, ChevronDown, User, LogOut, Shield, Key } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import adminApi from '@/api/adminApi';
+import { useChat } from '@/context/ChatContext';
 import styles from './AdminHeader.module.css';
 
 const AdminHeader = () => {
@@ -11,6 +12,7 @@ const AdminHeader = () => {
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [notifications, setNotifications] = useState([]);
     const [notifLoading, setNotifLoading] = useState(false);
+    const { unreadTotal, setMainChatOpen } = useChat();
 
     const managedSectionId = useMemo(() => {
         const sec = user?.managed_sections?.[0];
@@ -101,20 +103,14 @@ const AdminHeader = () => {
 
                 {/* Messages */}
                 <div className={styles.actionWrapper}>
-                    <button className={styles.iconButton} onClick={() => toggleDropdown('msg')}>
+                    <button 
+                        className={styles.iconButton} 
+                        onClick={() => { closeDropdowns(); setMainChatOpen(true); }}
+                        title="Open Staff Chat"
+                    >
                         <MessageSquare size={20} />
-                        <span className={styles.messageBadge}></span>
+                        {unreadTotal > 0 && <span className={styles.messageBadge}>{unreadTotal > 9 ? '9+' : unreadTotal}</span>}
                     </button>
-                    {activeDropdown === 'msg' && (
-                        <div className={styles.dropdown}>
-                            <div className={styles.dropdownHeader}>Messages</div>
-                            <div className={styles.dropdownContent}>
-                                <div className={styles.dropdownItem}>Parent inquiry: Kristina S.</div>
-                                <div className={styles.dropdownItem}>Staff meeting scheduled</div>
-                                <div className={styles.dropdownItemViewAll}>Go to Inbox</div>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Settings */}

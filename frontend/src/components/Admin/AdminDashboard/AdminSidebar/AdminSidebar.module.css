@@ -439,3 +439,86 @@
   }
 }
 
+/* ─── Chat Nav Button (Sidebar Bottom) ─── */
+.chatNavContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  margin: 10px 10px 0 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.chatNavContainer:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.chatNavContainerCollapsed {
+  justify-content: center;
+  padding: 8px 0;
+  margin: 10px 0 0 0;
+  border-radius: 12px;
+}
+
+.chatNavIconBox {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  border: 2px solid #3b82f6;
+}
+
+.chatNavBadge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #22c55e;
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--theme-sidebar-bg);
+}
+
+.chatNavText {
+  display: flex;
+  flex-direction: column;
+}
+
+.chatNavLabel {
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.chatNavStatus {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.chatNavDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+}

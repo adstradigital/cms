@@ -396,6 +396,36 @@ const AdminSidebar = () => {
         <NavItem icon={<Settings size={18} />} label="Settings" collapsed={isCollapsed} active={pathname === '/admins/settings'} href="/admins/settings" />
         <NavItem icon={<HelpCircle size={18} />} label="Support" collapsed={isCollapsed} active={pathname === '/admins/support'} href="/admins/support" />
         <NavItem icon={<LogOut size={18} />} label="Log out" collapsed={isCollapsed} onClick={logout} />
+        
+        {/* Chat Widget Button */}
+        <div 
+          className={`${styles.chatNavContainer} ${isCollapsed ? styles.chatNavContainerCollapsed : ''}`}
+          onClick={() => {
+            // Placeholder: Will integrate with main chat context
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('open-main-chat'));
+            }
+          }}
+        >
+          <div className={styles.chatNavIconBox}>
+            <div className={styles.chatNavBadge}>3</div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              <line x1="9" y1="10" x2="9.01" y2="10"></line>
+              <line x1="12" y1="10" x2="12.01" y2="10"></line>
+              <line x1="15" y1="10" x2="15.01" y2="10"></line>
+            </svg>
+          </div>
+          {!isCollapsed && (
+            <div className={styles.chatNavText}>
+              <span className={styles.chatNavLabel}>Chat</span>
+              <span className={styles.chatNavStatus}>
+                <span className={styles.chatNavDot}></span>
+                Online
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

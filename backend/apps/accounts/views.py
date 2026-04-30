@@ -69,6 +69,27 @@ def login_view(request):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Ensure the user is logging into the correct portal
+        requested_role = request.data.get("role")
+        if requested_role:
+            requested_role = str(requested_role).lower().strip()
+            user_portal = str(user.portal).lower() if getattr(user, 'portal', None) else ""
+            user_role_name = str(user.role.name).lower() if getattr(user, 'role', None) else ""
+            
+            is_admin = user.is_superuser or user_portal == "admin" or "admin" in user_role_name or "principal" in user_role_name
+            is_student = user_portal == "student" or "student" in user_role_name
+            is_staff = user_portal == "staff" or "staff" in user_role_name or "teacher" in user_role_name or "driver" in user_role_name
+            is_parent = user_portal == "parent" or "parent" in user_role_name
+
+            if requested_role == "admin" and not is_admin:
+                return Response({"error": "Access denied. Admin privileges required."}, status=status.HTTP_403_FORBIDDEN)
+            elif requested_role == "student" and not is_student:
+                return Response({"error": "Access denied. Student privileges required."}, status=status.HTTP_403_FORBIDDEN)
+            elif requested_role == "staff" and not is_staff and not is_admin:
+                return Response({"error": "Access denied. Staff privileges required."}, status=status.HTTP_403_FORBIDDEN)
+            elif requested_role == "parent" and not is_parent:
+                return Response({"error": "Access denied. Parent privileges required."}, status=status.HTTP_403_FORBIDDEN)
+
         # Auto-assign Admin role for superusers without a role
         if user.is_superuser and not user.role:
             try:

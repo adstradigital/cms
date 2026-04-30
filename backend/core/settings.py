@@ -49,6 +49,7 @@ else:
 
 # 4. 📦 APPLICATION DEFINITION
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -61,6 +62,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'channels',
 
     # Project apps
     'apps.accounts',
@@ -83,6 +85,7 @@ INSTALLED_APPS = [
     'apps.expenses',
     'apps.payroll',
     'apps.reports',
+    'apps.chat',
 
     # Celery result backend
     'django_celery_results',
@@ -120,6 +123,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 ASGI_APPLICATION = 'core.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')],
+        },
+    },
+}
 
 
 # 5. 🛡️ AUTH & PASSWORDS

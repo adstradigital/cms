@@ -12,7 +12,8 @@ import {
   StickyNote,
   Zap,
   ChevronRight,
-  X
+  X,
+  MessageCircle
 } from 'lucide-react';
 import styles from './RightSidebar.module.css';
 
@@ -22,6 +23,7 @@ const WIDGET_CATALOG = [
   { id: 'analogClock', label: 'Analog Clock', icon: Clock, color: '#38bdf8', desc: 'Live clock' },
   { id: 'calendarDate', label: 'Calendar', icon: CalendarDays, color: '#f87171', desc: 'Today date' },
   { id: 'stickyNote', label: 'Sticky Note', icon: StickyNote, color: '#fb923c', desc: 'Notepad' },
+  { id: 'quickChat', label: 'Quick Chat', icon: MessageCircle, color: '#a855f7', desc: 'Floating chat' },
 ];
 
 const SIZE_OPTIONS = [

@@ -10,6 +10,8 @@ import AnalogClockFab from '../AdminDashboard/Widget/AnalogClockFab';
 import StickyNoteFab from '../AdminDashboard/Widget/StickyNoteFab';
 import CalendarDateFab from '../AdminDashboard/Widget/CalendarDateFab';
 import RightSidebar from '../AdminDashboard/RightSidebar/RightSidebar';
+import QuickChat from '../AdminDashboard/Widget/ChatWindow/QuickChat/QuickChat';
+import StaffChatOverlay from '../AdminDashboard/Widget/ChatWindow/ChatWindow';
 
 /* Default widget configuration */
 const DEFAULT_WIDGETS = {
@@ -17,6 +19,7 @@ const DEFAULT_WIDGETS = {
   analogClock: false,
   calendarDate: false,
   stickyNote: false,
+  quickChat: true,
 };
 
 const DEFAULT_SIZES = {
@@ -94,6 +97,10 @@ export default function AdminLayout({ children }) {
       {activeWidgets.analogClock && <AnalogClockFab scale={SIZE_SCALE[widgetSizes.analogClock]} />}
       {activeWidgets.calendarDate && <CalendarDateFab scale={SIZE_SCALE[widgetSizes.calendarDate]} />}
       {activeWidgets.stickyNote && <StickyNoteFab scale={SIZE_SCALE[widgetSizes.stickyNote]} />}
+
+      {/* WIDGETS & OVERLAYS */}
+      {activeWidgets.quickChat && <QuickChat />}
+      <StaffChatOverlay />
 
       {/* RIGHT SIDEBAR */}
       <RightSidebar
